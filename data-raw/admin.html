@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin</title>
+    <script src="form.js"></script>
+    <script src="js-yaml-4.1.0.min.js"></script>
+    <style>
+        .parent {
+            width:100%;
+            display: flex;
+            justify-content: center;
+        }
+        .main {
+            max-width: 350px;
+        }
+        .example {
+            overflow: auto;
+            width: 100%;
+        }
+        .example pre {
+            margin-top: 0;
+        }
+        .form-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            margin-left: 10px;
+        }
+        .form-group label {
+            /* width: 270px; */
+            /* margin-right: 10px; */
+            flex: 1;
+        }
+        .form-group input {
+            /* flex: 0; */
+            flex: 2;
+            max-width: 150px;
+            margin-left: 10px;
+        }
+        .title {
+            font-weight: bold;
+            margin-top: 25px;
+        }
+        .tooltip {
+            display: inline-block;
+            position: relative;
+            cursor: pointer;
+            padding-left: 5px;
+            font-weight: bold;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 300px;
+            background-color: #555;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%; /* Position the tooltip above the text */
+            left: 50%;
+            margin-left: -100px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 85%;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        .settings-yaml {
+            width: 100%;
+            height: 300px;
+        }
+    </style>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            fetch('/sys-info')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('hostname').innerText = data.hostname;
+                    document.getElementById('firmware').innerText = data.firmware;
+                });
+            fetch('/conf/sys/get')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('settings').value = jsyaml.dump(data);
+                });
+        });
+
+        function postYamlAsJson() {
+            // const form = document.getElementById('sys-config-form');
+            // const formData = new FormData(form);
+            // const yaml = formData.get('settings');
+            // const json = jsyaml.load(yaml);
+            const settingsEl = document.getElementById('settings');
+            try {
+                const settingsJson = jsyaml.load(settingsEl.value);
+
+                const json = {
+                    "command": "sys-config",
+                    "settings": settingsJson
+                };
+
+                fetch('/system', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(json)
+                })
+                // .then(response => {
+                //     if (!response.ok) {
+                //         throw new Error('Network response was not ok');
+                //     }
+                //     return response.json();
+                // })
+                .then(data => {
+                    console.log('Success:', data);
+                })
+                // .catch(error => {
+                //     alert('Error during fetch: ' + error.message);
+                // })
+                ;
+
+            } catch (error) {
+                alert('Error parsing YAML: ' + error.message);
+            }
+        }
+    </script>
+</head>
+<body>
+    <div class="parent">
+        <div class="main">
+            <h1>Admin: <span id="hostname"></span></h1>
+            <p class="version">Ver. <span id="firmware"></span></p>
+            <p class="title">DMX Configuration</p>
+            <div id="dmx-config-form-container" class="form-container"></div>
+                <p class="title">Sys Configuration</p>
+            <div id="sys-config-form-container" class="form-container">
+                <!-- <form id="sys-config-form" onsubmit=" postYamlAsJson();"> -->
+                    <textarea name="settings" id="settings" class="settings-yaml"></textarea>
+                    <br />
+                    <input type="button" value="Save" onclick="postYamlAsJson();">
+                <!-- </form> -->
+            </div>
+
+            <p class="title">Firmware update</p>
+            <div id="firmware-form-container" class="form-container"></div>
+            <p class="title">Spiffs update</p>
+            <div id="spiffs-form-container" class="form-container"></div>
+        
+            <p class="title">Example sys configuration</p>
+            <div class="example">
+                <pre>
+wifi_ssid: wifi-network-name
+wifi_pass: wifi-password
+hostname: tower
+hb_int: 5000
+udp_port: 5824
+lights_test: true
+max_idle: 120 # power of when no activity in minutes
+leds:
+    - 13
+    - 14
+rgbw_strips: []
+rgb_strips:
+  - pin: 13
+    size: 60
+    slices:
+    - 0
+    - 15
+    - 33
+    - 49
+    - 57
+
+servos:
+  - pin: 4
+    max_angle: 180
+    min_pulse_width: 500 # optional
+    max_pulse_width: 2500 # optional
+    
+waves:
+- max_fade_time: 10000
+    # slice sequential number in order they are defined, ignoring "pin groups"
+    slice_indexes:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+                </pre>
+            </div>
+        </div>
+    </div>
+    <script type="text/javascript">
+        const dmxFormDefinition = {
+            "command": "dmx-config",
+            "submitLabel" : "Save",
+            "fields": [
+                {
+                    "name": "universe",
+                    "label": "Universe",
+                    "type": "number",
+                },
+                {
+                    "name": "channel",
+                    "label": "Fisrt Address",
+                    "type": "number",
+                }
+            ]
+        };
+        
+        fetch('/conf/dmx/get')
+            .then(response => response.json())
+            .then(data => {
+                renderForm('dmx-config-form-container', dmxFormDefinition, data);
+            });
+
+        // const sysFormDefinition = {
+        //     "command": "sys-config",
+        //     "submitLabel" : "Save",
+        //     "fields": [
+        //         {
+        //             "name": "settings",
+        //             "label": "Settings",
+        //             "type": "textarea"
+        //         }
+        //     ]
+        // };
+        
+        // fetch('/conf/sys/get')
+        //     .then(response => response.json())
+        //     .then(data => {
+        //         renderForm('sys-config-form-container', sysFormDefinition, data);
+        //     });
+
+        const firmwareFormDef = {
+            "command": "firmware-update",
+            "submitLabel" : "Update",
+            "fields": [
+                {
+                    "name": "url",
+                    "label": "Url",
+                    "type": "string",
+                }
+            ]
+        };
+        renderForm('firmware-form-container', firmwareFormDef, {});
+
+        const spiffsFormDef = {
+            "command": "spiffs-update",
+            "submitLabel" : "Update",
+            "fields": [
+                {
+                    "name": "url",
+                    "label": "Url",
+                    "type": "string",
+                }
+            ]
+        };
+        renderForm('spiffs-form-container', spiffsFormDef, {});
+    </script>
+ 
+</body>
+</html>
