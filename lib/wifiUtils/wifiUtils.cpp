@@ -33,7 +33,15 @@ class WifiUtils {
             WifiUtils::macAddress = String(macBuffer);
 
             if (hostname != "") {
-              WiFi.setHostname(hostname);
+              String hname = hostname;
+              // replace non alpha-numeric characters with '-'
+              for (int i = 0; i < hname.length(); i++) {
+                  if (!isalnum(hname[i])) {
+                      hname[i] = '-';
+                  }
+              }              
+              hname = hname.substring(0, 32);
+              WiFi.setHostname(hname.c_str());
             } else {
               // mac based hostname
               String hostname = hostnamePrefix + WifiUtils::macAddress;

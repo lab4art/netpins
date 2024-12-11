@@ -277,7 +277,7 @@ struct Settings {
 };
 
 struct DmxSettings {
-    std::uint8_t universe;
+    std::uint8_t universe; // TODO universe 0 is not displayed in the UI
     std::uint8_t channel;
 
     bool operator==(const DmxSettings& other) const {
