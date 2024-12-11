@@ -3,7 +3,7 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <HTTPUpdate.h>
-
+#include <WiFiClientSecure.h>
 
 void update_started() {
     Log.noticeln("HTTP update process started");
@@ -22,16 +22,31 @@ void update_error(int err) {
 }
 
 void firmwareUpdate(String url, bool spiffs = false) {
-    // HTTPClient http;
-    WiFiClient client;
+    
+    std::unique_ptr<WiFiClient> client;
+    if (url.startsWith("https://")) {
+        std::unique_ptr<WiFiClientSecure> secureClient(new WiFiClientSecure);
+        // secureClient->setCACert(github_root_ca);
+        secureClient->setInsecure();
+        client = std::move(secureClient);
+    } else {
+        client.reset(new WiFiClient);
+    }
+
+    httpUpdate.onStart(update_started);
+    httpUpdate.onEnd(update_finished);
+    // httpUpdate.onProgress(update_progress);
+    httpUpdate.onError(update_error);
+    httpUpdate.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+
     t_httpUpdate_return ret;
     if (spiffs) {
         Log.noticeln("Updating SPIFFS from: %s", url.c_str());
-        ret = httpUpdate.updateSpiffs(client, url);
+        ret = httpUpdate.updateSpiffs(*client, url);
         ESP.restart();
     } else {
         Log.noticeln("Updating firmware from: %s", url.c_str());
-        ret = httpUpdate.update(client, url);
+        ret = httpUpdate.update(*client, url);
         // restart called internally
     }
     switch (ret) {
