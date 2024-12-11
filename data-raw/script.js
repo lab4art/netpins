@@ -5,7 +5,7 @@ document.addEventListener("DOMContentLoaded", function() {
             document.getElementById('hostname').innerText = data.hostname;
             document.getElementById('firmware').innerText = data.firmware;
         });
-    fetch('/conf/sys/get')
+    fetch('/conf/sys')
         .then(response => response.json())
         .then(data => {
             document.getElementById('settings').value = jsyaml.dump(data);

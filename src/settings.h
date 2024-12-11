@@ -289,6 +289,16 @@ class SettingsManager {
             Serial.println(message.c_str());
         }
 
+        void fromJsonDoc(JsonDocument& jsonDoc) {
+            T newSettings;
+            T::deserialize(newSettings, jsonDoc);
+            if (true || newSettings != this->settings) { // TODO waves changes are not detected, fix!
+                Serial.println("Settings changed.");
+                this->settings = newSettings;
+                dirty = true;
+            }
+        }
+
     public:
         SettingsManager(std::string nspace):
             nspace(nspace),
@@ -340,13 +350,25 @@ class SettingsManager {
             JsonDocument jsonDoc;
             deserializeJson(jsonDoc, jsonString);
 
-            T newSettings;
-            T::deserialize(newSettings, jsonDoc);
-            if (true || newSettings != this->settings) { // TODO waves changes are not detected, fix!
-                Serial.println("Settings changed.");
-                this->settings = newSettings;
-                dirty = true;
+            fromJsonDoc(jsonDoc);
+        }
+
+        /**
+         * Applies potentially partial json to current settings.
+         * Only top level keys are merged, nested keys are replaced.
+         */
+        void mergeJson(String jsonString) {
+            JsonDocument newJsonDoc;
+            deserializeJson(newJsonDoc, jsonString);
+
+            JsonDocument currentJsonDoc;
+            this->settings.serialize(currentJsonDoc);            
+
+            // merge jsons by copying values from newJsonDoc to currentJsonDoc
+            for (JsonPair kv : newJsonDoc.as<JsonObject>()) {
+                currentJsonDoc[kv.key()] = kv.value();
             }
+            fromJsonDoc(currentJsonDoc);
         }
 
         T& getSettings() {

@@ -160,7 +160,7 @@ waves:
             ]
         };
         
-        fetch('/conf/dmx/get')
+        fetch('/conf/dmx')
             .then(response => response.json())
             .then(data => {
                 renderForm('dmx-config-form-container', dmxFormDefinition, data);

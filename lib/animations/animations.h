@@ -2,7 +2,6 @@
 
 #define _TASK_OO_CALLBACKS
 
-#include <functional>
 #include <Arduino.h>
 #include <TaskScheduler.h>
 #include <ArduinoLog.h>

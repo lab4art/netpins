@@ -22,13 +22,19 @@ void update_error(int err) {
 }
 
 void firmwareUpdate(String url, bool spiffs = false) {
-    
+    // do not include ssl if compiler flag is not set
+
+
     std::unique_ptr<WiFiClient> client;
-    if (url.startsWith("https://")) {
-        std::unique_ptr<WiFiClientSecure> secureClient(new WiFiClientSecure);
-        // secureClient->setCACert(github_root_ca);
-        secureClient->setInsecure();
-        client = std::move(secureClient);
+    if (ENABLE_HTTPS_OTA) {
+        if (url.startsWith("https://")) {
+            std::unique_ptr<WiFiClientSecure> secureClient(new WiFiClientSecure);
+            // secureClient->setCACert(github_root_ca);
+            secureClient->setInsecure();
+            client = std::move(secureClient);
+        } else {
+            client.reset(new WiFiClient);
+        }
     } else {
         client.reset(new WiFiClient);
     }

@@ -22,12 +22,13 @@ class WebAdmin {
 
     public:
         WebAdmin(
-            SettingsManager<Settings>* settingsManager,
-            SettingsManager<DmxSettings>* dmxSettingsManager,
-            std::function<void(JsonDocument&)> onSystemCommand):
-            settingsManager(settingsManager),
-            dmxSettingsManager(dmxSettingsManager),
-            onSystemCommand(onSystemCommand) {
+                SettingsManager<Settings>* settingsManager,
+                SettingsManager<DmxSettings>* dmxSettingsManager,
+                std::function<void(JsonDocument&)> onSystemCommand):
+                settingsManager(settingsManager),
+                dmxSettingsManager(dmxSettingsManager),
+                onSystemCommand(onSystemCommand) {
+
             webServer->on("/sys-info", HTTP_GET, [this](AsyncWebServerRequest *request){
                 this->onReceivedCallback();
 
@@ -94,49 +95,17 @@ class WebAdmin {
 
 
             // HTTP_GET is used for convinience that users can use a browser without any plugin or form
-            webServer->on("^\\/conf\\/(.+)\\/(.+)$", HTTP_GET, [this](AsyncWebServerRequest *request){
+            webServer->on("^\\/conf\\/(.+)$", HTTP_GET, [this](AsyncWebServerRequest *request){
                 this->onReceivedCallback();
                 String configName = request->pathArg(0);
-                String action = request->pathArg(1); // set|get
 
-                if (action == "set") {
-                    // convert request to onCommand call
-                    JsonDocument json;
-                    json["command"] = configName + "-config";
-                    for (size_t i = 0; i < request->args(); i++) {
-                        json[request->argName(i)] = request->arg(i);
-                    }
-                    this->onSystemCommand(json);
-                    request->send(204);
-                } else if (action == "get") {
-                    if (configName == "sys") {
-                        request->send(200, "application/json", this->settingsManager->getSettings().asJson().c_str());
-                    } else if (configName == "dmx") {
-                        request->send(200, "application/json", this->dmxSettingsManager->getSettings().asJson().c_str());
-                    } else {
-                        request->send(404);
-                    }
+                if (configName == "sys") {
+                    request->send(200, "application/json", this->settingsManager->getSettings().asJson().c_str());
+                } else if (configName == "dmx") {
+                    request->send(200, "application/json", this->dmxSettingsManager->getSettings().asJson().c_str());
                 } else {
                     request->send(404);
                 }
-            });
-
-            webServer->on("^\\/sys\\/(.+)$", HTTP_GET, [this](AsyncWebServerRequest *request){
-            this->onReceivedCallback();
-            String command = request->pathArg(0);
-            if (command == "reboot") {
-                ESP.restart();
-            } else if (command == "firmware-update") {
-                JsonDocument json;
-                json["command"] = command;
-                for (size_t i = 0; i < request->args(); i++) {
-                    json[request->argName(i)] = request->arg(i);
-                }
-                this->onSystemCommand(json);
-                request->send(204);
-            } else {
-                request->send(404);
-            }
             });
 
             webServer->on("^\\/system$", HTTP_POST, [this](AsyncWebServerRequest *request) {

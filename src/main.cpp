@@ -91,6 +91,12 @@ void onSystemCommand(JsonDocument &jsonDoc) {
       settingsManager->save();
       ESP.restart();
     }
+  } else if (jsonDoc["command"] == "sys-config-merge") {
+    settingsManager->mergeJson(jsonDoc["data"].as<String>());
+    if (settingsManager->isDirty()) {
+      settingsManager->save();
+      ESP.restart();
+    }
   } else if (jsonDoc["command"] == "dmx-config") {
     Log.noticeln("DMX config command received.");
     dmxSettingsManager->fromJson(jsonDoc["data"].as<String>());
