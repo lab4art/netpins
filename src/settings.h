@@ -83,44 +83,6 @@ struct Settings {
         return !(*this == other);
     }
 
-    // String toString() {
-    //     String ledsStr = "";
-    //     for (auto led : leds) {
-    //         ledsStr += led + ", ";
-    //     }
-
-    //     String rgbwStripsStr = "";
-    //     for (auto stripe : rgbwStrips) {
-    //         rgbwStripsStr += "pin: " + String(stripe.pin) + ", size: " + String(stripe.size) + ", slices: ";
-    //         for (auto slice : stripe.slices) {
-    //             rgbwStripsStr += slice + ", ";
-    //         }
-    //     }
-    //     String rgbStripsStr = "";
-    //     for (auto stripe : rgbStrips) {
-    //         rgbStripsStr += "pin: " + String(stripe.pin) + ", size: " + String(stripe.size) + ", slices: ";
-    //         for (auto slice : stripe.slices) {
-    //             rgbStripsStr += slice + ", ";
-    //         }
-    //     }
-
-    //     return String("Settings: ")
-    //     + "wifiSsid: " + wifiSsid.c_str()
-    //     + ", wifiPass: " + wifiPass.c_str()
-    //     + ", hostname: " + hostname.c_str()
-    //     + ", hbInt: " + hbInt
-    //     + ", udpPort: " + udpPort
-    //     + ", lightsTest: " + lightsTest
-    //     + ", maxIdle: " + maxIdle
-    //     + ", enableDmxStore: " + enableDmxStore
-    //     + ", leds size: " + leds.size()
-    //     + ", leds: " + ledsStr
-    //     + ", rgbwStrips size: " + rgbwStrips.size()
-    //     + ", rgbwStrips: " + rgbwStripsStr
-    //     + ", rgbStrips size: " + rgbStrips.size()
-    //     + ", rgbStrips: " + rgbStripsStr;
-    // }
-
     static void deserialize(Settings& s, JsonDocument& json) {
         s.wifiSsid = json["wifi_ssid"].as<std::string>();
         s.wifiPass = json["wifi_pass"].as<std::string>();
@@ -204,14 +166,14 @@ struct Settings {
         json["max_idle"] = maxIdle;
         json["enable_dmx_store"] = enableDmxStore;
 
-        JsonArray leds = json["leds"].to<JsonArray>();
-        for (auto led : leds) {
-            leds.add(led);
+        JsonArray jsonLeds = json["leds"].to<JsonArray>();
+        for (auto led : this->leds) {
+            jsonLeds.add(led);
         }
 
-        JsonArray rgbw_strips = json["rgbw_strips"].to<JsonArray>();
+        JsonArray jsonRgbw = json["rgbw_strips"].to<JsonArray>();
         for (auto stripe : rgbwStrips) {
-            JsonObject jsonStripe = rgbw_strips.createNestedObject();
+            JsonObject jsonStripe = jsonRgbw.createNestedObject();
             jsonStripe["pin"] = stripe.pin;
             jsonStripe["size"] = stripe.size;
             JsonArray slices = jsonStripe["slices"].to<JsonArray>();
@@ -220,9 +182,9 @@ struct Settings {
             }
         }
 
-        JsonArray rgb_strips = json["rgb_strips"].to<JsonArray>();
+        JsonArray jsonRgb = json["rgb_strips"].to<JsonArray>();
         for (auto stripe : rgbStrips) {
-            JsonObject jsonStripe = rgb_strips.createNestedObject();
+            JsonObject jsonStripe = jsonRgb.createNestedObject();
             jsonStripe["pin"] = stripe.pin;
             jsonStripe["size"] = stripe.size;
             JsonArray slices = jsonStripe["slices"].to<JsonArray>();
@@ -359,8 +321,6 @@ class SettingsManager {
             }
 
             Serial.println("Saving settings: ");
-            // Serial.println(this->settings.toString());
-
             JsonDocument jsonDoc;
             this->settings.serialize(jsonDoc);
             String output;
@@ -379,7 +339,7 @@ class SettingsManager {
             // parse jsonString to jsonDoc
             JsonDocument jsonDoc;
             deserializeJson(jsonDoc, jsonString);
-            
+
             T newSettings;
             T::deserialize(newSettings, jsonDoc);
             if (true || newSettings != this->settings) { // TODO waves changes are not detected, fix!
@@ -391,13 +351,6 @@ class SettingsManager {
 
         T& getSettings() {
             return this->settings;
-        }
-
-        void setSettings(T settings) {
-            if (settings != this->settings) {
-                this->settings = settings;
-                dirty = true;
-            }
         }
 
         void setDefaults() {

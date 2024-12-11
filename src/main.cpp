@@ -86,25 +86,22 @@ void onSystemCommand(JsonDocument &jsonDoc) {
   lastCommandReceivedAt = millis();
 
   if (jsonDoc["command"] == "sys-config") {
-    settingsManager->fromJson(jsonDoc["settings"].as<String>());
+    settingsManager->fromJson(jsonDoc["data"].as<String>());
     if (settingsManager->isDirty()) {
       settingsManager->save();
       ESP.restart();
     }
   } else if (jsonDoc["command"] == "dmx-config") {
     Log.noticeln("DMX config command received.");
-    DmxSettings dmxSettings;
-    dmxSettings.universe = jsonDoc["universe"].as<std::uint8_t>(); // TODO unify sent data format to match settings
-    dmxSettings.channel = jsonDoc["channel"].as<std::uint8_t>();
-    dmxSettingsManager->setSettings(dmxSettings);
-    if (settingsManager->isDirty()) {
-      settingsManager->save();
+    dmxSettingsManager->fromJson(jsonDoc["data"].as<String>());
+    if (dmxSettingsManager->isDirty()) {
+      dmxSettingsManager->save();
       ESP.restart();
     }
 
   } else if (jsonDoc["command"] == "firmware-update") {
     // firmwareUpdate(jsonDoc["url"].as<String>());
-    FirmwareUpdateParams* params = new FirmwareUpdateParams{jsonDoc["url"].as<String>(), false};
+    FirmwareUpdateParams* params = new FirmwareUpdateParams{jsonDoc["data"]["url"].as<String>(), false};
     xTaskCreate(
       firmwareUpdateTask,   // Task function
       "FirmwareUpdateTask", // Name of the task
@@ -115,7 +112,7 @@ void onSystemCommand(JsonDocument &jsonDoc) {
     );  
   } else if (jsonDoc["command"] == "spiffs-update") {
     // firmwareUpdate(jsonDoc["url"].as<String>());
-    FirmwareUpdateParams* params = new FirmwareUpdateParams{jsonDoc["url"].as<String>(), true};
+    FirmwareUpdateParams* params = new FirmwareUpdateParams{jsonDoc["data"]["url"].as<String>(), true};
     xTaskCreate(
       firmwareUpdateTask,   // Task function
       "FirmwareUpdateTask", // Name of the task
@@ -464,7 +461,7 @@ void onWifiExecutionCallback(String ip) {
       if (settigns.hbInt > 0) {
         auto ip = WiFi.localIP();
         IPAddress broadcastIp = IPAddress(ip[0], ip[1], ip[2], 255);
-        Log.noticeln("Starting UDP heartbeat on %s ...", broadcastIp.toString());
+        Log.noticeln("Starting UDP heartbeat on %d.%d.%d.255 ...", ip[0], ip[1], ip[2]);
         udp = new WiFiUDP();
         heartbeatBroadcast = new HeartbeatBroadcast(udp, broadcastIp, settigns.udpPort, &scheduler, FIRMWARE_VERSION, settigns.hbInt);
       }

@@ -1,12 +1,29 @@
+document.addEventListener("DOMContentLoaded", function() {
+    fetch('/sys-info')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('hostname').innerText = data.hostname;
+            document.getElementById('firmware').innerText = data.firmware;
+        });
+    fetch('/conf/sys/get')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('settings').value = jsyaml.dump(data);
+        });
+});
+
 function renderForm(formContainerId, formDef, data) {
     const formContainer = document.getElementById(formContainerId);
     const form = document.createElement('form');
     form.onsubmit = function (event) {
         event.preventDefault();
-        const formData = {};
+        const formData = {
+            'command': '',
+            'data': {}
+        };
         formData['command'] = formDef.command;
         formDef.fields.forEach(field => {
-            formData[field.name] = form.elements[field.name].value;
+            formData['data'][field.name] = form.elements[field.name].value;
         });
         // console.log(formData);
         // post json data to server
@@ -62,3 +79,42 @@ function renderForm(formContainerId, formDef, data) {
     formContainer.appendChild(form);
 }
 
+function postYamlAsJson() {
+    // const form = document.getElementById('sys-config-form');
+    // const formData = new FormData(form);
+    // const yaml = formData.get('settings');
+    // const json = jsyaml.load(yaml);
+    const settingsEl = document.getElementById('settings');
+    try {
+        const settingsJson = jsyaml.load(settingsEl.value);
+
+        const json = {
+            "command": "sys-config",
+            "data": settingsJson
+        };
+
+        fetch('/system', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(json)
+        })
+        // .then(response => {
+        //     if (!response.ok) {
+        //         throw new Error('Network response was not ok');
+        //     }
+        //     return response.json();
+        // })
+        .then(data => {
+            console.log('Success:', data);
+        })
+        // .catch(error => {
+        //     alert('Error during fetch: ' + error.message);
+        // })
+        ;
+
+    } catch (error) {
+        alert('Error parsing YAML: ' + error.message);
+    }
+}

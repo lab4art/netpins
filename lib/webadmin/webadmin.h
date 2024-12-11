@@ -62,8 +62,8 @@ class WebAdmin {
                 request->send(response);
             });
             // webServer->serveStatic("/script.js", LittleFS, "/script.js"); // TODO improvement
-            webServer->on("/form.js", HTTP_GET, [](AsyncWebServerRequest *request){
-                String path = "/form.js.gz";
+            webServer->on("/script.js", HTTP_GET, [](AsyncWebServerRequest *request){
+                String path = "/script.js.gz";
                 File file = LittleFS.open(path, "r");
                 if (!file) {
                     request->send(500, "text/plain", "Failed to open file");
