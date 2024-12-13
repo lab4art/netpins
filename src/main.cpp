@@ -81,44 +81,43 @@ void createStrip(int pin, int maxNeopx, std::map<int, NeoPixelBus<Feature, Metho
     strips[pin]->Show();
 }
 
-// TODO return enum: OK, OK-REBOOT, ERROR and make reboot after the response is sent
-void onSystemCommand(JsonDocument &jsonDoc) {
+WebAdmin::CommandResult onSystemCommand(JsonDocument &jsonDoc) {
   lastCommandReceivedAt = millis();
 
   if (jsonDoc["command"] == "sys-config") {
     settingsManager->fromJson(jsonDoc["data"].as<String>());
     if (settingsManager->isDirty()) {
       settingsManager->save();
-      ESP.restart();
+      return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK_REBOOT, "Saved, rebooting ...", 3000};
+    } else {
+      return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, "No updates.", -1};
     }
   } else if (jsonDoc["command"] == "sys-config-merge") {
     settingsManager->mergeJson(jsonDoc["data"].as<String>());
     if (settingsManager->isDirty()) {
       settingsManager->save();
-      ESP.restart();
+      return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK_REBOOT, "Saved, rebooting ...", 3000};
+    } else {
+      return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, "No updates.", -1};
     }
   } else if (jsonDoc["command"] == "dmx-config") {
     Log.noticeln("DMX config command received.");
     dmxSettingsManager->fromJson(jsonDoc["data"].as<String>());
     if (dmxSettingsManager->isDirty()) {
       dmxSettingsManager->save();
-      ESP.restart();
+      return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK_REBOOT, "Saved, rebooting ...", 3000};
+    } else {
+      return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, "No updates.", -1};
+    }
+  } else if (jsonDoc["command"] == "firmware-update" || jsonDoc["command"] == "spiffs-update") {
+    FirmwareUpdateParams* params;
+
+    if (jsonDoc["command"] == "firmware-update") {
+      params = new FirmwareUpdateParams{jsonDoc["data"]["url"].as<String>(), false};
+    } else {
+      params = new FirmwareUpdateParams{jsonDoc["data"]["url"].as<String>(), true};
     }
 
-  } else if (jsonDoc["command"] == "firmware-update") {
-    // firmwareUpdate(jsonDoc["url"].as<String>());
-    FirmwareUpdateParams* params = new FirmwareUpdateParams{jsonDoc["data"]["url"].as<String>(), false};
-    xTaskCreate(
-      firmwareUpdateTask,   // Task function
-      "FirmwareUpdateTask", // Name of the task
-      10000,                // Stack size (in words)
-      params,                  // Task input parameters
-      1,                    // Priority of the task
-      NULL                  // Task handle
-    );  
-  } else if (jsonDoc["command"] == "spiffs-update") {
-    // firmwareUpdate(jsonDoc["url"].as<String>());
-    FirmwareUpdateParams* params = new FirmwareUpdateParams{jsonDoc["data"]["url"].as<String>(), true};
     xTaskCreate(
       firmwareUpdateTask,   // Task function
       "FirmwareUpdateTask", // Name of the task
@@ -127,10 +126,26 @@ void onSystemCommand(JsonDocument &jsonDoc) {
       1,                    // Priority of the task
       NULL                  // Task handle
     );
+    // Wait for the result from the firmware update task
+    FirmwareUpdateResult* updateResult;
+    if (xQueueReceive(firmwareUpdateResultQueue, &updateResult, pdMS_TO_TICKS(90000)) != pdTRUE) {
+      Log.errorln("Failed to receive update result within 90 seconds.");
+      return WebAdmin::CommandResult{WebAdmin::CommandStatus::ERROR, "Update timed-out after 90 seconds.", 3000};
+    } else {
+      if (updateResult->status == FirmwareUpdateStatus::NO_UPDATES) {
+        return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, updateResult->message, -1};
+      } else if (updateResult->status == FirmwareUpdateStatus::STARTED) {
+        return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, updateResult->message, 30000};  // update takes ~20s
+      } else if (updateResult->status == FirmwareUpdateStatus::SUCCESS) {
+        return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK_REBOOT, updateResult->message, 3000};
+      } else {
+        return WebAdmin::CommandResult{WebAdmin::CommandStatus::ERROR, updateResult->message, -1};
+      }
+    }
   } else if (jsonDoc["command"] == "reboot") {
-    ESP.restart();
+    return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK_REBOOT, "Rebooting ...", 3000};
   }
-  return;
+  return WebAdmin::CommandResult{WebAdmin::CommandStatus::ERROR, "Unknown command.", -1};
 }
 
 HeartbeatBroadcast* heartbeatBroadcast;
@@ -424,6 +439,7 @@ void setup() {
   }
 
   initNeoStipTask();
+  firmwareUpdateResultQueue = xQueueCreate(1, sizeof(int));
 
   dmxListener->restoreDmxData();
 

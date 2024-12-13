@@ -76,19 +76,18 @@ class WifiUtils {
                     if (reconnectDelay > 120000) { // 2 min
                       reconnectDelay = 120000;
                     }
-                    Serial.print(millis());
-                    Serial.println(" Reconnecting to WiFi ...");
+                    Log.noticeln("Reconnecting to WiFi ...");
                     WiFi.reconnect();
                     connectedCallbackCalled = false;
                     connectAttempt++;
                     if (connectAttempt > 15) {
+                      Log.errorln("Too many failed attempts to connect to WiFi. Restarting ...");
                       ESP.restart();
                     }
                 } else {
                   connectAttempt = 0;
                 }
                 if (!connectedCallbackCalled && WiFi.status() == WL_CONNECTED) {
-                  Serial.println("WiFi connected: " + WiFi.localIP().toString());
                   wifiExecutionCallback(WiFi.localIP().toString());
                   connectedCallbackCalled = true;
                 }

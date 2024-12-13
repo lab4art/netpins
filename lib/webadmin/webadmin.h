@@ -11,20 +11,45 @@
 
 
 class WebAdmin {
+    public:
+        enum CommandStatus {
+            OK,
+            OK_REBOOT,
+            ERROR
+        };
+        struct CommandResult {
+            CommandStatus status;
+            String message;
+            int reloadDelay; // -1 no reload, 0 reload immediately, >0 reload after delay
+        };
+
     private:
         AsyncWebServer* webServer = new AsyncWebServer(80);
         std::function<void()> onReceivedCallback = [](){};
         
         SettingsManager<Settings>* settingsManager;
         SettingsManager<DmxSettings>* dmxSettingsManager;
-        std::function<void(JsonDocument&)> onSystemCommand = [](JsonDocument doc){};
+        std::function<CommandResult(JsonDocument&)> onSystemCommand = [](JsonDocument&){ return CommandResult{OK, "Success."}; };
 
+        void serveFile(AsyncWebServerRequest *request, String path, String contentType) {
+            File file = LittleFS.open(path, "r");
+            if (!file) {
+                request->send(500, "text/plain", "Failed to open file");
+                return;
+            }
+            String htmlContent = file.readString();
+            file.close();
+            AsyncWebServerResponse *response = request->beginResponse(200, contentType, htmlContent);
+            response->addHeader("Content-encoding", "gzip");
+            request->send(response);
+
+        }
 
     public:
         WebAdmin(
                 SettingsManager<Settings>* settingsManager,
                 SettingsManager<DmxSettings>* dmxSettingsManager,
-                std::function<void(JsonDocument&)> onSystemCommand):
+                std::function<CommandResult(JsonDocument&)> onSystemCommand):
                 settingsManager(settingsManager),
                 dmxSettingsManager(dmxSettingsManager),
                 onSystemCommand(onSystemCommand) {
@@ -32,7 +57,6 @@ class WebAdmin {
             webServer->on("/sys-info", HTTP_GET, [this](AsyncWebServerRequest *request){
                 this->onReceivedCallback();
 
-                // std::string output;
                 String output;
                 JsonDocument doc;
                 doc["firmware"] = FIRMWARE_VERSION;
@@ -42,57 +66,21 @@ class WebAdmin {
                 doc["uptime"] = std::to_string(millis());
                 serializeJson(doc, output);
 
-                // request->send(200, "application/json", String(output.c_str()));
                 request->send(200, "application/json", output);
-                // request->send(200, "text/html", response.c_str());
             });
 
-            webServer->on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-                String path = "/admin.html.gz";
-                File file = LittleFS.open(path, "r");
-                if (!file) {
-                    request->send(500, "text/plain", "Failed to open file");
-                    return;
-                }
-                String htmlContent = file.readString();
-                file.close();
-
-                // request->send(200, "text/html", htmlContent);
-                AsyncWebServerResponse *response = request->beginResponse(200, "text/html", htmlContent);
-                response->addHeader("Content-encoding", "gzip");
-                request->send(response);
+            webServer->on("/", HTTP_GET, [this](AsyncWebServerRequest *request){
+                serveFile(request, "/admin.html.gz", "text/html");
             });
-            // webServer->serveStatic("/script.js", LittleFS, "/script.js"); // TODO improvement
-            webServer->on("/script.js", HTTP_GET, [](AsyncWebServerRequest *request){
-                String path = "/script.js.gz";
-                File file = LittleFS.open(path, "r");
-                if (!file) {
-                    request->send(500, "text/plain", "Failed to open file");
-                    return;
-                }
-                String htmlContent = file.readString();
-                file.close();
-                // request->send(200, "application/javascript", htmlContent.c_str());
-                AsyncWebServerResponse *response = request->beginResponse(200, "application/javascript", htmlContent);
-                // response->addHeader("Content-Type", "text/html");
-                response->addHeader("Content-encoding", "gzip");
-                request->send(response);
+            webServer->on("/script.js", HTTP_GET, [this](AsyncWebServerRequest *request){
+                serveFile(request, "/script.js.gz", "application/javascript");
             });
-
-            webServer->on("/js-yaml-4.1.0.min.js", HTTP_GET, [](AsyncWebServerRequest *request){
-                String path = "/js-yaml-4.1.0.min.js.gz";
-                File file = LittleFS.open(path, "r");
-                if (!file) {
-                    request->send(500, "text/plain", "Failed to open file");
-                    return;
-                }
-                String htmlContent = file.readString();
-                file.close();
-                AsyncWebServerResponse *response = request->beginResponse(200, "application/javascript", htmlContent);
-                response->addHeader("Content-encoding", "gzip");
-                request->send(response);
+            webServer->on("/js-yaml-4.1.0.min.js", HTTP_GET, [this](AsyncWebServerRequest *request){
+                serveFile(request, "/js-yaml-4.1.0.min.js.gz", "application/javascript");
             });
-
+            webServer->on("/style.css", HTTP_GET, [this](AsyncWebServerRequest *request){
+                serveFile(request, "/style.css.gz", "text/css");
+            });
 
             // HTTP_GET is used for convinience that users can use a browser without any plugin or form
             webServer->on("^\\/conf\\/(.+)$", HTTP_GET, [this](AsyncWebServerRequest *request){
@@ -111,16 +99,32 @@ class WebAdmin {
             webServer->on("^\\/system$", HTTP_POST, [this](AsyncWebServerRequest *request) {
                 this->onReceivedCallback();
                 // This callback after the last chunk of body data has been received
-                request->send(204);
                 String* requestBody = (String*)request->_tempObject;
                 Log.noticeln("Received POST request. Body: %s", requestBody->c_str());
                 JsonDocument doc;
                 deserializeJson(doc, *requestBody);
-                this->onSystemCommand(doc);
+                CommandResult result = this->onSystemCommand(doc);
                 delete requestBody;
                 request->_tempObject = NULL;
-                // if the URL of the request is http://example.com/path/to/page?query=string, request->url() returns /path/to/page?query=string.
 
+                // serialize CommandResult result to json
+                String resultJson;
+                JsonDocument resultDoc;
+                resultDoc["status"] = result.status == OK ? "OK" : result.status == OK_REBOOT ? "OK_REBOOT" : "ERROR";
+                resultDoc["message"] = result.message;
+                resultDoc["reloadDelay"] = result.reloadDelay;
+                serializeJson(resultDoc, resultJson);
+
+                if (result.status == OK || result.status == OK_REBOOT) {
+                    request->send(200, "application/json", resultJson);
+                    if (result.status == OK_REBOOT) {
+                        delay(1000);
+                        Log.noticeln("Rebooting ...");
+                        ESP.restart();
+                    }
+                } else {
+                    request->send(500, "application/json", resultJson);
+                }
             }, NULL, [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
                 // This callback is called for each chunk of body data received
                 Log.noticeln("Received chunk, Len: %d, Index: %d, Total: %d.", len, index, total);

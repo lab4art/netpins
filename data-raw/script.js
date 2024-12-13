@@ -1,89 +1,100 @@
-document.addEventListener("DOMContentLoaded", function() {
+function showLoader() {
+    const glassPane = document.getElementById('glass-pane');
+    glassPane.style.display = 'flex';
+}
+
+function hideLoader() {
+    const glassPane = document.getElementById('glass-pane');
+    glassPane.style.display = 'none';
+}
+
+const NotificationType = {
+    ERROR: 'error',
+    SUCCESS: 'success'
+}
+
+function showNotificationPanel(message, type, hideAfter) {
+    document.getElementById('notification-message').innerText = message;
+    var panel = document.getElementById('notification-panel');
+    if (type === NotificationType.ERROR) {
+        panel.className = 'notification-panel-error';
+    } else {
+        panel.className = 'notification-panel';
+    }
+    panel.style.display = 'block';
+    if (hideAfter) {
+        setTimeout(() => {
+            hideNotificationPanel();
+        }, hideAfter);
+    }
+}
+
+function hideNotificationPanel() {
+    var panel = document.getElementById('notification-panel');
+    panel.style.display = 'none';
+}
+
+function fetchAndUpdateDMX() {
+    fetch('/conf/dmx')
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById('universe').value = data.universe;
+        document.getElementById('channel').value = data.channel;
+    });
+}
+
+function fetchAndUpdateSysInfo() {
     fetch('/sys-info')
-        .then(response => response.json())
-        .then(data => {
-            document.getElementById('hostname').innerText = data.hostname;
-            document.getElementById('firmware').innerText = data.firmware;
-        });
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById('hostname').innerText = data.hostname;
+        document.getElementById('firmware').innerText = data.firmware;
+    });
+}
+
+function fetchAndUpdateSettings() {
     fetch('/conf/sys')
-        .then(response => response.json())
-        .then(data => {
-            document.getElementById('settings').value = jsyaml.dump(data);
-        });
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById('settings').value = jsyaml.dump(data);
+    });
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+    fetchAndUpdateSysInfo();
+    fetchAndUpdateDMX();
+    fetchAndUpdateSettings();
 });
 
-function renderForm(formContainerId, formDef, data) {
-    const formContainer = document.getElementById(formContainerId);
-    const form = document.createElement('form');
-    form.onsubmit = function (event) {
-        event.preventDefault();
-        const formData = {
-            'command': '',
-            'data': {}
-        };
-        formData['command'] = formDef.command;
-        formDef.fields.forEach(field => {
-            formData['data'][field.name] = form.elements[field.name].value;
-        });
-        // console.log(formData);
-        // post json data to server
-        fetch('/system', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(formData),
-            })
-            .catch((error) => {
-                // console.error('Error:', error);
-            });
-    };
-
-    formDef.fields.forEach(field => {
-        const fieldWrapper = document.createElement('div');
-        fieldWrapper.className = 'form-group';
-
-        if (field.label) {
-            const label = document.createElement('label');
-            label.textContent = field.label;
-            label.setAttribute('for', field.name);
-            fieldWrapper.appendChild(label);
-        
-            if (field.tooltip) {
-                const tooltip = document.createElement('span');
-                tooltip.className = 'tooltip';
-                tooltip.textContent = '?';
-    
-                const tooltipText = document.createElement('span');
-                tooltipText.className = 'tooltiptext';
-                tooltipText.innerHTML = field.tooltip;
-    
-                tooltip.appendChild(tooltipText);
-                label.appendChild(tooltip);
-            }
+function processResponse(data) {
+    if (data.status === 'OK' || data.status === 'OK_REBOOT') {
+        if (data.reloadDelay >= 0) {
+            setTimeout(() => {
+                window.location.hash = '';
+                window.location.reload();
+            }, data.reloadDelay);
+            showNotificationPanel(data.message, NotificationType.SUCCESS);
+        } else {
+            fetchAndUpdateSysInfo();
+            fetchAndUpdateDMX();
+            fetchAndUpdateSettings();
+            hideLoader();
+            showNotificationPanel(data.message, NotificationType.SUCCESS, 3000);
         }
-
-        const input = document.createElement('input');
-        input.type = field.type;
-        input.name = field.name;
-        if (field.name in data) {
-            input.value = data[field.name];
+    } else {
+        if (data.reloadDelay >= 0) {
+            showNotificationPanel(data.message, NotificationType.ERROR);
+            setTimeout(() => {
+                window.location.reload();
+            }, data.reloadDelay);
+        } else {
+            showNotificationPanel(data.message, NotificationType.ERROR);
+            hideLoader();
         }
-        fieldWrapper.appendChild(input);
-        form.appendChild(fieldWrapper);
-    });
-    submitEl = document.createElement('input');
-    submitEl.type = 'submit';
-    submitEl.value = formDef.submitLabel;
-    form.appendChild(submitEl);
-    formContainer.appendChild(form);
+    }
 }
 
 function postYamlAsJson() {
-    // const form = document.getElementById('sys-config-form');
-    // const formData = new FormData(form);
-    // const yaml = formData.get('settings');
-    // const json = jsyaml.load(yaml);
     const settingsEl = document.getElementById('settings');
     try {
         const settingsJson = jsyaml.load(settingsEl.value);
@@ -93,6 +104,7 @@ function postYamlAsJson() {
             "data": settingsJson
         };
 
+        showLoader();
         fetch('/system', {
             method: 'POST',
             headers: {
@@ -100,21 +112,49 @@ function postYamlAsJson() {
             },
             body: JSON.stringify(json)
         })
-        // .then(response => {
-        //     if (!response.ok) {
-        //         throw new Error('Network response was not ok');
-        //     }
-        //     return response.json();
-        // })
+        .then(response => response.json())
         .then(data => {
-            console.log('Success:', data);
+            console.log('Response:', data);
+            processResponse(data);
         })
-        // .catch(error => {
-        //     alert('Error during fetch: ' + error.message);
-        // })
-        ;
+        .catch(error => {
+            hideLoader();
+            showNotificationPanel(error.message, NotificationType.ERROR);
+        });
 
     } catch (error) {
-        alert('Error parsing YAML: ' + error.message);
+        hideLoader();
+        showNotificationPanel('Error parsing YAML: ' + error.message, NotificationType.ERROR);
     }
+}
+
+function postFormAsJson(formId) {
+    showLoader();
+    const formEl = document.getElementById(formId);
+    const formData = new FormData(formEl);
+    const json = {
+        "command": formId,
+        "data": {}
+    };
+    formData.forEach((value, key) => {
+        json.data[key] = value;
+    });
+
+    showLoader();
+    fetch('/system', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(json)
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Response:', data);
+        processResponse(data);
+    })
+    .catch(error => {
+        hideLoader();
+        showNotificationPanel(error.message, NotificationType.ERROR);
+    });
 }
