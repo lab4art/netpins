@@ -1,6 +1,9 @@
 body {
     font-family: Arial,Helvetica,sans-serif;
     color: #333;
+    margin: 0;
+    padding: 0;
+    
 }
 h1 {
     font-size: 150%;
@@ -13,17 +16,21 @@ h1 {
     width:100%;
     display: flex;
     justify-content: center;
+    background-color: #7d7d7d;
 }
 .main {
     max-width: 350px;
+    background-color: #f4f4f4;
+    padding-bottom: 10px;
+    padding-left: 10px;
+    padding-right: 10px;
 }
 .example {
     overflow: auto;
-    width: 100%;
     max-height: 300px;
     padding: 5px;
     border: 1px solid #c8c8c8;
-    background-color: #f9f9f9;
+    background-color: #ffffff;
 }
 .example pre {
     margin-top: 0;
@@ -108,7 +115,7 @@ h1 {
     justify-content: center;
 }
 .spinner {
-    border: 8px solid rgba(67, 170, 67, 0.5);
+    border: 8px solid rgb(112, 219, 91, 0.7);
     border-top: 8px solid #fff;
     border-radius: 50%;
     width: 60px;
@@ -138,16 +145,7 @@ h1 {
     display: none;
 }
 .notification-panel-error {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
     background-color: #d43535;
-    color: white;
-    text-align: center;
-    padding: 10px;
-    z-index: 10000; /* Ensure it is above other content */
-    display: none;
 }
 
 .notification-panel button {
@@ -157,9 +155,18 @@ h1 {
     padding: 5px 10px;
     margin-left: 10px;
     cursor: pointer;
+    border-radius: 5px;
+}
+
+.notification-panel-error button {
+    background-color: #733838;
 }
 
 .notification-panel button:hover {
     background-color: #38734c63;
+}
+
+.notification-panel-error button:hover {
+    background-color: #73383863;
 }
 

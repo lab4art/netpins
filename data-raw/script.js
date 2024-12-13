@@ -17,7 +17,7 @@ function showNotificationPanel(message, type, hideAfter) {
     document.getElementById('notification-message').innerText = message;
     var panel = document.getElementById('notification-panel');
     if (type === NotificationType.ERROR) {
-        panel.className = 'notification-panel-error';
+        panel.className = 'notification-panel notification-panel-error';
     } else {
         panel.className = 'notification-panel';
     }

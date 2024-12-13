@@ -1,3 +1,3 @@
 #pragma once
 
-#define FIRMWARE_VERSION "netpins-1.0.4-snapshot"
+#define FIRMWARE_VERSION "netpins-1.0.4"
