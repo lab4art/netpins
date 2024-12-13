@@ -32,7 +32,7 @@ FirmwareUpdateResult* lastResult = new FirmwareUpdateResult();
 void update_started() {
     Log.noticeln("HTTP update process started");
     lastResult->status = FirmwareUpdateStatus::STARTED;
-    lastResult->message = "Update started it takes about 30 sec ...";
+    lastResult->message = "Update started. It takes about 30 sec ...";
     emptyQueue(firmwareUpdateResultQueue);
     // Send the result to the queue, blocking for up to 15 seconds
     if (xQueueSend(firmwareUpdateResultQueue, &lastResult, pdMS_TO_TICKS(15000)) != pdPASS) {

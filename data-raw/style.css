@@ -151,7 +151,7 @@ h1 {
 }
 
 .notification-panel button {
-    background-color: #444;
+    background-color: #38734c;
     color: white;
     border: none;
     padding: 5px 10px;
@@ -160,6 +160,6 @@ h1 {
 }
 
 .notification-panel button:hover {
-    background-color: #44444463;
+    background-color: #38734c63;
 }
 

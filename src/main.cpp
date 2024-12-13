@@ -443,7 +443,9 @@ void setup() {
 
   dmxListener->restoreDmxData();
 
-  maxIdleMillis = settings.maxIdle * 60000;
+  if (settings.maxIdle > 0) {
+    maxIdleMillis = settings.maxIdle * 60000;
+  }
 
   Serial.println(String("Using ssid: ") + settings.wifiSsid.c_str());
   wifi = new WifiUtils(settings.wifiSsid.c_str(), settings.wifiPass.c_str(), 5000, settings.hostname.c_str());
@@ -524,6 +526,7 @@ void loop() {
 
   if (maxIdleMillis > 0 && millis() - lastCommandReceivedAt > maxIdleMillis) {
     Log.noticeln("No command received for %d min, going to sleep ...", maxIdleMillis / 60000);
+    Log.noticeln("maxIdleMillis: %d, lastCommandReceivedAt: %d, millis: %d", maxIdleMillis, lastCommandReceivedAt, millis());
     
     if (webAdmin != nullptr) {
       webAdmin->end();

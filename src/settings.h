@@ -239,7 +239,7 @@ struct Settings {
 };
 
 struct DmxSettings {
-    std::uint8_t universe; // TODO universe 0 is not displayed in the UI
+    std::uint8_t universe;
     std::uint8_t channel;
 
     bool operator==(const DmxSettings& other) const {
@@ -292,7 +292,7 @@ class SettingsManager {
         void fromJsonDoc(JsonDocument& jsonDoc) {
             T newSettings;
             T::deserialize(newSettings, jsonDoc);
-            if (true || newSettings != this->settings) { // TODO waves changes are not detected, fix!
+            if (newSettings != this->settings) {
                 Serial.println("Settings changed.");
                 this->settings = newSettings;
                 dirty = true;
