@@ -81,6 +81,9 @@ class WebAdmin {
             webServer->on("/style.css", HTTP_GET, [this](AsyncWebServerRequest *request){
                 serveFile(request, "/style.css.gz", "text/css");
             });
+            webServer->on("/favicon.svg", HTTP_GET, [this](AsyncWebServerRequest *request){
+                serveFile(request, "/favicon.svg.gz", "image/svg+xml");
+            });
 
             // HTTP_GET is used for convinience that users can use a browser without any plugin or form
             webServer->on("^\\/conf\\/(.+)$", HTTP_GET, [this](AsyncWebServerRequest *request){

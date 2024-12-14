@@ -83,6 +83,7 @@ void createStrip(int pin, int maxNeopx, std::map<int, NeoPixelBus<Feature, Metho
 
 WebAdmin::CommandResult onSystemCommand(JsonDocument &jsonDoc) {
   lastCommandReceivedAt = millis();
+  factoryReset->resetCounter(true);
 
   if (jsonDoc["command"] == "sys-config") {
     settingsManager->fromJson(jsonDoc["data"].as<String>());

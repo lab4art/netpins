@@ -25,8 +25,8 @@ class FactoryReset {
             preferences.end();
         }
 
-        bool resetCounter() {
-            if (!couterReseted && millis() > 10000) {
+        bool resetCounter(boolean force = false) {
+            if (!couterReseted && (force || millis() > 8000)) {
                 Log.noticeln("Resetting factoryReset counter ...");
                 preferences.begin("f-rst", false);
                 preferences.putInt("cnt", 0);
