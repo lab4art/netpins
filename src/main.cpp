@@ -449,7 +449,8 @@ void setup() {
   }
 
   Serial.println(String("Using ssid: ") + settings.wifiSsid.c_str());
-  wifi = new WifiUtils(settings.wifiSsid.c_str(), settings.wifiPass.c_str(), 5000, settings.hostname.c_str());
+
+  wifi = new WifiUtils(settings.wifiSsid.c_str(), settings.wifiPass.c_str(), { STATIC_IP, GATEWAY, SUBNET, DNS }, 5000, settings.hostname.c_str());
   Serial.println("Wifi MAC: " + WifiUtils::macAddress);
 
   artnet = new ArtnetWifi();
@@ -488,7 +489,14 @@ void onWifiExecutionCallback(String ip) {
         IPAddress broadcastIp = IPAddress(ip[0], ip[1], ip[2], 255);
         Log.noticeln("Starting UDP heartbeat on %d.%d.%d.255 ...", ip[0], ip[1], ip[2]);
         udp = new WiFiUDP();
-        heartbeatBroadcast = new HeartbeatBroadcast(udp, broadcastIp, settigns.udpPort, &scheduler, FIRMWARE_VERSION, settigns.hbInt);
+        heartbeatBroadcast = new HeartbeatBroadcast(
+          udp, 
+          broadcastIp, 
+          settigns.udpPort, 
+          &scheduler, 
+          FIRMWARE_VERSION, 
+          settigns.hostname,
+          settigns.hbInt);
       }
     }
   }

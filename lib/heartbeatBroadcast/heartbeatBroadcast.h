@@ -9,6 +9,7 @@ class HeartbeatBroadcast: public Task {
     IPAddress broadcastIp;
     u_int16_t port;
     const char* firmwareVersion;
+    std::string hostName;
 
   public:
     HeartbeatBroadcast(
@@ -17,11 +18,13 @@ class HeartbeatBroadcast: public Task {
         u_int16_t port,
         Scheduler* aScheduler,
         const char* firmwareVersion,
+        std::string hostName,
         unsigned long interval = 10000):
       udp(udp),
       broadcastIp(broadcastIp),
       port(port),
       firmwareVersion(firmwareVersion),
+      hostName(hostName),
       Task(interval, TASK_FOREVER, aScheduler, false) {
         if (interval > 0) {
           this->enable();
@@ -33,8 +36,9 @@ class HeartbeatBroadcast: public Task {
       JsonDocument doc;
       doc["uptime"] = millis();
       doc["firmwareVersion"] = firmwareVersion;
-      doc["ip"] = WiFi.localIP().toString();
       doc["mac"] = WifiUtils::macAddress;
+      doc["ip"] = WiFi.localIP().toString();
+      doc["hostname"] = this->hostName;
       serializeJson(doc, output);
 
       udp->beginPacket(broadcastIp, port);

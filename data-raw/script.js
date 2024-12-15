@@ -49,6 +49,12 @@ function fetchAndUpdateSysInfo() {
     .then(data => {
         document.getElementById('hostname').innerText = data.hostname;
         document.getElementById('firmware').innerText = data.firmware;
+        // update page title
+        if (data.hostname) {
+            document.title = 'NetPins: ' + data.hostname;
+        } else {
+            document.title = 'NetPins';
+        }
     });
 }
 

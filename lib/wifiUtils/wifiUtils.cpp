@@ -7,6 +7,12 @@
 
 #define ON_WIFI_EXECUTION_CALLBACK_SIGNATURE std::function<void(String)> wifiExecutionCallback
 
+struct static_ip_t {
+    IPAddress ip;
+    IPAddress gateway;
+    IPAddress subnet;
+    IPAddress dns1;
+};
 class WifiUtils {
     private:
         const char* ssid;
@@ -21,7 +27,7 @@ class WifiUtils {
     public:
         static String macAddress;
 
-        WifiUtils(const char* ssid, const char* password, unsigned long reconnectInterval = 5000, const char* hostname = "", const char* hostnamePrefix = "esp-"): 
+        WifiUtils(const char* ssid, const char* password, static_ip_t staticIp, unsigned long reconnectInterval = 5000, const char* hostname = "", const char* hostnamePrefix = "esp-") : 
               ssid(ssid), 
               password(password),
               reconnectInterval(reconnectInterval) {
@@ -55,6 +61,11 @@ class WifiUtils {
               Log.noticeln("AP IP address: %s", WiFi.softAPIP().toString().c_str()); // default IP is 192.168.4.1
             } else {
               WiFi.mode(WIFI_STA);
+
+              if (staticIp.ip != IPAddress(0, 0, 0, 0)) {
+                WiFi.config(staticIp.ip, staticIp.gateway, staticIp.subnet, staticIp.dns1);
+              }
+
               WiFi.begin(ssid, password);
             }
 

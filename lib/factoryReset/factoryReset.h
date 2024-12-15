@@ -41,5 +41,4 @@ class FactoryReset {
         bool shouldReset() {
             return doReset;
         }
-
 };
