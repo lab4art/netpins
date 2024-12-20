@@ -5,6 +5,7 @@
 #include <vector>
 #include <Things.h>
 #include <Preferences.h>
+#include <ArduinoLog.h>
 
 /**
  * Each controller has one DmxListener instance to handle DMX data.
@@ -37,18 +38,16 @@ class DmxListener {
                     }
                 }
                 if (sameData) {
-                    Log.infoln("DMX data is the same as the last stored data.");
+                    Log.noticeln("DMX data is the same as the last stored data.");
                     return;
                 }
 
                 preferences.begin("dmx-state", false);
                 preferences.putBytes("data", data, 511); // do not store the last byte, it's a store flag
                 preferences.end();
-                lastStoreFlag = 255;
                 Log.infoln("DMX data stored.");
-            } else {
-                lastStoreFlag = data[511];
             }
+            lastStoreFlag = data[511];
         }
 
     public:
@@ -79,7 +78,7 @@ class DmxListener {
             thingList.clear();
         }
 
-        void onDmxFrame(uint16_t length, uint8_t data[512]) {
+        void processDmxData(uint16_t length, uint8_t data[512]) {
             int currentDmxIndex = firstDmxChannel - 1; // 1st channel is 1 (means 0 in the art-net data array)
             for (auto& thing : thingList) {
                 // get the data for the thing based on the number of channels it needs
@@ -98,16 +97,15 @@ class DmxListener {
             }
         }
 
-        void restoreDmxData() {
+        void restoreDmxData(uint8_t dmxData[512]) {
             if (!enableStore) {
                 return;
             }
-            uint8_t dmxData[512] = {0};
+            // uint8_t dmxData[512] = {0};
             preferences.begin("dmx-state", true);
             preferences.getBytes("data", dmxData, 511);
             preferences.end();
             // set the store flag to 0 to prevent storing the data again
             dmxData[511] = 0;
-            onDmxFrame(512, dmxData);
         }
 };

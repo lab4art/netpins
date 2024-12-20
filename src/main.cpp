@@ -442,7 +442,7 @@ void setup() {
   initNeoStipTask();
   firmwareUpdateResultQueue = xQueueCreate(1, sizeof(int));
 
-  dmxListener->restoreDmxData();
+  dmxListener->restoreDmxData(dmxData);
 
   if (settings.maxIdle > 0) {
     maxIdleMillis = settings.maxIdle * 60000;
@@ -518,7 +518,7 @@ void loop() {
 
   if (millis() - lastCommit > 20) { // 50fps
     // unsigned long startProcessing = micros();
-    dmxListener->onDmxFrame(512, dmxData);
+    dmxListener->processDmxData(512, dmxData);
     // doCommitStrip();
     commitNeoStip();
     // Serial.println(String(millis()) + " Processed in [us]: " + (micros() - startProcessing));
