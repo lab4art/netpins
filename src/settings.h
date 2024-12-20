@@ -239,8 +239,8 @@ struct Settings {
 };
 
 struct DmxSettings {
-    std::uint8_t universe;
-    std::uint8_t channel;
+    std::uint16_t universe;
+    std::uint16_t channel;
 
     bool operator==(const DmxSettings& other) const {
         return universe == other.universe &&
@@ -252,8 +252,8 @@ struct DmxSettings {
     }
 
     static void deserialize(DmxSettings& s, JsonDocument& json) {
-        s.universe = json["universe"].as<std::uint8_t>();
-        s.channel = json["channel"].as<std::uint8_t>();
+        s.universe = json["universe"].as<std::uint16_t>();
+        s.channel = json["channel"].as<std::uint16_t>();
     };
 
     void serialize(JsonDocument& json) {
