@@ -50,10 +50,10 @@ Recommended option is to use [PlatformIO for VSCode](https://docs.platformio.org
 - Configure the first DMX channel and the universe in the Admin console.
 - Next DMX channels are mapped without gaps depending on how many channels the function takes:
   - LEDs: 1 channel per pin
-  - RGBW strips: 4 channels per slice
-  - RGB strips: 3 channels per slice
+  - RGBW strips: 4 channels per slice (5 if dimmer is enabled)
+  - RGB strips: 3 channels per slice (4 if dimmer is enabled)
   - Servos: 1 channel per pin
-  - Waves: 7 channels per wave (2 x RGB + fade)
+  - Waves: 7 channels per wave (2 x RGB + fade) (8 if dimmer is enabled)
 
 ## Sample Configuration
 
@@ -72,6 +72,7 @@ rgbw_strips: []
 rgb_strips:
   - pin: 13
     size: 60
+    dimmer: true # add dimmer channel
     slices:
       - 0
       - 15
@@ -85,9 +86,9 @@ servos:
     max_pulse_width: 2500
   - pin: 13
     max_angle: 90
-waves:
+waves: # works only with rgb strip
   - max_fade_time: 10000
-    # slice sequential number in order they are defined, ignoring "pin groups"
+    # RGB slice sequential number in order they are defined, ignoring "pin groups"
     slice_indexes:
       - 0
       - 1

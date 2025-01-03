@@ -15,11 +15,14 @@ class Switchabe {
         virtual void off() = 0;
 };
 
+template<typename T_COLOR> 
 class SliceThingBase : public Thing, public Switchabe {
     protected:
         int pxFrom;
         int pxTo;
         static NeoGamma<NeoGammaTableMethod> colorGamma;
+
+        virtual void doSetColor(uint16_t px, T_COLOR color, uint8_t dimm) = 0;
 
     public:
         SliceThingBase(int pxFrom, int pxTo):
@@ -29,6 +32,33 @@ class SliceThingBase : public Thing, public Switchabe {
         int size() {
             return pxTo - pxFrom + 1;
         }
+
+        void setColor(T_COLOR color, uint8_t dimm = 255) {
+            for (int px = 0; px <= pxTo - pxFrom; px++) {
+                doSetColor(px, color, dimm);
+            }
+        }
+
+        void setColor(uint16_t px, T_COLOR color, uint8_t dimm = 255) {
+            // make sure px is in range
+            if (px < 0 || px >= size()) {
+                return;
+            }
+            doSetColor(px, color, dimm);
+        }
+
+        void on() {
+            for (int px = 0; px <= pxTo - pxFrom; px++) {
+                doSetColor(px, T_COLOR(255), 255);
+            }
+        }
+
+        void off() {
+            for (int px = 0; px <= pxTo - pxFrom; px++) {
+                doSetColor(px, T_COLOR(0), 0);
+            }
+        }
+
 };
 
 class LedThing : public Thing, public Switchabe {
@@ -102,111 +132,84 @@ class LedThing : public Thing, public Switchabe {
         }
 };
 
-class RgbThing : public SliceThingBase {
+class RgbThing : public SliceThingBase<RgbColor> {
   private:
     NeoPixelBus<NeoGrbFeature, NeoEsp32RmtNWs2812xMethod>* strip;
+    bool dimmable;
     
-    void doSetColor(uint16_t px, RgbColor color) {
+  protected:
+    void doSetColor(uint16_t px, RgbColor color, uint8_t dimm) {
         // update only if the color is different
         auto stripPx = pxFrom + px;
         auto gColor = colorGamma.Correct(color);
-        if (strip->GetPixelColor(stripPx) != gColor) {
-            strip->SetPixelColor(stripPx, gColor);
+        auto gDimm = NeoGammaTableMethod::Correct(dimm);
+        auto dimmFactor = gDimm / 255.0;
+        auto gColorDimm = RgbColor(gColor.R * dimmFactor, gColor.G * dimmFactor, gColor.B * dimmFactor);
+        if (strip->GetPixelColor(stripPx) != gColorDimm) {
+            strip->SetPixelColor(stripPx, gColorDimm);
         }
     }
 
   public:
-        RgbThing(NeoPixelBus<NeoGrbFeature, NeoEsp32RmtNWs2812xMethod>* strip, int pxFrom, int pxTo):
+        RgbThing(NeoPixelBus<NeoGrbFeature, NeoEsp32RmtNWs2812xMethod>* strip, int pxFrom, int pxTo, bool dimmable):
                 strip(strip),
-                SliceThingBase(pxFrom, pxTo) {
+                SliceThingBase<RgbColor>(pxFrom, pxTo),
+                dimmable(dimmable) {
         }
 
         int numChannels() {
-            return 3;
+            return dimmable ? 4 : 3;
         }
         
-        void setColor(RgbColor rgbColor) {
-            for (int px = 0; px <= pxTo - pxFrom; px++) {
-                doSetColor(px, rgbColor);
-            }
-        }
-
-        void setColor(uint16_t px, RgbColor color) {
-            // make sure px is in range
-            if (px < 0 || px >= size()) {
-                return;
-            }
-            doSetColor(px, color);
-        }
-
         void setData(uint8_t* data) { // data is a pointer to the first element of the array
-            setColor(RgbColor(data[0], data[1], data[2]));
+            if (dimmable) {
+                setColor(RgbColor(data[0], data[1], data[2]), data[3]);
+            } else {
+                setColor(RgbColor(data[0], data[1], data[2]));
+            }
         }
 
-        void on() {
-            for (int px = 0; px <= pxTo - pxFrom; px++) {
-                doSetColor(px, RgbColor(255, 255, 255));
-            }
+        bool isDimmable() {
+            return dimmable;
         }
-        
-        void off() {
-            for (int px = 0; px <= pxTo - pxFrom; px++) {
-                doSetColor(px, RgbColor(0, 0, 0));
-            }
-        }
+
 };
 
-class RgbwThing : public SliceThingBase {
+class RgbwThing : public SliceThingBase<RgbwColor> {
     private:
         NeoPixelBus<NeoGrbwFeature, NeoEsp32RmtNSk6812Method>* strip;
         static NeoGamma<NeoGammaTableMethod> colorGamma;
+        bool dimmable;
 
-        void doSetColor(uint16_t px, RgbwColor color) {
+    protected:
+        void doSetColor(uint16_t px, RgbwColor color, uint8_t dimm) {
             // update only if the color is different
             auto stripPx = pxFrom + px;
             auto gColor = colorGamma.Correct(color);
-            if (strip->GetPixelColor(stripPx) != gColor) {
-                strip->SetPixelColor(stripPx, gColor);
+            auto gDimm = NeoGammaTableMethod::Correct(dimm);
+            auto dimmFactor = gDimm / 255.0;
+            auto gColorDimm = RgbwColor(gColor.R * dimmFactor, gColor.G * dimmFactor, gColor.B * dimmFactor, gColor.W * dimmFactor);
+            if (strip->GetPixelColor(stripPx) != gColorDimm) {
+                strip->SetPixelColor(stripPx, gColorDimm);
             }
         }
 
     public:
-        RgbwThing(NeoPixelBus<NeoGrbwFeature, NeoEsp32RmtNSk6812Method>* strip, int pxFrom, int pxTo):
+        RgbwThing(NeoPixelBus<NeoGrbwFeature, NeoEsp32RmtNSk6812Method>* strip, int pxFrom, int pxTo, bool dimmable):
                 strip(strip),
-                SliceThingBase(pxFrom, pxTo) {
+                SliceThingBase<RgbwColor>(pxFrom, pxTo),
+                dimmable(dimmable) {
         }
 
         int numChannels() {
-            return 4;
+            return dimmable ? 5 : 4;
         }
         
-        void setColor(RgbwColor rgbwColor) {
-            for (int px = 0; px <= pxTo - pxFrom; px++) {
-                doSetColor(px, rgbwColor);
-            }
-        }
-
-        void setColor(uint16_t px, RgbwColor color) {
-            // make sure px is in range
-            if (px < 0 || px >= size()) {
-                return;
-            }
-            doSetColor(px, color);
-        }
-
         void setData(uint8_t* data) { // data is a pointer to the first element of the array
-            setColor(RgbwColor(data[0], data[1], data[2], data[3]));
-        }
-
-        void on() {
-            for (int px = 0; px <= pxTo - pxFrom; px++) {
-                doSetColor(px, RgbwColor(255, 255, 255, 255));
-            }
-        }
-        
-        void off() {
-            for (int px = 0; px <= pxTo - pxFrom; px++) {
-                doSetColor(px, RgbwColor(0, 0, 0, 0));
+            if (dimmable) {
+                setColor(RgbwColor(data[0], data[1], data[2], data[3]), data[4]);
+            } else {
+                setColor(RgbwColor(data[0], data[1], data[2], data[3]));
             }
         }
 };

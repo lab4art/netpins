@@ -20,7 +20,7 @@
     <div class="parent">
         <div class="main">
             <h1>NetPins: <span id="hostname"></span></h1>
-            <p class="version">Ver. <span id="firmware"></span></p>
+            <p class="version">Ver. <span id="firmware"></span> <a href="/sys-info" target="_blank">&#9432;</a></p>
             
             <p class="title">DMX Configuration</p>
             <div class="form-container">
@@ -85,6 +85,7 @@ rgbw_strips: []
 rgb_strips:
   - pin: 13
     size: 60
+    dimmer: true # add dimmer channel
     slices:
       - 0
       - 15

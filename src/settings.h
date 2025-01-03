@@ -8,13 +8,46 @@
 struct StripeCfg {
     std::uint8_t pin;
     std::uint16_t size;
+    bool dimmer;
     // first pixel of each slice
     std::vector<std::uint16_t> slices;
 
     bool operator==(const StripeCfg& other) const {
         return pin == other.pin &&
             size == other.size &&
+            dimmer == other.dimmer &&
             slices == other.slices;
+    }
+
+    bool operator!=(const StripeCfg& other) const {
+        return !(*this == other);
+    }
+
+    static StripeCfg deserialize(JsonObject& json) {
+        StripeCfg s;
+        s.pin = json["pin"].as<std::uint8_t>();
+        s.size = json["size"].as<std::uint16_t>();
+        if (json.containsKey("dimmer")) { // backward compatibility
+            s.dimmer = json["dimmer"].as<bool>();
+        } else {
+            s.dimmer = false;
+        }
+        JsonArray slicesArray = json["slices"].as<JsonArray>();
+        for (JsonVariant v : slicesArray) {
+            auto slice = v.as<std::uint16_t>();
+            s.slices.push_back(slice);
+        }
+        return s;
+    }
+
+    static void serialize(JsonObject& jsonStripe, const StripeCfg& s) {
+        jsonStripe["pin"] = s.pin;
+        jsonStripe["size"] = s.size;
+        jsonStripe["dimmer"] = s.dimmer;
+        JsonArray slices = jsonStripe["slices"].to<JsonArray>();
+        for (auto slice : s.slices) {
+            slices.add(slice);
+        }
     }
 };
 
@@ -27,6 +60,29 @@ struct WaveCfg {
     bool operator==(const WaveCfg& other) const {
         return maxFadeTime == other.maxFadeTime &&
             sliceIndexes == other.sliceIndexes;
+    }
+
+    bool operator!=(const WaveCfg& other) const {
+        return !(*this == other);
+    }
+
+    static WaveCfg deserialize(JsonObject& json) {
+        WaveCfg w;
+        w.maxFadeTime = json["max_fade_time"].as<std::uint32_t>();
+        JsonArray sliceIndexesArray = json["slice_indexes"].as<JsonArray>();
+        for (JsonVariant v : sliceIndexesArray) {
+            auto sliceIndex = v.as<std::uint8_t>();
+            w.sliceIndexes.push_back(sliceIndex);
+        }
+        return w;
+    }
+
+    static void serialize(JsonObject& jsonWave, const WaveCfg& w) {
+        jsonWave["max_fade_time"] = w.maxFadeTime;
+        JsonArray sliceIndexes = jsonWave["slice_indexes"].to<JsonArray>();
+        for (auto sliceIndex : w.sliceIndexes) {
+            sliceIndexes.add(sliceIndex);
+        }
     }
 };
 
@@ -41,6 +97,34 @@ struct ServoCfg {
             maxAngle == other.maxAngle &&
             minPulseWidth == other.minPulseWidth &&
             maxPulseWidth == other.maxPulseWidth;
+    }
+
+    bool operator!=(const ServoCfg& other) const {
+        return !(*this == other);
+    }
+
+    static ServoCfg deserialize(JsonObject& json) {
+        ServoCfg s;
+        s.pin = json["pin"].as<std::uint8_t>();
+        s.maxAngle = json["max_angle"].as<std::uint8_t>();
+        if (json.containsKey("min_pulse_width")) {
+            s.minPulseWidth = json["min_pulse_width"].as<std::uint16_t>();
+        }
+        if (json.containsKey("max_pulse_width")) {
+            s.maxPulseWidth = json["max_pulse_width"].as<std::uint16_t>();
+        }
+        return s;
+    }
+
+    static void serialize(JsonObject& jsonServo, const ServoCfg& s) {
+        jsonServo["pin"] = s.pin;
+        jsonServo["max_angle"] = s.maxAngle;
+        if (s.minPulseWidth != 0) {
+            jsonServo["min_pulse_width"] = s.minPulseWidth;
+        }
+        if (s.maxPulseWidth != 0) {
+            jsonServo["max_pulse_width"] = s.maxPulseWidth;
+        }
     }
 };
 
@@ -101,58 +185,25 @@ struct Settings {
         JsonArray rgbwStripsArray = json["rgbw_strips"].as<JsonArray>();
         for (JsonVariant v : rgbwStripsArray) {
             JsonObject jsonStripe = v.as<JsonObject>();
-            StripeCfg stripe;
-            stripe.pin = jsonStripe["pin"].as<std::uint8_t>();
-            stripe.size = jsonStripe["size"].as<std::uint16_t>();
-            JsonArray slicesArray = jsonStripe["slices"].as<JsonArray>();
-            for (JsonVariant v : slicesArray) {
-                auto slice = v.as<std::uint16_t>();
-                stripe.slices.push_back(slice);
-            }
-            s.rgbwStrips.push_back(stripe);
+            s.rgbwStrips.push_back(StripeCfg::deserialize(jsonStripe));
         }
 
         JsonArray rgbStripsArray = json["rgb_strips"].as<JsonArray>();
         for (JsonVariant v : rgbStripsArray) {
             JsonObject jsonStripe = v.as<JsonObject>();
-            StripeCfg stripe;
-            stripe.pin = jsonStripe["pin"].as<std::uint8_t>();
-            stripe.size = jsonStripe["size"].as<std::uint16_t>();
-            JsonArray slicesArray = jsonStripe["slices"].as<JsonArray>();
-            for (JsonVariant v : slicesArray) {
-                auto slice = v.as<std::uint16_t>();
-                stripe.slices.push_back(slice);
-            }
-            s.rgbStrips.push_back(stripe);
+            s.rgbStrips.push_back(StripeCfg::deserialize(jsonStripe));
         }
 
         JsonArray servosArray = json["servos"].as<JsonArray>();
         for (JsonVariant v : servosArray) {
             JsonObject jsonServo = v.as<JsonObject>();
-            ServoCfg servo;
-            servo.pin = jsonServo["pin"].as<std::uint8_t>();
-            servo.maxAngle = jsonServo["max_angle"].as<std::uint8_t>();
-            // set if value is present in json, otherwise use default
-            if (jsonServo.containsKey("min_pulse_width")) {
-                servo.minPulseWidth = jsonServo["min_pulse_width"].as<std::uint16_t>();
-            }
-            if (jsonServo.containsKey("max_pulse_width")) {
-                servo.maxPulseWidth = jsonServo["max_pulse_width"].as<std::uint16_t>();
-            }
-            s.servos.push_back(servo);
+            s.servos.push_back(ServoCfg::deserialize(jsonServo));
         }
 
         JsonArray wavesArray = json["waves"].as<JsonArray>();
         for (JsonVariant v : wavesArray) {
             JsonObject jsonWave = v.as<JsonObject>();
-            WaveCfg wave;
-            wave.maxFadeTime = jsonWave["max_fade_time"].as<std::uint32_t>();
-            JsonArray sliceIndexesArray = jsonWave["slice_indexes"].as<JsonArray>();
-            for (JsonVariant v : sliceIndexesArray) {
-                auto sliceIndex = v.as<std::uint8_t>();
-                wave.sliceIndexes.push_back(sliceIndex);
-            }
-            s.waves.push_back(wave);
+            s.waves.push_back(WaveCfg::deserialize(jsonWave));
         }
     };
 
@@ -174,46 +225,25 @@ struct Settings {
         JsonArray jsonRgbw = json["rgbw_strips"].to<JsonArray>();
         for (auto stripe : rgbwStrips) {
             JsonObject jsonStripe = jsonRgbw.createNestedObject();
-            jsonStripe["pin"] = stripe.pin;
-            jsonStripe["size"] = stripe.size;
-            JsonArray slices = jsonStripe["slices"].to<JsonArray>();
-            for (auto slice : stripe.slices) {
-                slices.add(slice);
-            }
+            StripeCfg::serialize(jsonStripe, stripe);
         }
 
         JsonArray jsonRgb = json["rgb_strips"].to<JsonArray>();
         for (auto stripe : rgbStrips) {
             JsonObject jsonStripe = jsonRgb.createNestedObject();
-            jsonStripe["pin"] = stripe.pin;
-            jsonStripe["size"] = stripe.size;
-            JsonArray slices = jsonStripe["slices"].to<JsonArray>();
-            for (auto slice : stripe.slices) {
-                slices.add(slice);
-            }
+            StripeCfg::serialize(jsonStripe, stripe);
         }
 
         JsonArray servosArray = json["servos"].to<JsonArray>();
         for (auto servo : servos) {
             JsonObject jsonServo = servosArray.createNestedObject();
-            jsonServo["pin"] = servo.pin;
-            jsonServo["max_angle"] = servo.maxAngle;
-            if (servo.minPulseWidth != 0) {
-                jsonServo["min_pulse_width"] = servo.minPulseWidth;
-            }
-            if (servo.maxPulseWidth != 0) {
-                jsonServo["max_pulse_width"] = servo.maxPulseWidth;
-            }
+            ServoCfg::serialize(jsonServo, servo);
         }
 
         JsonArray waves = json["waves"].to<JsonArray>();
         for (auto wave : this->waves) {
             JsonObject jsonWave = waves.createNestedObject();
-            jsonWave["max_fade_time"] = wave.maxFadeTime;
-            JsonArray sliceIndexes = jsonWave["slice_indexes"].to<JsonArray>();
-            for (auto sliceIndex : wave.sliceIndexes) {
-                sliceIndexes.add(sliceIndex);
-            }
+            WaveCfg::serialize(jsonWave, wave);
         }
     };
 

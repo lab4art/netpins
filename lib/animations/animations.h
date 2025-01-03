@@ -292,10 +292,11 @@ class FadeAnimation: public Animation {
     RgbThing* line;
     RgbColor color1;
     RgbColor color2;
+    uint8_t dimm = 255;
     RgbColor currentColor;
     RgbColor newColor;
     bool firstColor;
-    
+
     unsigned int fadeTimeMillis; // TODO hold
 
   public:
@@ -315,13 +316,6 @@ class FadeAnimation: public Animation {
     
     void animate() {
         if (getProgress() == 0) {
-            // if (firstColor) {
-            //     currentColor = color1;
-            //     newColor = color2;
-            // } else {
-            //     currentColor = color2;
-            //     newColor = color1;
-            // }
             if (firstColor) {
                 currentColor = newColor;
                 newColor = color1;
@@ -331,7 +325,7 @@ class FadeAnimation: public Animation {
             }
         }
         float blendFactor = getProgress();
-        line->setColor(RgbColor::LinearBlend(currentColor, newColor, blendFactor));
+        line->setColor(RgbColor::LinearBlend(currentColor, newColor, blendFactor), dimm);
     }
 
     void setColor1(RgbColor color1) {
@@ -340,6 +334,10 @@ class FadeAnimation: public Animation {
 
     void setColor2(RgbColor color2) {
         this->color2 = color2;
+    }
+
+    void setDimm(uint8_t dimm) {
+        this->dimm = dimm;
     }
 
     void setFirstColor(bool isFfirstColor) {
@@ -354,6 +352,7 @@ class Wave : public Thing {
         int current = 0;
         unsigned int maxFadeTimeMillis;
         bool firstColor = true;
+        bool dimmable = false;
 
     public:
         Wave(
@@ -364,6 +363,9 @@ class Wave : public Thing {
 
             for (auto& line : lines) {
                 FadeAnimation* fadeAnimation = new FadeAnimation(aScheduler, line, 100); //TODO hold
+                if (line->isDimmable()) {
+                    dimmable = true;
+                }
                 fadeAnimation->setDuration(1000);
                 fadeAnimation->setFirstColor(true);
                 fadeAnimation->setOnEnd([this](){
@@ -386,7 +388,8 @@ class Wave : public Thing {
         }
 
         int numChannels() {
-            return 7; // 2x3 for color and 1 for fade time
+            // 3(RGB) x 2 + 1(dimmer) + 1 (fade time)
+            return dimmable ? 8 : 7;
         }
 
         void setData(uint8_t* data) {
@@ -395,6 +398,9 @@ class Wave : public Thing {
             for (auto& fade : fades) {
                 fade->setColor1(color1);
                 fade->setColor2(color2);
+                if (dimmable) {
+                    fade->setDimm(data[7]);
+                }
                 // set duration based on the 8bit input
                 auto fadeTime = (data[6] * maxFadeTimeMillis) / 255;
                 // Log.noticeln("Setting fade time: %d from input %d", fadeTime, data[6]);

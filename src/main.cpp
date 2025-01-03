@@ -238,14 +238,14 @@ std::vector<ThingType*> createStripThings(
       int firstPx = 0;
       int lastPx = strip->PixelCount() - 1;
       Log.noticeln("Creating led strip single slice: %d-%d", firstPx, lastPx);
-      auto thing = new ThingType(strip, firstPx, lastPx);
+      auto thing = new ThingType(strip, firstPx, lastPx, stripeCfg.dimmer);
       sliceThings.push_back(thing);
     } else {
       for (int i = 0; i < stripSlices.size(); i++) {
         int firstPx = stripSlices[i];
         int lastPx = i < stripSlices.size() - 1 ? stripSlices[i + 1] - 1 : strip->PixelCount() - 1;
         Log.noticeln("Creating led strip slice: %d-%d", firstPx, lastPx);
-        auto thing = new ThingType(strip, firstPx, lastPx);
+        auto thing = new ThingType(strip, firstPx, lastPx, stripeCfg.dimmer);
         sliceThings.push_back(thing);
       }
     }
@@ -506,7 +506,7 @@ int executionTIme = 0;
 int loopCounter = 0;
 unsigned long lastCommit = 0;
 void loop() {
-  unsigned long loopStartTime = millis();
+  unsigned long loopStartTime = micros();
 
   scheduler.execute(); // scheduler should be before commitNeoStip because tasks usually prepare the data
 
@@ -553,12 +553,11 @@ void loop() {
   }
 
   // loopCounter++;
-  // executionTIme += millis() - loopStartTime;
-  // if (loopCounter % 100 == 0) {
-  // Log.noticeln("Loop execution time: %dms", executionTIme / 10);
+  // executionTIme += micros() - loopStartTime;
+  // if (loopCounter % 1000 == 0) {
+  //   Log.noticeln("Avg loop execution time: %d us", executionTIme / loopCounter);
   //   executionTIme = 0;
   //   loopCounter = 0;
-  //   Serial.println(String("Loop execution time: ") + (millis() - loopStartTime) + "ms");
-  //   Serial.println(String("Free memory: ") + ESP.getFreeHeap());
+    // Serial.println(String("Free memory: ") + ESP.getFreeHeap());
   // }
 }
