@@ -180,10 +180,9 @@ class RgbwThing : public SliceThingBase {
             return 4;
         }
         
-        void setData(uint8_t* data) { // data is a pointer to the first element of the array
-            RgbwColor newColor(data[0], data[1], data[2], data[3]);
+        void setColor(RgbwColor rgbwColor) {
             for (int px = 0; px <= pxTo - pxFrom; px++) {
-                doSetColor(px, newColor);
+                doSetColor(px, rgbwColor);
             }
         }
 
@@ -193,6 +192,10 @@ class RgbwThing : public SliceThingBase {
                 return;
             }
             doSetColor(px, color);
+        }
+
+        void setData(uint8_t* data) { // data is a pointer to the first element of the array
+            setColor(RgbwColor(data[0], data[1], data[2], data[3]));
         }
 
         void on() {

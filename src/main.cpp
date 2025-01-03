@@ -516,7 +516,12 @@ void loop() {
     }
   }
 
-  if (millis() - lastCommit > 20) { // 50fps
+  /*
+  30ms = 30fps
+  20ms = 50fps
+  13ms = 75fps
+  */
+  if (millis() - lastCommit > 20) {
     // unsigned long startProcessing = micros();
     dmxListener->processDmxData(512, dmxData);
     // doCommitStrip();
