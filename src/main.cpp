@@ -16,6 +16,8 @@
 #include <Arduino.h>
 #include <TaskScheduler.h>
 #include <ArduinoLog.h>
+#include <nvs.h>
+#include <nvs_flash.h>
 #include <Preferences.h>
 #include "wifiUtils.cpp"
 #include "firmware.h"
@@ -369,6 +371,15 @@ void onDmxFrame(uint16_t receivedUniverse, uint16_t length, uint8_t sequence, ui
   // do not process the data here, leave IO callback as soon as possible
 };
 
+void eraseAllPreferences() {
+    esp_err_t err = nvs_flash_erase();
+    if (err != ESP_OK) {
+        Log.errorln("Failed to erase NVS: %s\n", esp_err_to_name(err));
+    } else {
+        Log.noticeln("NVS erased successfully.");
+    }
+}
+
 void setup() {
   Serial.begin(115200);
   delay(500);
@@ -396,6 +407,7 @@ void setup() {
   factoryReset = new FactoryReset();
   if (factoryReset->shouldReset()) {
     Log.noticeln("Factory reset requested, setting defaults ...");
+    eraseAllPreferences();
     settingsManager->setDefaults();
     settingsManager->save();
     dmxSettingsManager->setDefaults();
