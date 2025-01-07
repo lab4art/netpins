@@ -3,6 +3,7 @@
 #include <esp_wifi.h>
 #include <WiFi.h>
 #include <ArduinoLog.h>
+#include <Preferences.h>
 
 
 #define ON_WIFI_EXECUTION_CALLBACK_SIGNATURE std::function<void(String)> wifiExecutionCallback
@@ -91,7 +92,12 @@ class WifiUtils {
                     WiFi.reconnect();
                     connectedCallbackCalled = false;
                     connectAttempt++;
-                    if (connectAttempt > 15) {
+                    if (connectAttempt > 15) { // keep enough reties to not trigger factory reset
+                      // store the uptime to preferences
+                      Preferences preferences;
+                      preferences.begin("sys", false);
+                      preferences.putULong("reboot-wifi", millis());
+                      preferences.end();
                       Log.errorln("Too many failed attempts to connect to WiFi. Restarting ...");
                       ESP.restart();
                     }

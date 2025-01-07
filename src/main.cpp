@@ -16,6 +16,7 @@
 #include <Arduino.h>
 #include <TaskScheduler.h>
 #include <ArduinoLog.h>
+#include <Preferences.h>
 #include "wifiUtils.cpp"
 #include "firmware.h"
 #include <HTTPClient.h>
@@ -58,6 +59,11 @@ ArtnetWifi* artnet;
 WebAdmin* webAdmin;
 
 FactoryReset* factoryReset;
+
+std::vector<Switchabe*> switchables;
+
+// uptime set by system reboot like WiFi connection failure
+ulong uptimeOffset = 0;
 
 int numOfCreatedStrips = 0;
 template<typename Feature, typename Method>
@@ -154,7 +160,7 @@ HeartbeatBroadcast* heartbeatBroadcast;
 xSemaphoreHandle semaphore = NULL;
 TaskHandle_t commitNeoStipTask;
 
-void doCommitStrip() {
+void doCommitStrip() { // TODO rename me
 
   for (auto led : leds) {
     led->commit();
@@ -379,6 +385,11 @@ void setup() {
   Log.setPrefix(printPrefix);
   Log.infoln("Logging initialized.");
 
+  Preferences preferences;
+  preferences.begin("sys", true);
+  uptimeOffset = preferences.getULong("reboot-wifi", 0L);
+  preferences.end();
+
   dmxSettingsManager = new SettingsManager<DmxSettings>("dmx");
   settingsManager = new SettingsManager<Settings>("settings");
 
@@ -410,7 +421,6 @@ void setup() {
   dmxUniverse = dmxSettings.universe;
   dmxListener = new DmxListener(dmxSettings.channel, settings.enableDmxStore);
 
-  std::vector<Switchabe*> switchables;
   try {
     switchables = createThings(settings);
     Serial.println("Things created.");
@@ -538,17 +548,23 @@ void loop() {
     artnet->read();
   }
 
-  if (maxIdleMillis > 0 && millis() - lastCommandReceivedAt > maxIdleMillis) {
+  auto virtualUptime = uptimeOffset + millis();
+  if (maxIdleMillis > 0 && virtualUptime - lastCommandReceivedAt > maxIdleMillis) {
     Log.noticeln("No command received for %d min, going to sleep ...", maxIdleMillis / 60000);
-    Log.noticeln("maxIdleMillis: %d, lastCommandReceivedAt: %d, millis: %d", maxIdleMillis, lastCommandReceivedAt, millis());
+    Log.noticeln("maxIdleMillis: %d, lastCommandReceivedAt: %d, virtualUptime %d, millis: %d", maxIdleMillis, lastCommandReceivedAt, virtualUptime, millis());
     
     if (webAdmin != nullptr) {
       webAdmin->end();
     }
     WiFi.mode(WIFI_OFF);
 
-    esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+    // turn off all switchables
+    for (auto& switchable : switchables) {
+      switchable->off();
+    }
+    doCommitStrip();
 
+    esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
     esp_deep_sleep_start();
   }
 
