@@ -397,8 +397,12 @@ void setup() {
   Log.infoln("Logging initialized.");
 
   Preferences preferences;
-  preferences.begin("sys", true);
+  preferences.begin("sys", false);
   uptimeOffset = preferences.getULong("reboot-wifi", 0L);
+  if (uptimeOffset != 0) {
+    // erase to not count the same offset on regular reboots
+    preferences.putULong("reboot-wifi", 0L);
+  }
   preferences.end();
 
   dmxSettingsManager = new SettingsManager<DmxSettings>("dmx");
@@ -472,7 +476,14 @@ void setup() {
 
   Serial.println(String("Using ssid: ") + settings.wifiSsid.c_str());
 
-  wifi = new WifiUtils(settings.wifiSsid.c_str(), settings.wifiPass.c_str(), { STATIC_IP, GATEWAY, SUBNET, DNS }, 5000, settings.hostname.c_str());
+  wifi = new WifiUtils(
+    settings.wifiSsid.c_str(), 
+    settings.wifiPass.c_str(), 
+    { STATIC_IP, GATEWAY, SUBNET, DNS }, 
+    5000,
+    settings.rebootAfterWifiFailed,
+    uptimeOffset,
+    settings.hostname.c_str());
   Serial.println("Wifi MAC: " + WifiUtils::macAddress);
 
   artnet = new ArtnetWifi();

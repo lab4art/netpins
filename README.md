@@ -65,6 +65,7 @@ hb_int: 5000 # 0 = disabled
 udp_port: 5824
 lights_test: true # power on all at boot for 2 seconds
 max_idle: 120 # power off microcontroller when no network activity for N minutes
+reboot_after_wifi_failed: 15 # reboot after 15 failed wifi connections, 0 means no reboot
 leds:
   - 13
   - 14

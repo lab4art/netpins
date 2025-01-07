@@ -146,6 +146,7 @@ struct Settings {
     bool lightsTest;
     std::uint16_t maxIdle; // max idle time in min, 0 means no sleep
     bool enableDmxStore;
+    unsigned int rebootAfterWifiFailed = 15; // reboot after 15 failed wifi connections, 0 means no reboot
 
     bool operator==(const Settings& other) const {
         return wifiSsid == other.wifiSsid &&
@@ -160,7 +161,8 @@ struct Settings {
             waves == other.waves &&
             lightsTest == other.lightsTest &&
             maxIdle == other.maxIdle &&
-            enableDmxStore == other.enableDmxStore;
+            enableDmxStore == other.enableDmxStore &&
+            rebootAfterWifiFailed == other.rebootAfterWifiFailed;
     }
 
     bool operator!=(const Settings& other) const {
@@ -176,6 +178,7 @@ struct Settings {
         s.lightsTest = json["lights_test"].as<bool>();
         s.maxIdle = json["max_idle"].as<std::uint16_t>();
         s.enableDmxStore = json["enable_dmx_store"].as<bool>();
+        s.rebootAfterWifiFailed = json["reboot_after_wifi_failed"].as<unsigned int>();
 
         JsonArray ledsArray = json["leds"].as<JsonArray>();
         for (JsonVariant v : ledsArray) {
@@ -216,6 +219,7 @@ struct Settings {
         json["lights_test"] = lightsTest;
         json["max_idle"] = maxIdle;
         json["enable_dmx_store"] = enableDmxStore;
+        json["reboot_after_wifi_failed"] = rebootAfterWifiFailed;
 
         JsonArray jsonLeds = json["leds"].to<JsonArray>();
         for (auto led : this->leds) {

@@ -23,15 +23,19 @@ class WifiUtils {
         unsigned long reconnectInterval = 0;
         // prevent all devices to connect at the same time at boot
         unsigned long reconnectDelay = 0;
+        unsigned int rebootAfterWiFiFailed;
         unsigned int connectAttempt = 0;
+        unsigned long uptimeOffset;
 
     public:
         static String macAddress;
 
-        WifiUtils(const char* ssid, const char* password, static_ip_t staticIp, unsigned long reconnectInterval = 5000, const char* hostname = "", const char* hostnamePrefix = "esp-") : 
+        WifiUtils(const char* ssid, const char* password, static_ip_t staticIp, unsigned long reconnectInterval, unsigned int rebootAfterWiFiFailed, unsigned long uptimeOffset, const char* hostname = "", const char* hostnamePrefix = "esp-") : 
               ssid(ssid), 
               password(password),
-              reconnectInterval(reconnectInterval) {
+              reconnectInterval(reconnectInterval),
+              rebootAfterWiFiFailed(rebootAfterWiFiFailed),
+              uptimeOffset(uptimeOffset) {
 
             uint8_t mac[6];
             WiFi.macAddress(mac);
@@ -92,11 +96,11 @@ class WifiUtils {
                     WiFi.reconnect();
                     connectedCallbackCalled = false;
                     connectAttempt++;
-                    if (connectAttempt > 15) { // keep enough reties to not trigger factory reset
+                    if (rebootAfterWiFiFailed > 0 && connectAttempt >= rebootAfterWiFiFailed) { // keep enough reties to not trigger factory reset
                       // store the uptime to preferences
                       Preferences preferences;
                       preferences.begin("sys", false);
-                      preferences.putULong("reboot-wifi", millis());
+                      preferences.putULong("reboot-wifi", millis() + uptimeOffset);
                       preferences.end();
                       Log.errorln("Too many failed attempts to connect to WiFi. Restarting ...");
                       ESP.restart();
