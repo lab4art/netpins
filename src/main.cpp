@@ -7,7 +7,7 @@
 #include "config.h"
 
 #include <NeoPixelBus.h>
-#include <ArtnetWifi.h>
+#include <ArtnetWiFi.h>
 #include <WiFiUdp.h>
 
 #include <map>
@@ -57,7 +57,7 @@ DmxListener* dmxListener;
 
 
 Scheduler scheduler;
-ArtnetWifi* artnet;
+ArtnetWiFiReceiver* artnet;
 WebAdmin* webAdmin;
 
 FactoryReset* factoryReset;
@@ -354,14 +354,15 @@ std::vector<Switchabe*> createThings(Settings& settings) {
 uint16_t dmxUniverse;
 uint8_t lastDmxSequence = 0;
 uint8_t dmxData[512] = {0}; // 1st byte is sequence number
-void onDmxFrame(uint16_t receivedUniverse, uint16_t length, uint8_t sequence, uint8_t* data) {
-  if (receivedUniverse != dmxUniverse) {
+
+void onDmxFrame(const uint8_t *data, uint16_t size, const ArtDmxMetadata &metadata, const ArtNetRemoteInfo &remote) {
+  if (metadata.universe != dmxUniverse) {
       return;
   }
   lastCommandReceivedAt = millis();
   // ignore old sequencees unless counter flipped
-  if (sequence < lastDmxSequence && lastDmxSequence - sequence < 10) {
-      Log.traceln("Ignoring old sequence %d, last sequence: %d", sequence, lastDmxSequence);
+  if (metadata.sequence < lastDmxSequence && lastDmxSequence - metadata.sequence < 10) {
+      Log.traceln("Ignoring old sequence %d, last sequence: %d", metadata.sequence, lastDmxSequence);
       return;
   }
 
@@ -486,9 +487,11 @@ void setup() {
     settings.hostname.c_str());
   Serial.println("Wifi MAC: " + WifiUtils::macAddress);
 
-  artnet = new ArtnetWifi();
+  artnet = new ArtnetWiFiReceiver();
   artnet->begin();
-  artnet->setArtDmxCallback(onDmxFrame);
+  artnet->subscribeArtDmx(onDmxFrame);
+  artnet->setArtPollReplyConfigShortName("NetPins");
+  artnet->setArtPollReplyConfigLongName(String(WiFi.getHostname()) + " - " + dmxSettings.channel + "@" + dmxSettings.universe + " - " + FIRMWARE_VERSION);
 
   if (_ENABLE_WEBSERVER) {
     Log.noticeln("Starting web server ...");
@@ -508,6 +511,13 @@ void setup() {
 
 void onWifiExecutionCallback(String ip) {
   Log.noticeln("WiFi connected, IP address: %s.", ip.c_str());
+  esp_wifi_set_ps(WIFI_PS_NONE); // Disable power-saving mode
+  // esp_wifi_set_max_tx_power(50); // range is [8, 84] corresponding to 2dBm - 20dBm. 
+
+  // int8_t currentPower;
+  // esp_wifi_get_max_tx_power(&currentPower);
+  // Log.noticeln("Current Wi-Fi Transmit Power: %d.", currentPower);
+
   auto settigns = settingsManager->getSettings();
   if (_ENABLE_UDP_BROADCAST) {
     if (settigns.udpPort > 0) {
@@ -535,8 +545,9 @@ void onWifiExecutionCallback(String ip) {
   }
 }
 
-int executionTIme = 0;
 int loopCounter = 0;
+int executionTimeSum = 0;
+int maxExecutionTime = 0;
 unsigned long lastCommit = 0;
 void loop() {
   unsigned long loopStartTime = micros();
@@ -568,7 +579,7 @@ void loop() {
   }
   
   if (artnet != nullptr) {
-    artnet->read();
+    artnet->parse();
   }
 
   auto virtualUptime = uptimeOffset + millis();
@@ -591,12 +602,16 @@ void loop() {
     esp_deep_sleep_start();
   }
 
-  // loopCounter++;
-  // executionTIme += micros() - loopStartTime;
-  // if (loopCounter % 1000 == 0) {
-  //   Log.noticeln("Avg loop execution time: %d us", executionTIme / loopCounter);
-  //   executionTIme = 0;
-  //   loopCounter = 0;
-    // Serial.println(String("Free memory: ") + ESP.getFreeHeap());
-  // }
+  loopCounter++;
+  auto executionTime = micros() - loopStartTime;
+  executionTimeSum += executionTime;
+  if (executionTime > maxExecutionTime) {
+    maxExecutionTime = executionTime;
+  }
+  if (loopCounter % 1000 == 0) {
+    Log.noticeln("Max loop execution time: %d us, avg loop execution time: %d us", maxExecutionTime, executionTimeSum / loopCounter);
+    executionTimeSum = 0;
+    loopCounter = 0;
+    Serial.println(String("Free memory: ") + ESP.getFreeHeap());
+  }
 }
