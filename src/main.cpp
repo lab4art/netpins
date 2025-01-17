@@ -221,8 +221,8 @@ void initNeoStipTask() {
 TailAnimation* tailAnimation1; // TODO make this configurable or pluggable
 TailAnimation* tailAnimation2;
 
-template<typename Feature, typename Method, class ThingType>
-std::vector<ThingType*> createStripThings(
+template<typename Feature, typename Method, class ThingType, class ThingGroupType>
+std::vector<ThingGroupType*> createStripThings(
     std::map<int, NeoPixelBus<Feature, Method> *>& strips,
     std::vector<StripeCfg> stripeCfgs
   ) {
@@ -234,6 +234,7 @@ std::vector<ThingType*> createStripThings(
   }
   strips.clear();
 
+  std::vector<ThingGroupType*> groups;
   for (auto& stripeCfg : stripeCfgs) {
     Log.noticeln("Creating led strip on pin: %d", stripeCfg.pin);
     createStrip<Feature, Method>(stripeCfg.pin, stripeCfg.size, strips);
@@ -242,23 +243,22 @@ std::vector<ThingType*> createStripThings(
     // create led strip things for each slice, slices are defined by first pixel only, last pixel is calculated from the next slice
     // if slices are not defined, the whole strip is used as one thing (slice)
     auto& stripSlices = stripeCfg.slices;
-    if (stripSlices.size() == 0 || (stripSlices.size() == 1 && stripSlices[0] == 0)) {
-      int firstPx = 0;
-      int lastPx = strip->PixelCount() - 1;
-      Log.noticeln("Creating led strip single slice: %d-%d", firstPx, lastPx);
-      auto thing = new ThingType(strip, firstPx, lastPx, stripeCfg.dimmer);
-      sliceThings.push_back(thing);
-    } else {
-      for (int i = 0; i < stripSlices.size(); i++) {
-        int firstPx = stripSlices[i];
-        int lastPx = i < stripSlices.size() - 1 ? stripSlices[i + 1] - 1 : strip->PixelCount() - 1;
-        Log.noticeln("Creating led strip slice: %d-%d", firstPx, lastPx);
-        auto thing = new ThingType(strip, firstPx, lastPx, stripeCfg.dimmer);
-        sliceThings.push_back(thing);
-      }
+    if (stripSlices.size() == 0) {
+      // if there are no slices, create one slice from the whole strip
+      stripSlices.push_back(0);
     }
+
+    for (int i = 0; i < stripSlices.size(); i++) {
+      int firstPx = stripSlices[i];
+      int lastPx = i < stripSlices.size() - 1 ? stripSlices[i + 1] - 1 : strip->PixelCount() - 1;
+      Log.noticeln("Creating led strip slice: %d-%d", firstPx, lastPx);
+      auto thing = new ThingType(strip, firstPx, lastPx, stripeCfg.dimmer == DimmerMode::perStripe ? true : false);
+      sliceThings.push_back(thing);
+    }
+    ThingGroupType* group = new ThingGroupType(sliceThings, stripeCfg.dimmer == DimmerMode::single ? true : false);
+    groups.push_back(group);
   }
-  return sliceThings;
+  return groups;
 };
 
 std::vector<Switchabe*> createThings(Settings& settings) {
@@ -279,15 +279,15 @@ std::vector<Switchabe*> createThings(Settings& settings) {
   }
 
   Log.noticeln("Creating RGBW strips ...");
-  std::vector<RgbwThing*> rgbwThings = createStripThings<NeoGrbwFeature, NeoEsp32RmtNSk6812Method, RgbwThing>(rgbwStrips, settings.rgbwStrips);
+  std::vector<RgbwThingGroup*> rgbwThings = createStripThings<NeoGrbwFeature, NeoEsp32RmtNSk6812Method, RgbwThing, RgbwThingGroup>(rgbwStrips, settings.rgbwStrips);
   for (auto& rgbwThing : rgbwThings) {
     dmxListener->addThing(rgbwThing);
     switchables.push_back(rgbwThing);
   }
 
   Log.noticeln("Creating RGB strips ...");
-  std::vector<RgbThing*> rgbThings = createStripThings<NeoGrbFeature, NeoEsp32RmtNWs2812xMethod, RgbThing>(rgbStrips, settings.rgbStrips);
-  for (auto& rgbThing : rgbThings) {
+  std::vector<RgbThingGroup*> rgbThingsGroups = createStripThings<NeoGrbFeature, NeoEsp32RmtNWs2812xMethod, RgbThing, RgbThingGroup>(rgbStrips, settings.rgbStrips);
+  for (auto& rgbThing : rgbThingsGroups) {
     dmxListener->addThing(rgbThing);
     switchables.push_back(rgbThing);
   }
@@ -337,11 +337,21 @@ std::vector<Switchabe*> createThings(Settings& settings) {
   //wave1 = new Wave(&scheduler, rgbThings, 4000);
   // loop over settings waves and create animations
 
+  std::vector<RgbThing*> allRgbThings;
+  std::map<uint8_t, RgbThing*> rgbThingsGroupsIndex;
+  for (auto& rgbThingsGroup : rgbThingsGroups) {
+    for (auto& rgbThing : rgbThingsGroup->things()) {
+      allRgbThings.push_back(rgbThing);
+      rgbThingsGroupsIndex[allRgbThings.size() - 1] = rgbThing;
+    }
+  }
+
   for (auto& waveDef : settings.waves) {
     std::vector<RgbThing*> waveLines;
     for (auto& sliceIndex : waveDef.sliceIndexes) {
-      waveLines.push_back(rgbThings[sliceIndex]);
-      dmxListener->removeThing(rgbThings[sliceIndex]);
+      waveLines.push_back(allRgbThings[sliceIndex]);
+      // remove the group if at least one of the lines is in the wave
+      dmxListener->removeThing(rgbThingsGroupsIndex[sliceIndex]);
     }
     auto wave = new Wave(&scheduler, waveLines, waveDef.maxFadeTime);
     Serial.println(String("Wave created with ") + waveLines.size() + " lines.");
@@ -511,12 +521,9 @@ void setup() {
 
 void onWifiExecutionCallback(String ip) {
   Log.noticeln("WiFi connected, IP address: %s.", ip.c_str());
-  esp_wifi_set_ps(WIFI_PS_NONE); // Disable power-saving mode
-  // esp_wifi_set_max_tx_power(50); // range is [8, 84] corresponding to 2dBm - 20dBm. 
-
-  // int8_t currentPower;
-  // esp_wifi_get_max_tx_power(&currentPower);
-  // Log.noticeln("Current Wi-Fi Transmit Power: %d.", currentPower);
+  if (settingsManager->getSettings().disableWifiPowerSave) {
+    esp_wifi_set_ps(WIFI_PS_NONE); // Disable power-saving mode
+  }
 
   auto settigns = settingsManager->getSettings();
   if (_ENABLE_UDP_BROADCAST) {
