@@ -66,6 +66,7 @@ udp_port: 5824
 lights_test: true # power on all at boot for 2 seconds
 max_idle: 120 # power off microcontroller when no network activity for N minutes
 reboot_after_wifi_failed: 15 # reboot after 15 failed wifi connections, 0 means no reboot
+disable_wifi_power_save: false # disable WiFi power save to prevent led flicering on "poor" power connection
 leds:
   - 13
   - 14
@@ -73,7 +74,7 @@ rgbw_strips: []
 rgb_strips:
   - pin: 13
     size: 60
-    dimmer: true # add dimmer channel
+    dimmer: none # add dimmer channel. Options: none, single, per-stripe
     slices:
       - 0
       - 15
@@ -87,7 +88,7 @@ servos:
     max_pulse_width: 2500
   - pin: 13
     max_angle: 90
-waves: # works only with rgb strip
+waves: # *deprecated* Works only with rgb strip
   - max_fade_time: 10000
     # RGB slice sequential number in order they are defined, ignoring "pin groups"
     slice_indexes:

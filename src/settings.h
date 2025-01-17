@@ -5,10 +5,36 @@
 #include <ArduinoJson.h>
 #include <Preferences.h>
 
+enum DimmerMode {
+    none,
+    single,
+    perStripe
+};
+
+static DimmerMode dimmerModeFromString(std::string dimmer) {
+    if (dimmer == "single") {
+        return DimmerMode::single;
+    } else if (dimmer == "per-stripe") {
+        return DimmerMode::perStripe;
+    }
+    return DimmerMode::none;
+};
+
+static std::string dimmerModeToString(DimmerMode dimmer) {
+    switch (dimmer) {
+        case DimmerMode::single:
+            return "single";
+        case DimmerMode::perStripe:
+            return "per-stripe";
+        default:
+            return "none";
+    }
+};
+
 struct StripeCfg {
     std::uint8_t pin;
     std::uint16_t size;
-    bool dimmer;
+    DimmerMode dimmer;
     // first pixel of each slice
     std::vector<std::uint16_t> slices;
 
@@ -28,9 +54,9 @@ struct StripeCfg {
         s.pin = json["pin"].as<std::uint8_t>();
         s.size = json["size"].as<std::uint16_t>();
         if (json.containsKey("dimmer")) { // backward compatibility
-            s.dimmer = json["dimmer"].as<bool>();
+            s.dimmer = dimmerModeFromString(json["dimmer"].as<std::string>());
         } else {
-            s.dimmer = false;
+            s.dimmer = DimmerMode::none;
         }
         JsonArray slicesArray = json["slices"].as<JsonArray>();
         for (JsonVariant v : slicesArray) {
@@ -43,7 +69,7 @@ struct StripeCfg {
     static void serialize(JsonObject& jsonStripe, const StripeCfg& s) {
         jsonStripe["pin"] = s.pin;
         jsonStripe["size"] = s.size;
-        jsonStripe["dimmer"] = s.dimmer;
+        jsonStripe["dimmer"] = dimmerModeToString(s.dimmer);
         JsonArray slices = jsonStripe["slices"].to<JsonArray>();
         for (auto slice : s.slices) {
             slices.add(slice);
@@ -147,6 +173,7 @@ struct Settings {
     std::uint16_t maxIdle; // max idle time in min, 0 means no sleep
     bool enableDmxStore;
     unsigned int rebootAfterWifiFailed = 15; // reboot after 15 failed wifi connections, 0 means no reboot
+    bool disableWifiPowerSave;
 
     bool operator==(const Settings& other) const {
         return wifiSsid == other.wifiSsid &&
@@ -162,7 +189,8 @@ struct Settings {
             lightsTest == other.lightsTest &&
             maxIdle == other.maxIdle &&
             enableDmxStore == other.enableDmxStore &&
-            rebootAfterWifiFailed == other.rebootAfterWifiFailed;
+            rebootAfterWifiFailed == other.rebootAfterWifiFailed &&
+            disableWifiPowerSave == other.disableWifiPowerSave;
     }
 
     bool operator!=(const Settings& other) const {
@@ -179,6 +207,11 @@ struct Settings {
         s.maxIdle = json["max_idle"].as<std::uint16_t>();
         s.enableDmxStore = json["enable_dmx_store"].as<bool>();
         s.rebootAfterWifiFailed = json["reboot_after_wifi_failed"].as<unsigned int>();
+        if (json.containsKey("disable_wifi_power_save")) { // backward compatibility
+            s.disableWifiPowerSave = json["disable_wifi_power_save"].as<bool>();
+        } else {
+            s.disableWifiPowerSave = false;
+        }
 
         JsonArray ledsArray = json["leds"].as<JsonArray>();
         for (JsonVariant v : ledsArray) {
@@ -220,6 +253,7 @@ struct Settings {
         json["max_idle"] = maxIdle;
         json["enable_dmx_store"] = enableDmxStore;
         json["reboot_after_wifi_failed"] = rebootAfterWifiFailed;
+        json["disable_wifi_power_save"] = disableWifiPowerSave;
 
         JsonArray jsonLeds = json["leds"].to<JsonArray>();
         for (auto led : this->leds) {

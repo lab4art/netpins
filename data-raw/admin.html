@@ -79,6 +79,7 @@ udp_port: 5824
 lights_test: true
 max_idle: 120 # power of when no activity in minutes
 reboot_after_wifi_failed: 15 # reboot after 15 failed wifi connections, 0 means no reboot
+disable_wifi_power_save: false # disable WiFi power save to prevent led flicering on "poor" power connection
 leds:
   - 13
   - 14
@@ -86,7 +87,7 @@ rgbw_strips: []
 rgb_strips:
   - pin: 13
     size: 60
-    dimmer: true # add dimmer channel
+    dimmer: none # add dimmer channel. Options: none, single, per-stripe
     slices:
       - 0
       - 15

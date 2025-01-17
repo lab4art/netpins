@@ -1,5 +1,6 @@
 #pragma once
 
+#include <vector>
 #include <NeoPixelBus.h>
 #include <ESP32Servo.h>
 
@@ -15,8 +16,11 @@ class Switchabe {
         virtual void off() = 0;
 };
 
+class SwitchableThing : public Thing, public Switchabe {
+};
+
 template<typename T_COLOR> 
-class SliceThingBase : public Thing, public Switchabe {
+class SliceThingBase : public SwitchableThing {
     protected:
         int pxFrom;
         int pxTo;
@@ -61,7 +65,7 @@ class SliceThingBase : public Thing, public Switchabe {
 
 };
 
-class LedThing : public Thing, public Switchabe {
+class LedThing : public SwitchableThing {
     private:
         int pin;
         int currentValue = 0;
@@ -249,5 +253,107 @@ class ServoThing : public Thing {
             int angle = map(currentValue, 0, 255, 0, this->maxAngle);
             servo.write(angle);
             dirty = false;
+        }
+};
+
+class ThingGroup : public SwitchableThing {
+    private:
+        int numOfChannels;
+    protected:
+        std::vector<SwitchableThing*> things;
+        boolean dimmable;
+
+    public:
+        ThingGroup(std::vector<SwitchableThing*> things, boolean dimmable):
+            things(things),
+            dimmable(dimmable) {
+                int sumChannels = 0;
+                for (auto& thing : things) {
+                    sumChannels += thing->numChannels();
+                }
+                if (dimmable) {
+                    numOfChannels = sumChannels + 1;
+                } else {
+                    numOfChannels = sumChannels;
+                }
+        }
+
+        int numChannels() {
+            return numOfChannels;
+        }
+
+        boolean isDimmable() {
+            return dimmable;
+        }
+
+        void on() {
+            for (auto& thing : things) {
+                thing->on();
+            }
+        }
+
+        void off() {
+            for (auto& thing : things) {
+                thing->off();
+            }
+        }
+};
+class RgbThingGroup : public ThingGroup {
+    private:
+        std::vector<RgbThing*> rgbThings;
+
+    public:
+        RgbThingGroup(std::vector<RgbThing*> rgbThings, boolean dimmable):
+            ThingGroup(std::vector<SwitchableThing*>(rgbThings.begin(), rgbThings.end()), dimmable),
+            rgbThings(rgbThings) {
+        }
+
+        void setData(uint8_t* data) {
+            int dimm;
+            if (dimmable) {
+                dimm = data[numChannels() - 1];
+            } else {
+                dimm = 255;
+            }
+
+            int currentChannel = 0;
+            for (auto& thing : rgbThings) {
+                int numChannels = thing->numChannels();
+                uint8_t* thingData = data + currentChannel;
+                thing->setColor(RgbColor(thingData[0], thingData[1], thingData[2]), dimm);
+                currentChannel += numChannels;
+            }
+        }
+
+        std::vector<RgbThing*> things() {
+            return rgbThings;
+        }
+};
+
+class RgbwThingGroup : public ThingGroup {
+    private:
+        std::vector<RgbwThing*> rgbwThings;
+
+    public:
+        RgbwThingGroup(std::vector<RgbwThing*> rgbwThings, boolean dimmable):
+            ThingGroup(std::vector<SwitchableThing*>(rgbwThings.begin(), rgbwThings.end()), dimmable),
+            rgbwThings(rgbwThings) {
+        }
+
+        void setData(uint8_t* data) {
+            int dimm;
+            if (dimmable) {
+                dimm = data[numChannels() - 1];
+            } else {
+                dimm = 255;
+            }
+
+            int currentChannel = 0;
+            for (auto& thing : rgbwThings) {
+                int numChannels = thing->numChannels();
+                uint8_t* thingData = data + currentChannel;
+                thing->setColor(RgbwColor(thingData[0], thingData[1], thingData[2], thingData[3]), dimm);
+                currentChannel += numChannels;
+            }
         }
 };
