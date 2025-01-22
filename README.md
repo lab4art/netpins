@@ -99,6 +99,16 @@ waves: # *deprecated* Works only with rgb strip
       - 4
 ```
 
+### Experimental
+```yaml
+hum_temps:
+  - pin: 4
+    read_ms: 1000
+touch_sensors:
+  - pin: 4
+    threshold: 250 # work ok with a wire on a s2_mini pin
+```
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

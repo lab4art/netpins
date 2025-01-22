@@ -20,40 +20,10 @@ class DmxListener {
         std::map<int, Thing*> thingMap;
         Preferences preferences;
         uint8_t lastStoreFlag = 0;
-        bool enableStore;
-
-        // store the data to preferences when last byte is flipped from 0 to 255
-        void storeDmxData(uint8_t data[512]) {
-            if (data[511] == 255 && lastStoreFlag == 0) {
-                // check if the data is the same as the last stored data
-                uint8_t storedData[512] = {0};
-                preferences.begin("dmx-state", true);
-                preferences.getBytes("data", storedData, 511);
-                preferences.end();
-                bool sameData = true;
-                for (int i = 0; i < 511; i++) {
-                    if (data[i] != storedData[i]) {
-                        sameData = false;
-                        break;
-                    }
-                }
-                if (sameData) {
-                    Log.noticeln("DMX data is the same as the last stored data.");
-                    return;
-                }
-
-                preferences.begin("dmx-state", false);
-                preferences.putBytes("data", data, 511); // do not store the last byte, it's a store flag
-                preferences.end();
-                Log.infoln("DMX data stored.");
-            }
-            lastStoreFlag = data[511];
-        }
 
     public:
-        DmxListener(int firstDmxChannel, bool enableStore = false):
-            firstDmxChannel(firstDmxChannel), 
-            enableStore(enableStore) {
+        DmxListener(int firstDmxChannel):
+            firstDmxChannel(firstDmxChannel) {
         }
 
         ~DmxListener() {
@@ -92,20 +62,35 @@ class DmxListener {
                     currentDmxIndex += thing->numChannels();
                 }
             }
-            if (enableStore) {
-                storeDmxData(data);
+        }
+
+        void storeDmxData(uint8_t data[512]) {
+            // check if the data is the same as the last stored data
+            uint8_t storedData[512] = {0};
+            preferences.begin("dmx-state", true);
+            preferences.getBytes("data", storedData, 512);
+            preferences.end();
+            bool sameData = true;
+            for (int i = 0; i < 512; i++) {
+                if (data[i] != storedData[i]) {
+                    sameData = false;
+                    break;
+                }
             }
+            if (sameData) {
+                Log.noticeln("DMX data is the same as the last stored data.");
+                return;
+            }
+
+            preferences.begin("dmx-state", false);
+            preferences.putBytes("data", data, 512);
+            preferences.end();
+            Log.infoln("DMX data stored.");
         }
 
         void restoreDmxData(uint8_t dmxData[512]) {
-            if (!enableStore) {
-                return;
-            }
-            // uint8_t dmxData[512] = {0};
             preferences.begin("dmx-state", true);
-            preferences.getBytes("data", dmxData, 511);
+            preferences.getBytes("data", dmxData, 512);
             preferences.end();
-            // set the store flag to 0 to prevent storing the data again
-            dmxData[511] = 0;
         }
 };

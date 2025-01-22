@@ -34,6 +34,8 @@
 #include <settings.h>
 #include <factoryReset.h>
 #include <Things.h>
+#include <sensors.h>
+#include <mqttUtils.h>
 
 
 #define ON_WIFI_EXECUTION_CALLBACK_SIGNATURE std::function<void(String)> wifiExecutionCallback
@@ -43,6 +45,8 @@ std::map<int /* pin */, NeoPixelBus<NeoGrbwFeature, NeoEsp32RmtNSk6812Method>*> 
 std::map<int /* pin */, NeoPixelBus<NeoGrbFeature, NeoEsp32RmtNWs2812xMethod>*> rgbStrips;
 std::vector<LedThing*> leds;
 std::vector<ServoThing*> servos;
+std::vector<HumTempSensor*> humTempSensors;
+std::vector<TouchSensor*> touchSensors;
 
 unsigned long lastCommandReceivedAt = 0;
 unsigned long maxIdleMillis = 0;
@@ -58,14 +62,17 @@ DmxListener* dmxListener;
 
 Scheduler scheduler;
 ArtnetWiFiReceiver* artnet;
+MqttUtils* mqtt;
 WebAdmin* webAdmin;
-
-FactoryReset* factoryReset;
 
 std::vector<Switchabe*> switchables;
 
 // uptime set by system reboot like WiFi connection failure
 ulong uptimeOffset = 0;
+
+uint16_t dmxUniverse;
+uint8_t lastDmxSequence = 0;
+uint8_t dmxData[512] = {0}; // 1st byte is sequence number
 
 int numOfCreatedStrips = 0;
 template<typename Feature, typename Method>
@@ -89,42 +96,44 @@ void createStrip(int pin, int maxNeopx, std::map<int, NeoPixelBus<Feature, Metho
     strips[pin]->Show();
 }
 
-WebAdmin::CommandResult onSystemCommand(JsonDocument &jsonDoc) {
+WebAdmin::CommandResult onSystemCommand(JsonVariant &jsonVariant) {
   lastCommandReceivedAt = millis();
-  factoryReset->resetCounter(true);
+  FactoryReset::getInstance().resetCounter(true);
 
-  if (jsonDoc["command"] == "sys-config") {
-    settingsManager->fromJson(jsonDoc["data"].as<String>());
+  String command = jsonVariant["command"].as<String>();
+
+  if (command == "sys-config") {
+    settingsManager->fromJson(jsonVariant["data"].as<String>());
     if (settingsManager->isDirty()) {
       settingsManager->save();
       return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK_REBOOT, "Saved, rebooting ...", 3000};
     } else {
       return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, "No updates.", -1};
     }
-  } else if (jsonDoc["command"] == "sys-config-merge") {
-    settingsManager->mergeJson(jsonDoc["data"].as<String>());
+  } else if (command == "sys-config-merge") {
+    settingsManager->mergeJson(jsonVariant["data"].as<String>());
     if (settingsManager->isDirty()) {
       settingsManager->save();
       return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK_REBOOT, "Saved, rebooting ...", 3000};
     } else {
       return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, "No updates.", -1};
     }
-  } else if (jsonDoc["command"] == "dmx-config") {
+  } else if (command == "dmx-config") {
     Log.noticeln("DMX config command received.");
-    dmxSettingsManager->fromJson(jsonDoc["data"].as<String>());
+    dmxSettingsManager->fromJson(jsonVariant["data"].as<String>());
     if (dmxSettingsManager->isDirty()) {
       dmxSettingsManager->save();
       return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK_REBOOT, "Saved, rebooting ...", 3000};
     } else {
       return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, "No updates.", -1};
     }
-  } else if (jsonDoc["command"] == "firmware-update" || jsonDoc["command"] == "spiffs-update") {
+  } else if (command == "firmware-update" || command == "spiffs-update") {
     FirmwareUpdateParams* params;
 
-    if (jsonDoc["command"] == "firmware-update") {
-      params = new FirmwareUpdateParams{jsonDoc["data"]["url"].as<String>(), false};
+    if (command == "firmware-update") {
+      params = new FirmwareUpdateParams{jsonVariant["data"]["url"].as<String>(), false};
     } else {
-      params = new FirmwareUpdateParams{jsonDoc["data"]["url"].as<String>(), true};
+      params = new FirmwareUpdateParams{jsonVariant["data"]["url"].as<String>(), true};
     }
 
     xTaskCreate(
@@ -151,8 +160,11 @@ WebAdmin::CommandResult onSystemCommand(JsonDocument &jsonDoc) {
         return WebAdmin::CommandResult{WebAdmin::CommandStatus::ERROR, updateResult->message, -1};
       }
     }
-  } else if (jsonDoc["command"] == "reboot") {
+  } else if (command == "reboot") {
     return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK_REBOOT, "Rebooting ...", 3000};
+  } else if (command == "save-dmx") {
+    dmxListener->storeDmxData(dmxData);
+    return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, "Saved.", -1};
   }
   return WebAdmin::CommandResult{WebAdmin::CommandStatus::ERROR, "Unknown command.", -1};
 }
@@ -361,10 +373,6 @@ std::vector<Switchabe*> createThings(Settings& settings) {
   return switchables;
 };
 
-uint16_t dmxUniverse;
-uint8_t lastDmxSequence = 0;
-uint8_t dmxData[512] = {0}; // 1st byte is sequence number
-
 void onDmxFrame(const uint8_t *data, uint16_t size, const ArtDmxMetadata &metadata, const ArtNetRemoteInfo &remote) {
   if (metadata.universe != dmxUniverse) {
       return;
@@ -388,8 +396,26 @@ void eraseAllPreferences() {
         Log.errorln("Failed to erase NVS: %s\n", esp_err_to_name(err));
     } else {
         Log.noticeln("NVS erased successfully.");
+        err = nvs_flash_init();
+        if (err != ESP_OK) {
+            Log.errorln("Failed to initialize NVS: %s", esp_err_to_name(err));
+        } else {
+            Log.noticeln("NVS initialized successfully.");
+        }        
     }
 }
+void onMqttMessage(char* topic, byte* payload, unsigned int length) {
+  Log.noticeln("MQTT message received: %s, %s", topic, payload);
+
+};
+
+void beforeWiFiReboot() {
+    // store the uptime to preferences, used for idle power off
+    Preferences preferences;
+    preferences.begin("sys", false);
+    preferences.putULong("reboot-wifi", millis() + uptimeOffset);
+    preferences.end();
+};
 
 void setup() {
   Serial.begin(115200);
@@ -401,8 +427,7 @@ void setup() {
 
   Serial.println("Booting ...");
 
-  Log.begin(LOG_LEVEL_NOTICE, &Serial, true);
-  // Log.begin(LOG_LEVEL_TRACE, &Serial, true);
+  Log.begin(LOG_LEVEL, &Serial, true);
   Log.setShowLevel(false);    // Do not show loglevel, we will do this in the prefix
   Log.setPrefix(printPrefix);
   Log.infoln("Logging initialized.");
@@ -411,7 +436,7 @@ void setup() {
   preferences.begin("sys", false);
   uptimeOffset = preferences.getULong("reboot-wifi", 0L);
   if (uptimeOffset != 0) {
-    // erase to not count the same offset on regular reboots
+    // erase to not count the same offset on reboots
     preferences.putULong("reboot-wifi", 0L);
   }
   preferences.end();
@@ -419,8 +444,8 @@ void setup() {
   dmxSettingsManager = new SettingsManager<DmxSettings>("dmx");
   settingsManager = new SettingsManager<Settings>("settings");
 
-  factoryReset = new FactoryReset();
-  if (factoryReset->shouldReset()) {
+  FactoryReset::getInstance().evaluate(FACTORY_REST_PIN);
+  if (FactoryReset::getInstance().shouldReset()) {
     Log.noticeln("Factory reset requested, setting defaults ...");
     eraseAllPreferences();
     settingsManager->setDefaults();
@@ -446,7 +471,7 @@ void setup() {
   
   auto dmxSettings = dmxSettingsManager->getSettings();
   dmxUniverse = dmxSettings.universe;
-  dmxListener = new DmxListener(dmxSettings.channel, settings.enableDmxStore);
+  dmxListener = new DmxListener(dmxSettings.channel);
 
   try {
     switchables = createThings(settings);
@@ -493,7 +518,7 @@ void setup() {
     { STATIC_IP, GATEWAY, SUBNET, DNS }, 
     5000,
     settings.rebootAfterWifiFailed,
-    uptimeOffset,
+    beforeWiFiReboot,
     settings.hostname.c_str());
   Serial.println("Wifi MAC: " + WifiUtils::macAddress);
 
@@ -514,6 +539,42 @@ void setup() {
       lastCommandReceivedAt = millis();
     });
     Log.noticeln("Web server listening on %s", WiFi.localIP().toString().c_str());
+  }
+
+  // mqtt = new MqttUtils( // TODO make this configurable
+  //   "settings.mqttServer.c_str()",
+  //   "settings.mqttUser.c_str()",
+  //   "settings.mqttPass.c_str()",
+  //   "settings.mqttTopic.c_str()",
+  //   onMqttMessage
+  // );
+  mqtt = new MqttUtils( // TODO make this configurable
+    "host",
+    "user",
+    "pass",
+    "/command/#",
+    onMqttMessage
+  );
+
+  for (auto& humTemp : settings.humTemps) {
+    auto humTempSensor = new HumTempSensor(humTemp.pin, humTemp.readMs);
+    humTempSensor->setTempChangeListener([&humTemp](int temp){
+        webAdmin->setProperty(String("temp-") + humTemp.pin, temp);
+    });
+    humTempSensor->setHumidityChangeListener([&humTemp](int hum){
+        webAdmin->setProperty(String("hum-") + humTemp.pin, hum);
+    });
+    humTempSensors.push_back(humTempSensor);
+  }
+
+  for (auto& touch : settings.touchSensors) {
+    auto touchSensor = new TouchSensor(touch.pin, 200, touch.threshold);
+    uint8_t pin = touch.pin;
+    touchSensor->setOnChangeListener([pin](bool touched) {
+        String topic = String("/sensor/touch-") + pin;
+        mqtt->publish(topic.c_str(), touched ? "1" : "0");
+    });
+    touchSensors.push_back(touchSensor);
   }
 
   Log.noticeln("Running ...");
@@ -561,11 +622,7 @@ void loop() {
 
   scheduler.execute(); // scheduler should be before commitNeoStip because tasks usually prepare the data
 
-  if (factoryReset != nullptr) {
-    if (factoryReset->resetCounter()) {
-      // delete factoryReset; // if deleting, ESP can crash
-    }
-  }
+  FactoryReset::getInstance().resetCounter();
 
   /*
   30ms = 30fps
@@ -609,16 +666,30 @@ void loop() {
     esp_deep_sleep_start();
   }
 
-  loopCounter++;
-  auto executionTime = micros() - loopStartTime;
-  executionTimeSum += executionTime;
-  if (executionTime > maxExecutionTime) {
-    maxExecutionTime = executionTime;
+  for (auto& humTempSensor : humTempSensors) {
+    humTempSensor->read();
   }
-  if (loopCounter % 1000 == 0) {
-    Log.noticeln("Max loop execution time: %d us, avg loop execution time: %d us", maxExecutionTime, executionTimeSum / loopCounter);
-    executionTimeSum = 0;
-    loopCounter = 0;
-    Serial.println(String("Free memory: ") + ESP.getFreeHeap());
+
+  for (TouchSensor* touchSensor : touchSensors) {
+    touchSensor->read();
+  }
+
+  mqtt->tryReconnect();
+  mqtt->loop();
+
+  if (PRINT_EXECUTION_TIME) {
+    loopCounter++;
+    auto executionTime = micros() - loopStartTime;
+    executionTimeSum += executionTime;
+    if (executionTime > maxExecutionTime) {
+      maxExecutionTime = executionTime;
+    }
+    if (loopCounter % 1000 == 0) {
+      Log.noticeln("Max loop execution time: %d us, avg loop execution time: %d us", maxExecutionTime, executionTimeSum / loopCounter);
+      executionTimeSum = 0;
+      maxExecutionTime = 0;
+      loopCounter = 0;
+      Serial.println(String("Free memory: ") + ESP.getFreeHeap());
+    }
   }
 }

@@ -1,13 +1,15 @@
 #pragma once
 
-#include <ArduinoJson.h>
 #include <WebServer.h>
+#include <AsyncJson.h>
+#include <ArduinoJson.h>
 #include <ESPAsyncWebServer.h>
 #include <LittleFS.h>
 #include "wifiUtils.cpp"
 #include <ArduinoLog.h>
 #include <constants.h>
 #include <settings.h>
+#include <variant>
 
 
 class WebAdmin {
@@ -29,30 +31,29 @@ class WebAdmin {
         
         SettingsManager<Settings>* settingsManager;
         SettingsManager<DmxSettings>* dmxSettingsManager;
-        std::function<CommandResult(JsonDocument&)> onSystemCommand = [](JsonDocument&){ return CommandResult{OK, "Success."}; };
+        std::function<CommandResult(JsonVariant&)> onSystemCommand = [](JsonVariant&){ return CommandResult{OK, "Success."}; };
+        std::map<String, float> properties;
 
-        void serveFile(AsyncWebServerRequest *request, String path, String contentType) {
-            File file = LittleFS.open(path, "r");
-            if (!file) {
-                request->send(500, "text/plain", "Failed to open file");
-                return;
+        void listFiles() {
+            File root = LittleFS.open("/");
+            Log.noticeln("Files on /");
+            File file = root.openNextFile();
+            while (file) {
+                Log.noticeln("- %s", file.name());
+                file = root.openNextFile();
             }
-            String htmlContent = file.readString();
-            file.close();
-            AsyncWebServerResponse *response = request->beginResponse(200, contentType, htmlContent);
-            response->addHeader("Content-encoding", "gzip");
-            request->send(response);
-
         }
 
     public:
         WebAdmin(
                 SettingsManager<Settings>* settingsManager,
                 SettingsManager<DmxSettings>* dmxSettingsManager,
-                std::function<CommandResult(JsonDocument&)> onSystemCommand):
+                std::function<CommandResult(JsonVariant&)> onSystemCommand):
                 settingsManager(settingsManager),
                 dmxSettingsManager(dmxSettingsManager),
                 onSystemCommand(onSystemCommand) {
+
+            listFiles();
 
             webServer->on("/sys-info", HTTP_GET, [this](AsyncWebServerRequest *request){
                 this->onReceivedCallback();
@@ -64,51 +65,39 @@ class WebAdmin {
                 doc["ip"] = WiFi.localIP().toString();
                 doc["hostname"] = this->settingsManager->getSettings().hostname;
                 doc["uptime"] = std::to_string(millis());
+                for (auto const& [key, val] : properties) {
+                    doc[key] = val;
+                }
                 serializeJson(doc, output);
 
                 request->send(200, "application/json", output);
             });
 
-            webServer->on("/", HTTP_GET, [this](AsyncWebServerRequest *request){
-                serveFile(request, "/admin.html.gz", "text/html");
+            webServer->on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+                request->redirect("/index.html");
             });
-            webServer->on("/script.js", HTTP_GET, [this](AsyncWebServerRequest *request){
-                serveFile(request, "/script.js.gz", "application/javascript");
-            });
-            webServer->on("/js-yaml-4.1.0.min.js", HTTP_GET, [this](AsyncWebServerRequest *request){
-                serveFile(request, "/js-yaml-4.1.0.min.js.gz", "application/javascript");
-            });
-            webServer->on("/style.css", HTTP_GET, [this](AsyncWebServerRequest *request){
-                serveFile(request, "/style.css.gz", "text/css");
-            });
-            webServer->on("/favicon.svg", HTTP_GET, [this](AsyncWebServerRequest *request){
-                serveFile(request, "/favicon.svg.gz", "image/svg+xml");
-            });
+            webServer->serveStatic("/index.html", LittleFS, "/index.html");
+            webServer->serveStatic("/script.js", LittleFS, "/script.js");
+            webServer->serveStatic("/js-yaml-4.1.0.min.js", LittleFS, "/js-yaml-4.1.0.min.js");
+            webServer->serveStatic("/style.css", LittleFS, "/style.css");
+            webServer->serveStatic("/favicon.svg", LittleFS, "/favicon.svg");
+            webServer->serveStatic("/test.txt", LittleFS, "/test.txt");
 
-            // HTTP_GET is used for convinience that users can use a browser without any plugin or form
-            webServer->on("^\\/conf\\/(.+)$", HTTP_GET, [this](AsyncWebServerRequest *request){
+
+            webServer->on("/conf/sys", HTTP_GET, [this](AsyncWebServerRequest *request){
                 this->onReceivedCallback();
-                String configName = request->pathArg(0);
-
-                if (configName == "sys") {
-                    request->send(200, "application/json", this->settingsManager->getSettings().asJson().c_str());
-                } else if (configName == "dmx") {
-                    request->send(200, "application/json", this->dmxSettingsManager->getSettings().asJson().c_str());
-                } else {
-                    request->send(404);
-                }
+                request->send(200, "application/json", this->settingsManager->getSettings().asJson().c_str());
             });
 
-            webServer->on("^\\/system$", HTTP_POST, [this](AsyncWebServerRequest *request) {
+            webServer->on("/conf/dmx", HTTP_GET, [this](AsyncWebServerRequest *request){
                 this->onReceivedCallback();
-                // This callback after the last chunk of body data has been received
-                String* requestBody = (String*)request->_tempObject;
-                Log.noticeln("Received POST request. Body: %s", requestBody->c_str());
-                JsonDocument doc;
-                deserializeJson(doc, *requestBody);
-                CommandResult result = this->onSystemCommand(doc);
-                delete requestBody;
-                request->_tempObject = NULL;
+                request->send(200, "application/json", this->dmxSettingsManager->getSettings().asJson().c_str());
+            });
+
+            AsyncCallbackJsonWebHandler* systemHandler = new AsyncCallbackJsonWebHandler("/system", [this](AsyncWebServerRequest *request, JsonVariant &json) {
+                this->onReceivedCallback();
+
+                CommandResult result = this->onSystemCommand(json);
 
                 // serialize CommandResult result to json
                 String resultJson;
@@ -119,30 +108,20 @@ class WebAdmin {
                 serializeJson(resultDoc, resultJson);
 
                 if (result.status == OK || result.status == OK_REBOOT) {
-                    request->send(200, "application/json", resultJson);
+                    AsyncWebServerResponse *response = request->beginResponse(200, "application/json", resultJson);
+                    response->addHeader("Connection", "close");
+                    request->send(response);
                     if (result.status == OK_REBOOT) {
-                        delay(1000);
-                        Log.noticeln("Rebooting ...");
-                        ESP.restart();
+                        request->onDisconnect([]() {
+                            Log.noticeln("Rebooting ...");
+                            ESP.restart();
+                        });
                     }
                 } else {
                     request->send(500, "application/json", resultJson);
                 }
-            }, NULL, [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
-                // This callback is called for each chunk of body data received
-                Log.noticeln("Received chunk, Len: %d, Index: %d, Total: %d.", len, index, total);
-
-                if (request->_tempObject == NULL) {
-                request->_tempObject = new String();
-                }
-                
-                // Append the current chunk to _tempObject
-                String* requestBody = (String*)request->_tempObject;
-                for (size_t i = 0; i < len; i++) {
-                // Serial.print((char)data[i]);
-                *requestBody += (char)data[i];
-                }
             });
+            webServer->addHandler(systemHandler);
 
             webServer->onNotFound([](AsyncWebServerRequest *request){
                 // this->onReceivedCallback(); ignore, not a valid request
@@ -154,6 +133,10 @@ class WebAdmin {
 
         void setOnReceivedCallback(std::function<void()> onReceivedCallback) {
             this->onReceivedCallback = onReceivedCallback;
+        }
+
+        void setProperty(String key, float value) {
+            properties[key] = value;
         }
 
         void end() {

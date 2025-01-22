@@ -3,7 +3,7 @@
 #include <esp_wifi.h>
 #include <WiFi.h>
 #include <ArduinoLog.h>
-#include <Preferences.h>
+#include <factoryReset.h>
 
 
 #define ON_WIFI_EXECUTION_CALLBACK_SIGNATURE std::function<void(String)> wifiExecutionCallback
@@ -16,8 +16,7 @@ struct static_ip_t {
 };
 class WifiUtils {
     private:
-        const char* ssid;
-        const char* password;
+        String ssidString;
         unsigned long previousMillis = 0;
         boolean connectedCallbackCalled = false;
         unsigned long reconnectInterval = 0;
@@ -25,18 +24,17 @@ class WifiUtils {
         unsigned long reconnectDelay = 0;
         unsigned int rebootAfterWiFiFailed;
         unsigned int connectAttempt = 0;
-        unsigned long uptimeOffset;
+        std::function<void()> beforeWiFiReboot;
 
     public:
         static String macAddress;
 
-        WifiUtils(const char* ssid, const char* password, static_ip_t staticIp, unsigned long reconnectInterval, unsigned int rebootAfterWiFiFailed, unsigned long uptimeOffset, const char* hostname = "", const char* hostnamePrefix = "esp-") : 
-              ssid(ssid), 
-              password(password),
-              reconnectInterval(reconnectInterval),
-              rebootAfterWiFiFailed(rebootAfterWiFiFailed),
-              uptimeOffset(uptimeOffset) {
+        WifiUtils(const char* ssid, const char* password, static_ip_t staticIp, unsigned long reconnectInterval, unsigned int rebootAfterWiFiFailed, std::function<void()> beforeWiFiReboot = nullptr, const char* hostname = "", const char* hostnamePrefix = "esp-") : 
+                reconnectInterval(reconnectInterval),
+                rebootAfterWiFiFailed(rebootAfterWiFiFailed),
+                beforeWiFiReboot(beforeWiFiReboot) {
 
+            ssidString = ssid;
             uint8_t mac[6];
             WiFi.macAddress(mac);
             char macBuffer[18]; // "XX:XX:XX:XX:XX:XX\0" requires 18 characters
@@ -75,33 +73,30 @@ class WifiUtils {
             }
 
             randomSeed(micros());
-            reconnectDelay = random(0, 2 * reconnectInterval);
+            reconnectDelay = random(reconnectInterval, 2 * reconnectInterval);
         }
 
         void tryReconnect(ON_WIFI_EXECUTION_CALLBACK_SIGNATURE) {
-            // skip if WiFi is in AP mode
-            if (WiFi.getMode() == WIFI_AP) {
-              return;
-            }
-
             unsigned long currentMillis = millis();
             // if WiFi is down, try reconnecting every CHECK_WIFI_TIME seconds
             if (currentMillis - previousMillis >= reconnectDelay) {
-                if (WiFi.status() != WL_CONNECTED) {
-                    reconnectDelay = random(0, reconnectInterval) + reconnectInterval * connectAttempt; // progressive back-off
-                    if (reconnectDelay > 120000) { // 2 min
-                      reconnectDelay = 120000;
+                // no reconnect if AP mode
+                if (WiFi.getMode() == WIFI_STA && WiFi.status() != WL_CONNECTED) {
+                    reconnectDelay = reconnectInterval + reconnectInterval * connectAttempt; // progressive back-off
+                    if (reconnectDelay > reconnectInterval * 10) {
+                        reconnectDelay = reconnectInterval * 10;
                     }
-                    Log.noticeln("Reconnecting to WiFi ...");
+                    reconnectDelay = reconnectDelay + random(0, reconnectInterval);
+                    Log.noticeln("Reconnecting to WiFi %s ...", ssidString.c_str());
                     WiFi.reconnect();
                     connectedCallbackCalled = false;
                     connectAttempt++;
-                    if (rebootAfterWiFiFailed > 0 && connectAttempt >= rebootAfterWiFiFailed) { // keep enough reties to not trigger factory reset
-                      // store the uptime to preferences
-                      Preferences preferences;
-                      preferences.begin("sys", false);
-                      preferences.putULong("reboot-wifi", millis() + uptimeOffset);
-                      preferences.end();
+                    if (rebootAfterWiFiFailed > 0 && connectAttempt >= rebootAfterWiFiFailed) {
+                      // prevent factory reset by WiFi failure, reset the counter
+                      FactoryReset::getInstance().resetCounter(true);
+                      if (beforeWiFiReboot != nullptr) {
+                        beforeWiFiReboot();
+                      }
                       Log.errorln("Too many failed attempts to connect to WiFi. Restarting ...");
                       ESP.restart();
                     }

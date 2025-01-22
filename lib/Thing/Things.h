@@ -146,8 +146,7 @@ class RgbThing : public SliceThingBase<RgbColor> {
         // update only if the color is different
         auto stripPx = pxFrom + px;
         auto gColor = colorGamma.Correct(color);
-        auto gDimm = NeoGammaTableMethod::Correct(dimm);
-        auto dimmFactor = gDimm / 255.0;
+        auto dimmFactor = dimm / 255.0;
         auto gColorDimm = RgbColor(gColor.R * dimmFactor, gColor.G * dimmFactor, gColor.B * dimmFactor);
         if (strip->GetPixelColor(stripPx) != gColorDimm) {
             strip->SetPixelColor(stripPx, gColorDimm);
@@ -190,8 +189,7 @@ class RgbwThing : public SliceThingBase<RgbwColor> {
             // update only if the color is different
             auto stripPx = pxFrom + px;
             auto gColor = colorGamma.Correct(color);
-            auto gDimm = NeoGammaTableMethod::Correct(dimm);
-            auto dimmFactor = gDimm / 255.0;
+            auto dimmFactor = dimm / 255.0;
             auto gColorDimm = RgbwColor(gColor.R * dimmFactor, gColor.G * dimmFactor, gColor.B * dimmFactor, gColor.W * dimmFactor);
             if (strip->GetPixelColor(stripPx) != gColorDimm) {
                 strip->SetPixelColor(stripPx, gColorDimm);

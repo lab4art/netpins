@@ -154,6 +154,59 @@ struct ServoCfg {
     }
 };
 
+
+struct HumTempCfg {
+    std::uint8_t pin;
+    int readMs;
+
+    bool operator==(const HumTempCfg& other) const {
+        return pin == other.pin &&
+            readMs == other.readMs;
+    };
+
+    bool operator!=(const HumTempCfg& other) const {
+        return !(*this == other);
+    };
+
+    static HumTempCfg deserialize(JsonObject& json) {
+        HumTempCfg h;
+        h.pin = json["pin"].as<std::uint8_t>();
+        h.readMs = json["read_ms"].as<int>();
+        return h;
+    };
+
+    static void serialize(JsonObject& jsonHumTemp, const HumTempCfg& h) {
+        jsonHumTemp["pin"] = h.pin;
+        jsonHumTemp["read_ms"] = h.readMs;
+    };
+};
+
+struct TouchSensorCfg {
+    std::uint8_t pin;
+    int threshold;
+
+    bool operator==(const TouchSensorCfg& other) const {
+        return pin == other.pin &&
+            threshold == other.threshold;
+    };
+
+    bool operator!=(const TouchSensorCfg& other) const {
+        return !(*this == other);
+    };
+
+    static TouchSensorCfg deserialize(JsonObject& json) {
+        TouchSensorCfg t;
+        t.pin = json["pin"].as<std::uint8_t>();
+        t.threshold = json["threshold"].as<int>();
+        return t;
+    };
+
+    static void serialize(JsonObject& jsonTouchSensor, const TouchSensorCfg& t) {
+        jsonTouchSensor["pin"] = t.pin;
+        jsonTouchSensor["threshold"] = t.threshold;
+    };
+};
+
 struct Settings {
     std::string wifiSsid;
     std::string wifiPass;
@@ -168,10 +221,11 @@ struct Settings {
     // waves
     // stripes that are part of the animation must be excluded from the dmx listener
     std::vector<WaveCfg> waves;
+    std::vector<HumTempCfg> humTemps;
+    std::vector<TouchSensorCfg> touchSensors;
 
     bool lightsTest;
     std::uint16_t maxIdle; // max idle time in min, 0 means no sleep
-    bool enableDmxStore;
     unsigned int rebootAfterWifiFailed = 15; // reboot after 15 failed wifi connections, 0 means no reboot
     bool disableWifiPowerSave;
 
@@ -186,9 +240,10 @@ struct Settings {
             rgbStrips == other.rgbStrips &&
             servos == other.servos &&
             waves == other.waves &&
+            humTemps == other.humTemps &&
+            touchSensors == other.touchSensors &&
             lightsTest == other.lightsTest &&
             maxIdle == other.maxIdle &&
-            enableDmxStore == other.enableDmxStore &&
             rebootAfterWifiFailed == other.rebootAfterWifiFailed &&
             disableWifiPowerSave == other.disableWifiPowerSave;
     }
@@ -205,7 +260,6 @@ struct Settings {
         s.udpPort = json["udp_port"].as<std::uint16_t>();
         s.lightsTest = json["lights_test"].as<bool>();
         s.maxIdle = json["max_idle"].as<std::uint16_t>();
-        s.enableDmxStore = json["enable_dmx_store"].as<bool>();
         s.rebootAfterWifiFailed = json["reboot_after_wifi_failed"].as<unsigned int>();
         if (json.containsKey("disable_wifi_power_save")) { // backward compatibility
             s.disableWifiPowerSave = json["disable_wifi_power_save"].as<bool>();
@@ -241,6 +295,18 @@ struct Settings {
             JsonObject jsonWave = v.as<JsonObject>();
             s.waves.push_back(WaveCfg::deserialize(jsonWave));
         }
+
+        JsonArray humTempsArray = json["hum_temps"].as<JsonArray>();
+        for (JsonVariant v : humTempsArray) {
+            JsonObject jsonHumTemp = v.as<JsonObject>();
+            s.humTemps.push_back(HumTempCfg::deserialize(jsonHumTemp));
+        }
+
+        JsonArray touchSensorsArray = json["touch_sensors"].as<JsonArray>();
+        for (JsonVariant v : touchSensorsArray) {
+            JsonObject jsonTouchSensor = v.as<JsonObject>();
+            s.touchSensors.push_back(TouchSensorCfg::deserialize(jsonTouchSensor));
+        }
     };
 
     void serialize(JsonDocument& json) {
@@ -251,7 +317,6 @@ struct Settings {
         json["udp_port"] = udpPort;
         json["lights_test"] = lightsTest;
         json["max_idle"] = maxIdle;
-        json["enable_dmx_store"] = enableDmxStore;
         json["reboot_after_wifi_failed"] = rebootAfterWifiFailed;
         json["disable_wifi_power_save"] = disableWifiPowerSave;
 
@@ -283,6 +348,18 @@ struct Settings {
             JsonObject jsonWave = waves.createNestedObject();
             WaveCfg::serialize(jsonWave, wave);
         }
+
+        JsonArray humTemps = json["hum_temps"].to<JsonArray>();
+        for (auto humTemp : this->humTemps) {
+            JsonObject jsonHumTemp = humTemps.createNestedObject();
+            HumTempCfg::serialize(jsonHumTemp, humTemp);
+        }
+
+        JsonArray touchSensors = json["touch_sensors"].to<JsonArray>();
+        for (auto touchSensor : this->touchSensors) {
+            JsonObject jsonTouchSensor = touchSensors.createNestedObject();
+            TouchSensorCfg::serialize(jsonTouchSensor, touchSensor);
+        }
     };
 
     String asJson() {
@@ -302,7 +379,6 @@ struct Settings {
             this->udpPort = 5824;
             this->lightsTest = true;
             this->maxIdle = 0;
-            this->enableDmxStore = false;
     };
 };
 
