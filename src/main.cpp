@@ -16,6 +16,8 @@
 #include <Arduino.h>
 #include <TaskScheduler.h>
 #include <ArduinoLog.h>
+#include <nvs.h>
+#include <nvs_flash.h>
 #include "wifiUtils.cpp"
 #include "firmware.h"
 #include <HTTPClient.h>
@@ -57,8 +59,6 @@ Scheduler scheduler;
 ArtnetWifi* artnet;
 WebAdmin* webAdmin;
 
-FactoryReset* factoryReset;
-
 int numOfCreatedStrips = 0;
 template<typename Feature, typename Method>
 void createStrip(int pin, int maxNeopx, std::map<int, NeoPixelBus<Feature, Method>*>& strips) {
@@ -83,7 +83,7 @@ void createStrip(int pin, int maxNeopx, std::map<int, NeoPixelBus<Feature, Metho
 
 WebAdmin::CommandResult onSystemCommand(JsonDocument &jsonDoc) {
   lastCommandReceivedAt = millis();
-  factoryReset->resetCounter(true);
+  FactoryReset::getInstance().resetCounter(true);
 
   if (jsonDoc["command"] == "sys-config") {
     settingsManager->fromJson(jsonDoc["data"].as<String>());
@@ -363,6 +363,21 @@ void onDmxFrame(uint16_t receivedUniverse, uint16_t length, uint8_t sequence, ui
   // do not process the data here, leave IO callback as soon as possible
 };
 
+void eraseAllPreferences() {
+    esp_err_t err = nvs_flash_erase();
+    if (err != ESP_OK) {
+        Log.errorln("Failed to erase NVS: %s\n", esp_err_to_name(err));
+    } else {
+        Log.noticeln("NVS erased successfully.");
+        err = nvs_flash_init();
+        if (err != ESP_OK) {
+            Log.errorln("Failed to initialize NVS: %s", esp_err_to_name(err));
+        } else {
+            Log.noticeln("NVS initialized successfully.");
+        }        
+    }
+}
+
 void setup() {
   Serial.begin(115200);
   delay(500);
@@ -382,9 +397,10 @@ void setup() {
   dmxSettingsManager = new SettingsManager<DmxSettings>("dmx");
   settingsManager = new SettingsManager<Settings>("settings");
 
-  factoryReset = new FactoryReset();
-  if (factoryReset->shouldReset()) {
+  FactoryReset::getInstance().evaluate(FACTORY_REST_PIN);
+  if (FactoryReset::getInstance().shouldReset()) {
     Log.noticeln("Factory reset requested, setting defaults ...");
+    eraseAllPreferences();
     settingsManager->setDefaults();
     settingsManager->save();
     dmxSettingsManager->setDefaults();
@@ -510,11 +526,7 @@ void loop() {
 
   scheduler.execute(); // scheduler should be before commitNeoStip because tasks usually prepare the data
 
-  if (factoryReset != nullptr) {
-    if (factoryReset->resetCounter()) {
-      // delete factoryReset; // if deleting, ESP can crash
-    }
-  }
+  FactoryReset::getInstance().resetCounter();
 
   if (millis() - lastCommit > 20) { // 50fps
     // unsigned long startProcessing = micros();
