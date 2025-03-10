@@ -9,3 +9,5 @@
 #define GATEWAY        IPAddress(0, 0, 0, 0)
 #define SUBNET         IPAddress(0, 0, 0, 0)
 #define DNS            IPAddress(0, 0, 0, 0)
+
+#define FACTORY_REST_PIN -1 // -1 to use power cycle factory reset
