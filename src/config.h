@@ -1,5 +1,7 @@
 #pragma once
 
+#define FIRMWARE_VERSION "netpins-1.1.2-snapshot"
+
 #define WAIT_FOR_SERIAL false
 
 #define WIFI_SSID ""
