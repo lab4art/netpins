@@ -81,42 +81,44 @@ void createStrip(int pin, int maxNeopx, std::map<int, NeoPixelBus<Feature, Metho
     strips[pin]->Show();
 }
 
-WebAdmin::CommandResult onSystemCommand(JsonDocument &jsonDoc) {
+WebAdmin::CommandResult onSystemCommand(JsonVariant &jsonVariant) {
   lastCommandReceivedAt = millis();
   FactoryReset::getInstance().resetCounter(true);
 
-  if (jsonDoc["command"] == "sys-config") {
-    settingsManager->fromJson(jsonDoc["data"].as<String>());
+  String command = jsonVariant["command"].as<String>();
+
+  if (command == "sys-config") {
+    settingsManager->fromJson(jsonVariant["data"].as<String>());
     if (settingsManager->isDirty()) {
       settingsManager->save();
       return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK_REBOOT, "Saved, rebooting ...", 3000};
     } else {
       return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, "No updates.", -1};
     }
-  } else if (jsonDoc["command"] == "sys-config-merge") {
-    settingsManager->mergeJson(jsonDoc["data"].as<String>());
+  } else if (command == "sys-config-merge") {
+    settingsManager->mergeJson(jsonVariant["data"].as<String>());
     if (settingsManager->isDirty()) {
       settingsManager->save();
       return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK_REBOOT, "Saved, rebooting ...", 3000};
     } else {
       return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, "No updates.", -1};
     }
-  } else if (jsonDoc["command"] == "dmx-config") {
+  } else if (command == "dmx-config") {
     Log.noticeln("DMX config command received.");
-    dmxSettingsManager->fromJson(jsonDoc["data"].as<String>());
+    dmxSettingsManager->fromJson(jsonVariant["data"].as<String>());
     if (dmxSettingsManager->isDirty()) {
       dmxSettingsManager->save();
       return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK_REBOOT, "Saved, rebooting ...", 3000};
     } else {
       return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, "No updates.", -1};
     }
-  } else if (jsonDoc["command"] == "firmware-update" || jsonDoc["command"] == "spiffs-update") {
+  } else if (command == "firmware-update" || command == "spiffs-update") {
     FirmwareUpdateParams* params;
 
-    if (jsonDoc["command"] == "firmware-update") {
-      params = new FirmwareUpdateParams{jsonDoc["data"]["url"].as<String>(), false};
+    if (command == "firmware-update") {
+      params = new FirmwareUpdateParams{jsonVariant["data"]["url"].as<String>(), false};
     } else {
-      params = new FirmwareUpdateParams{jsonDoc["data"]["url"].as<String>(), true};
+      params = new FirmwareUpdateParams{jsonVariant["data"]["url"].as<String>(), true};
     }
 
     xTaskCreate(
@@ -143,7 +145,7 @@ WebAdmin::CommandResult onSystemCommand(JsonDocument &jsonDoc) {
         return WebAdmin::CommandResult{WebAdmin::CommandStatus::ERROR, updateResult->message, -1};
       }
     }
-  } else if (jsonDoc["command"] == "reboot") {
+  } else if (command == "reboot") {
     return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK_REBOOT, "Rebooting ...", 3000};
   }
   return WebAdmin::CommandResult{WebAdmin::CommandStatus::ERROR, "Unknown command.", -1};
@@ -388,8 +390,7 @@ void setup() {
 
   Serial.println("Booting ...");
 
-  Log.begin(LOG_LEVEL_NOTICE, &Serial, true);
-  // Log.begin(LOG_LEVEL_TRACE, &Serial, true);
+  Log.begin(LOG_LEVEL, &Serial, true);
   Log.setShowLevel(false);    // Do not show loglevel, we will do this in the prefix
   Log.setPrefix(printPrefix);
   Log.infoln("Logging initialized.");

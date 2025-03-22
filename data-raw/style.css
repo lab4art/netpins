@@ -12,6 +12,10 @@ h1 {
     font-size: 80%;
 }
 
+.version a {
+    text-decoration: none;
+}
+
 .parent {
     width:100%;
     display: flex;
