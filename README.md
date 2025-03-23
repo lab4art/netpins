@@ -88,7 +88,11 @@ servos:
     max_pulse_width: 2500
   - pin: 13
     max_angle: 90
-waves: # *deprecated* Works only with rgb strip
+```
+
+### Experimental
+```yaml
+waves: # Works only with rgb strip
   - max_fade_time: 10000
     # RGB slice sequential number in order they are defined, ignoring "pin groups"
     slice_indexes:
@@ -97,10 +101,6 @@ waves: # *deprecated* Works only with rgb strip
       - 2
       - 3
       - 4
-```
-
-### Experimental
-```yaml
 hum_temps:
   - pin: 4
     read_ms: 1000
@@ -108,6 +108,34 @@ touch_sensors:
   - pin: 4
     threshold: 250 # work ok with a wire on a s2_mini pin
 ```
+
+## Testing
+
+### Direct API calls
+
+    curl -v http://192.168.4.1/sys-info
+    curl -v http://192.168.4.1/conf/sys
+
+    curl -v 
+      --header "Content-Type: application/json" \
+      --request POST \
+      --data '{"command": "sys-config-merge", "data": {"wifi_ssid": "SSID","wifi_pass": "***", "hostname": "esp-devel"}}' \
+      http://192.168.4.1/system
+
+### Test scenarios
+
+1. WiFi and Mqtt reconnect
+1. Hearthbeat broadcast
+1. Admin UI loading and saving preferences (yaml, dmx)
+1. Firmware and Filesystem OTA update
+1. Factory reset
+1. Iddle poweroff
+1. Simple led control over DMX
+1. RGB(W) stripe with slices control over DMX
+   1. w/ slices and without slices
+   1. w/ dimmer and without
+1. servo over dmx
+
 
 ## License
 
