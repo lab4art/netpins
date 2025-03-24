@@ -64,7 +64,7 @@ class DmxListener {
             }
         }
 
-        void storeDmxData(uint8_t data[512]) {
+        boolean storeDmxData(uint8_t data[512]) {
             // check if the data is the same as the last stored data
             uint8_t storedData[512] = {0};
             preferences.begin("dmx-state", true);
@@ -79,13 +79,14 @@ class DmxListener {
             }
             if (sameData) {
                 Log.noticeln("DMX data is the same as the last stored data.");
-                return;
+                return false;
             }
 
             preferences.begin("dmx-state", false);
             preferences.putBytes("data", data, 512);
             preferences.end();
             Log.infoln("DMX data stored.");
+            return true;
         }
 
         void restoreDmxData(uint8_t dmxData[512]) {

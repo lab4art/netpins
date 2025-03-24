@@ -135,17 +135,18 @@ function postYamlAsJson() {
 }
 
 function postFormAsJson(formId) {
-    showLoader();
     const formEl = document.getElementById(formId);
     const formData = new FormData(formEl);
-    const json = {
-        "command": formId,
-        "data": {}
-    };
-    formData.forEach((value, key) => {
-        json.data[key] = value;
-    });
 
+    postJson(formId, formData);
+}
+
+function postJson(command, data) {
+    const json = {
+        "command": command,
+        "data": data
+    };
+    
     showLoader();
     fetch('/system', {
         method: 'POST',

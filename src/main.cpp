@@ -162,8 +162,12 @@ WebAdmin::CommandResult onSystemCommand(JsonVariant &jsonVariant) {
     } else if (command == "reboot") {
         return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK_REBOOT, "Rebooting ...", 3000};
     } else if (command == "save-dmx") {
-        dmxListener->storeDmxData(dmxData);
-        return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, "Saved.", -1};
+        auto updated = dmxListener->storeDmxData(dmxData);
+        return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, updated ? "Saved." : "No updates.", -1};
+    } else if (command == "reset-dmx") {
+        uint8_t zerroData[512] = {0};
+        auto updated = dmxListener->storeDmxData(zerroData);
+        return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, updated ? "Saved." : "No updates. All the values were 0 already. ", -1};
     }
     return WebAdmin::CommandResult{WebAdmin::CommandStatus::ERROR, "Unknown command.", -1};
 }

@@ -21,7 +21,14 @@
         <div class="main">
             <h1>NetPins: <span id="hostname"></span></h1>
             <p class="version">Ver. <span id="firmware"></span> (UI 1.2.0) <a href="/sys-info" target="_blank">&#9432;</a></p>
-            
+
+            <p class="title">Commands</p>
+            <div class="form-container">
+                <p class="command" onclick="postJson('save-dmx', {}); return false;">save current dmx state</p>
+                <p class="command" onclick="postJson('reset-dmx', {}); return false;">clear dmx state</p>
+                <p class="command" onclick="postJson('reboot', {}); return false;">reboot</p>
+            </div>
+
             <p class="title">DMX Configuration</p>
             <div class="form-container">
                 <form id="dmx-config" onsubmit="postFormAsJson('dmx-config'); return false;">
