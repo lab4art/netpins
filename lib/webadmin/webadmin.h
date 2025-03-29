@@ -74,9 +74,9 @@ class WebAdmin {
             });
 
             webServer->on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-                request->redirect("/index.html");
+                request->redirect("/admin.html");
             });
-            webServer->serveStatic("/index.html", LittleFS, "/index.html");
+            webServer->serveStatic("/admin.html", LittleFS, "/admin.html");
             webServer->serveStatic("/script.js", LittleFS, "/script.js");
             webServer->serveStatic("/js-yaml-4.1.0.min.js", LittleFS, "/js-yaml-4.1.0.min.js");
             webServer->serveStatic("/style.css", LittleFS, "/style.css");
