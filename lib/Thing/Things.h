@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <ArduinoLog.h>
 #include <NeoPixelBus.h>
 #include <ESP32Servo.h>
 
@@ -38,7 +39,7 @@ class SliceThingBase : public SwitchableThing {
         }
 
         void setColor(T_COLOR color, uint8_t dimm = 255) {
-            for (int px = 0; px <= pxTo - pxFrom; px++) {
+            for (int px = 0; px < size(); px++) {
                 doSetColor(px, color, dimm);
             }
         }
@@ -52,13 +53,13 @@ class SliceThingBase : public SwitchableThing {
         }
 
         void on() {
-            for (int px = 0; px <= pxTo - pxFrom; px++) {
+            for (int px = 0; px < size(); px++) {
                 doSetColor(px, T_COLOR(255), 255);
             }
         }
 
         void off() {
-            for (int px = 0; px <= pxTo - pxFrom; px++) {
+            for (int px = 0; px < size(); px++) {
                 doSetColor(px, T_COLOR(0), 0);
             }
         }
@@ -149,6 +150,7 @@ class RgbThing : public SliceThingBase<RgbColor> {
         auto dimmFactor = dimm / 255.0;
         auto gColorDimm = RgbColor(gColor.R * dimmFactor, gColor.G * dimmFactor, gColor.B * dimmFactor);
         if (strip->GetPixelColor(stripPx) != gColorDimm) {
+            //  Log.traceln("Setting pixel %d to %d %d %d, dimm %d", stripPx, gColorDimm.R, gColorDimm.G, gColorDimm.B, dimm);
             strip->SetPixelColor(stripPx, gColorDimm);
         }
     }
@@ -158,6 +160,7 @@ class RgbThing : public SliceThingBase<RgbColor> {
                 strip(strip),
                 SliceThingBase<RgbColor>(pxFrom, pxTo),
                 dimmable(dimmable) {
+            Log.traceln("RgbThing created. FromPx: %d, ToPx: %d. Dimmable: %d", pxFrom, pxTo, dimmable);
         }
 
         int numChannels() {
@@ -192,6 +195,7 @@ class RgbwThing : public SliceThingBase<RgbwColor> {
             auto dimmFactor = dimm / 255.0;
             auto gColorDimm = RgbwColor(gColor.R * dimmFactor, gColor.G * dimmFactor, gColor.B * dimmFactor, gColor.W * dimmFactor);
             if (strip->GetPixelColor(stripPx) != gColorDimm) {
+                // Log.traceln("Setting pixel %d to %d %d %d %d, w/ dimm %d.", stripPx, gColor.R, gColor.G, gColor.B, gColor.W, dimm);
                 strip->SetPixelColor(stripPx, gColorDimm);
             }
         }
@@ -201,6 +205,7 @@ class RgbwThing : public SliceThingBase<RgbwColor> {
                 strip(strip),
                 SliceThingBase<RgbwColor>(pxFrom, pxTo),
                 dimmable(dimmable) {
+            Log.traceln("RgbwThing created. FromPx: %d, ToPx: %d. Dimmable: %d", pxFrom, pxTo, dimmable);
         }
 
         int numChannels() {
@@ -209,10 +214,16 @@ class RgbwThing : public SliceThingBase<RgbwColor> {
         
         void setData(uint8_t* data) { // data is a pointer to the first element of the array
             if (dimmable) {
+                Log.traceln("Setting color to %d %d %d %d, dimm %d", data[0], data[1], data[2], data[3], data[4]);
                 setColor(RgbwColor(data[0], data[1], data[2], data[3]), data[4]);
             } else {
+                Log.traceln("Setting color to %d %d %d %d, not dimmable", data[0], data[1], data[2], data[3]);
                 setColor(RgbwColor(data[0], data[1], data[2], data[3]));
             }
+        }
+
+        boolean isDimmable() {
+            return dimmable;
         }
 };
 
@@ -339,18 +350,23 @@ class RgbwThingGroup : public ThingGroup {
         }
 
         void setData(uint8_t* data) {
-            int dimm;
+            int groupDimm;
             if (dimmable) {
-                dimm = data[numChannels() - 1];
+                groupDimm = data[numChannels() - 1];
             } else {
-                dimm = 255;
+                groupDimm = 255;
             }
-
             int currentChannel = 0;
             for (auto& thing : rgbwThings) {
                 int numChannels = thing->numChannels();
                 uint8_t* thingData = data + currentChannel;
-                thing->setColor(RgbwColor(thingData[0], thingData[1], thingData[2], thingData[3]), dimm);
+                if (thing->isDimmable()) {
+                    // Log.traceln("Setting group data to dimmable thing with %d channels. Color: %d %d %d %d, dimm: %d", numChannels, thingData[0], thingData[1], thingData[2], thingData[3], thingData[4]);
+                    thing->setColor(RgbwColor(thingData[0], thingData[1], thingData[2], thingData[3]), thingData[4]);
+                } else {
+                    // Log.traceln("Setting group data to non-dimmable thing. Group dimm: %d", groupDimm);
+                    thing->setColor(RgbwColor(thingData[0], thingData[1], thingData[2], thingData[3]), groupDimm);
+                }
                 currentChannel += numChannels;
             }
         }

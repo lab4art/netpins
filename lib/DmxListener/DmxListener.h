@@ -56,7 +56,7 @@ class DmxListener {
                     Log.warningln("Missing DMX data for thing. 1st dmx ch %d, num ch: %d. Data length: %d.", currentDmxIndex, thing->numChannels(), length);
                     break;
                 } else {
-                    // Log.traceln("Processing thing %d, channels: %d, currentDmxChannel: %d", i, thing.numChannels(), currentDmxChannel);
+                    // Log.traceln("Setting data for thing with %d channels. Data: %d %d %d %d %d", thing->numChannels(), data[currentDmxIndex], data[currentDmxIndex + 1], data[currentDmxIndex + 2], data[currentDmxIndex + 3], data[currentDmxIndex + 4]);
                     // data is a pointer to the first element of the array
                     thing->setData(data + currentDmxIndex);                                
                     currentDmxIndex += thing->numChannels();

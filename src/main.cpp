@@ -1,6 +1,5 @@
 #define _TASK_OO_CALLBACKS
 
-// #define DISABLE_LOGGING
 #define _ENABLE_UDP_BROADCAST true
 #define _ENABLE_WEBSERVER true
 
@@ -250,7 +249,6 @@ std::vector<ThingGroupType*> createStripThings(
 
     std::vector<ThingGroupType*> groups;
     for (auto& stripeCfg : stripeCfgs) {
-        Log.noticeln("Creating led strip on pin: %d", stripeCfg.pin);
         createStrip<Feature, Method>(stripeCfg.pin, stripeCfg.size, strips);
         auto strip = strips[stripeCfg.pin];
 
@@ -265,8 +263,8 @@ std::vector<ThingGroupType*> createStripThings(
         for (int i = 0; i < stripSlices.size(); i++) {
             int firstPx = stripSlices[i];
             int lastPx = i < stripSlices.size() - 1 ? stripSlices[i + 1] - 1 : strip->PixelCount() - 1;
-            Log.noticeln("Creating led strip slice: %d-%d", firstPx, lastPx);
-            auto thing = new ThingType(strip, firstPx, lastPx, stripeCfg.dimmer == DimmerMode::perStripe ? true : false);
+            Log.noticeln("Creating led strip slice: %d-%d, dimmer mode %s.", firstPx, lastPx, dimmerModeToString(stripeCfg.dimmer).c_str());
+            auto thing = new ThingType(strip, firstPx, lastPx, stripeCfg.dimmer == DimmerMode::perSlice ? true : false);
             sliceThings.push_back(thing);
         }
         ThingGroupType* group = new ThingGroupType(sliceThings, stripeCfg.dimmer == DimmerMode::single ? true : false);

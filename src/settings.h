@@ -8,14 +8,14 @@
 enum DimmerMode {
     none,
     single,
-    perStripe
+    perSlice
 };
 
 static DimmerMode dimmerModeFromString(std::string dimmer) {
     if (dimmer == "single") {
         return DimmerMode::single;
-    } else if (dimmer == "per-stripe") {
-        return DimmerMode::perStripe;
+    } else if (dimmer == "per-slice") {
+        return DimmerMode::perSlice;
     }
     return DimmerMode::none;
 };
@@ -24,8 +24,8 @@ static std::string dimmerModeToString(DimmerMode dimmer) {
     switch (dimmer) {
         case DimmerMode::single:
             return "single";
-        case DimmerMode::perStripe:
-            return "per-stripe";
+        case DimmerMode::perSlice:
+            return "per-slice";
         default:
             return "none";
     }

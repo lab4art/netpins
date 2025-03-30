@@ -74,7 +74,7 @@ rgbw_strips: []
 rgb_strips:
   - pin: 13
     size: 60
-    dimmer: none # add dimmer channel. Options: none, single, per-stripe
+    dimmer: none # add dimmer channel. Options: none, single, per-slice
     slices:
       - 0
       - 15

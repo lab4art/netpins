@@ -2,8 +2,6 @@
 
 #define FIRMWARE_VERSION "netpins-1.1.2-snapshot"
 
-#define WAIT_FOR_SERIAL false
-
 #define WIFI_SSID ""
 #define WIFI_PASS ""
 
@@ -13,6 +11,9 @@
 #define DNS            IPAddress(0, 0, 0, 0)
 
 #define FACTORY_REST_PIN -1 // -1 to use power cycle factory reset
+
+// debug settings ////////////
+#define WAIT_FOR_SERIAL false
 
 // Uncomment line below to fully disable logging, and reduce project size
 //#define DISABLE_LOGGING
