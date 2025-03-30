@@ -28,10 +28,13 @@ class SliceThingBase : public SwitchableThing {
         static NeoGamma<NeoGammaTableMethod> colorGamma;
 
         virtual void doSetColor(uint16_t px, T_COLOR color, uint8_t dimm) = 0;
+        boolean dimmable;
 
     public:
-        SliceThingBase(int pxFrom, int pxTo):
-            pxFrom(pxFrom), pxTo(pxTo) {
+        SliceThingBase(int pxFrom, int pxTo, bool dimmable):
+                dimmable(dimmable), 
+                pxFrom(pxFrom), 
+                pxTo(pxTo) {
         }
 
         int size() {
@@ -64,6 +67,9 @@ class SliceThingBase : public SwitchableThing {
             }
         }
 
+        boolean isDimmable() {
+            return dimmable;
+        }
 };
 
 class LedThing : public SwitchableThing {
@@ -140,7 +146,6 @@ class LedThing : public SwitchableThing {
 class RgbThing : public SliceThingBase<RgbColor> {
   private:
     NeoPixelBus<NeoGrbFeature, NeoEsp32RmtNWs2812xMethod>* strip;
-    bool dimmable;
     
   protected:
     void doSetColor(uint16_t px, RgbColor color, uint8_t dimm) {
@@ -158,8 +163,7 @@ class RgbThing : public SliceThingBase<RgbColor> {
   public:
         RgbThing(NeoPixelBus<NeoGrbFeature, NeoEsp32RmtNWs2812xMethod>* strip, int pxFrom, int pxTo, bool dimmable):
                 strip(strip),
-                SliceThingBase<RgbColor>(pxFrom, pxTo),
-                dimmable(dimmable) {
+                SliceThingBase<RgbColor>(pxFrom, pxTo, dimmable) {
             Log.traceln("RgbThing created. FromPx: %d, ToPx: %d. Dimmable: %d", pxFrom, pxTo, dimmable);
         }
 
@@ -174,18 +178,12 @@ class RgbThing : public SliceThingBase<RgbColor> {
                 setColor(RgbColor(data[0], data[1], data[2]));
             }
         }
-
-        bool isDimmable() {
-            return dimmable;
-        }
-
 };
 
 class RgbwThing : public SliceThingBase<RgbwColor> {
     private:
         NeoPixelBus<NeoGrbwFeature, NeoEsp32RmtNSk6812Method>* strip;
         static NeoGamma<NeoGammaTableMethod> colorGamma;
-        bool dimmable;
 
     protected:
         void doSetColor(uint16_t px, RgbwColor color, uint8_t dimm) {
@@ -203,8 +201,7 @@ class RgbwThing : public SliceThingBase<RgbwColor> {
     public:
         RgbwThing(NeoPixelBus<NeoGrbwFeature, NeoEsp32RmtNSk6812Method>* strip, int pxFrom, int pxTo, bool dimmable):
                 strip(strip),
-                SliceThingBase<RgbwColor>(pxFrom, pxTo),
-                dimmable(dimmable) {
+                SliceThingBase<RgbwColor>(pxFrom, pxTo, dimmable) {
             Log.traceln("RgbwThing created. FromPx: %d, ToPx: %d. Dimmable: %d", pxFrom, pxTo, dimmable);
         }
 
@@ -220,10 +217,6 @@ class RgbwThing : public SliceThingBase<RgbwColor> {
                 Log.traceln("Setting color to %d %d %d %d, not dimmable", data[0], data[1], data[2], data[3]);
                 setColor(RgbwColor(data[0], data[1], data[2], data[3]));
             }
-        }
-
-        boolean isDimmable() {
-            return dimmable;
         }
 };
 
