@@ -65,7 +65,9 @@ class WebAdmin {
                 doc["ip"] = WiFi.localIP().toString();
                 doc["hostname"] = this->settingsManager->getSettings().hostname;
                 doc["uptime"] = std::to_string(millis());
-                for (auto const& [key, val] : properties) {
+                for (auto const& pair : properties) {
+                    const auto& key = pair.first;
+                    const auto& val = pair.second;
                     doc[key] = val;
                 }
                 serializeJson(doc, output);

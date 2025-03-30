@@ -320,45 +320,59 @@ struct Settings {
         json["reboot_after_wifi_failed"] = rebootAfterWifiFailed;
         json["disable_wifi_power_save"] = disableWifiPowerSave;
 
-        JsonArray jsonLeds = json["leds"].to<JsonArray>();
-        for (auto led : this->leds) {
-            jsonLeds.add(led);
+        if (leds.size() > 0) {
+            JsonArray jsonLeds = json["leds"].to<JsonArray>();
+            for (auto led : this->leds) {
+                jsonLeds.add(led);
+            }
         }
 
-        JsonArray jsonRgbw = json["rgbw_strips"].to<JsonArray>();
-        for (auto stripe : rgbwStrips) {
-            JsonObject jsonStripe = jsonRgbw.createNestedObject();
-            StripeCfg::serialize(jsonStripe, stripe);
+        if (rgbwStrips.size() > 0) {
+            JsonArray jsonRgbw = json["rgbw_strips"].to<JsonArray>();
+            for (auto stripe : rgbwStrips) {
+                JsonObject jsonStripe = jsonRgbw.add<JsonObject>();
+                StripeCfg::serialize(jsonStripe, stripe);
+            }
         }
 
-        JsonArray jsonRgb = json["rgb_strips"].to<JsonArray>();
-        for (auto stripe : rgbStrips) {
-            JsonObject jsonStripe = jsonRgb.createNestedObject();
-            StripeCfg::serialize(jsonStripe, stripe);
+        if (rgbStrips.size() > 0) {
+            JsonArray jsonRgb = json["rgb_strips"].to<JsonArray>();
+            for (auto stripe : rgbStrips) {
+                JsonObject jsonStripe = jsonRgb.add<JsonObject>();
+                StripeCfg::serialize(jsonStripe, stripe);
+            }
         }
 
-        JsonArray servosArray = json["servos"].to<JsonArray>();
-        for (auto servo : servos) {
-            JsonObject jsonServo = servosArray.createNestedObject();
-            ServoCfg::serialize(jsonServo, servo);
+        if (servos.size() > 0) {
+            JsonArray servosArray = json["servos"].to<JsonArray>();
+            for (auto servo : servos) {
+                JsonObject jsonServo = servosArray.add<JsonObject>();
+                ServoCfg::serialize(jsonServo, servo);
+            }
         }
 
-        JsonArray waves = json["waves"].to<JsonArray>();
-        for (auto wave : this->waves) {
-            JsonObject jsonWave = waves.createNestedObject();
-            WaveCfg::serialize(jsonWave, wave);
+        if (waves.size() > 0) {
+            JsonArray waves = json["waves"].to<JsonArray>();
+            for (auto wave : this->waves) {
+                JsonObject jsonWave = waves.add<JsonObject>();
+                WaveCfg::serialize(jsonWave, wave);
+            }
         }
 
-        JsonArray humTemps = json["hum_temps"].to<JsonArray>();
-        for (auto humTemp : this->humTemps) {
-            JsonObject jsonHumTemp = humTemps.createNestedObject();
-            HumTempCfg::serialize(jsonHumTemp, humTemp);
+        if (humTemps.size() > 0) {
+            JsonArray humTemps = json["hum_temps"].to<JsonArray>();
+            for (auto humTemp : this->humTemps) {
+                JsonObject jsonHumTemp = humTemps.add<JsonObject>();
+                HumTempCfg::serialize(jsonHumTemp, humTemp);
+            }
         }
 
-        JsonArray touchSensors = json["touch_sensors"].to<JsonArray>();
-        for (auto touchSensor : this->touchSensors) {
-            JsonObject jsonTouchSensor = touchSensors.createNestedObject();
-            TouchSensorCfg::serialize(jsonTouchSensor, touchSensor);
+        if (touchSensors.size() > 0) {
+            JsonArray touchSensors = json["touch_sensors"].to<JsonArray>();
+            for (auto touchSensor : this->touchSensors) {
+                JsonObject jsonTouchSensor = touchSensors.add<JsonObject>();
+                TouchSensorCfg::serialize(jsonTouchSensor, touchSensor);
+            }
         }
     };
 
