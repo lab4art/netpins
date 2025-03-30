@@ -65,9 +65,26 @@ h1 {
 .command {
     margin-left: 10px;
     cursor: pointer;
+    display: block;
+    padding: 2px 4px;
+    background-color: #E9E9ED;
+    color: #333;
+    border: 1px solid #C0C0C0;
+    border-radius: 5px;
+    text-align: center;
+    font-size: 16px;
+    text-decoration: none;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
 }
 .command:hover {
-    text-decoration: underline;
+    background-color: #D0D0D0;
+    box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+}
+.command:active {
+    background-color: #C0C0C0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    transform: translateY(2px);
 }
 
 .title {

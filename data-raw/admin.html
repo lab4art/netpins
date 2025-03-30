@@ -40,17 +40,17 @@
                         <label for="channel">First Address</label>
                         <input type="number" name="channel" id="channel" required="required" placeholder="1">
                     </div>
-                    <input type="submit" value="Save">
+                    <input type="submit" class="command" value="Save">
                 </form>
             </div>
             
             <p class="title cursor-help" onclick="window.location.hash='#example-sys-config'">Sys Configuration</p>
             <div class="form-container">
-                <form id="sys-config" onsubmit="postFormAsJson('sys-config'); return false;">
+                <form id="sys-config">
                     <div class="form-group">
                         <textarea name="settings" id="settings" class="settings-yaml"></textarea>
                     </div>
-                    <input type="button" value="Save" onclick="postYamlAsJson();">
+                    <input type="button" class="command" value="Save" onclick="postYamlAsJson();">
                 </form>
             </div>
 
@@ -60,7 +60,7 @@
                     <div class="form-group">
                         <input type="text" name="url" id="url" placeholder="http://path-to-firmware.bin" required="required" class="wide" />
                     </div>
-                    <input type="submit" value="Update" />
+                    <input type="submit" class="command" value="Update" />
                 </form>
             </div>
 
@@ -70,7 +70,7 @@
                     <div class="form-group">
                         <input type="text" name="url" id="url" placeholder="http://path-to-littlefs.bin" required="required" class="wide" />
                     </div>
-                    <input type="submit" value="Update" />
+                    <input type="submit" class="command" value="Update" />
             </div>
         
             <br />
