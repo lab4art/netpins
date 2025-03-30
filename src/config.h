@@ -1,6 +1,6 @@
 #pragma once
 
-#define FIRMWARE_VERSION "netpins-1.1.2-snapshot"
+#define FIRMWARE_VERSION "netpins-1.1.2"
 
 #define WIFI_SSID ""
 #define WIFI_PASS ""
