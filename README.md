@@ -1,6 +1,6 @@
 # NetPins
 
-NetPins is an Arduino project that allows you to manage various peripherals like LEDs, RGB strips, and servos.
+NetPins is an Arduino project that allows you to manage various peripherals like LEDs, RGB strips, and servos. The project has been tested with esp32dev and esp32s2 (lolin_s2_mini) boards. 
 
 ## Features
 
@@ -9,29 +9,42 @@ NetPins is an Arduino project that allows you to manage various peripherals like
 - **Web UI Configuration**: Configure your device settings through a web interface.
 - **Over-the-Air (OTA) Updates**: Update your firmware wirelessly without the need for physical connections.
 
+## Uploading firmware
+
+### Compiling and Uploading from sources
+
+Firmware and filesystem images can be compiled and uploaded using [PlatformIO for VSCode](https://docs.platformio.org/en/latest/integration/ide/vscode.html#ide-vscode).
+You also need a [git scm](https://git-scm.com/) installed.
+
+1. **Install PlatformIO for VSCode** following the instructions on the [PlatformIO website](https://docs.platformio.org/en/latest/integration/ide/vscode.html#installation).
+
+1. **Clone this repository** using the following command (needs to be done only the 1st time)
+    ```
+    git clone https://github.com/lab4art/netpins.git
+    ```
+
+1. Change to the project directory and pull the latest changes
+    ```
+    cd netpins
+    git fetch --tags
+    ```
+
+1. checkout the latest release, eg. 1.1.2
+    ```
+    git checkout 1.1.2
+    ```
+
+1. **Upload the firmaware** by following the [quick start instructions](https://docs.platformio.org/en/latest/integration/ide/vscode.html#quick-start) for PlatformIO for VSCode. The only difference is that you need to open the existing `netpins` project instead of creating a "New Project" and you don't need to edit any source code.
+     
+     - Note, some boards needs to be put into upload mode manually (1st time only), eg. by pressing the BOOT button when powered on, in case of `lolin_s2_mini` board you need to hold `0` while pressing the `RST` button.
+
+1. **Upload the filesystem** image for the web based admin UI, by opening the PatformIO left sidebar in VSCode by clicking on the PlatformIO icon (alien) and then click on the `Platform / Upload File System Image"` button. Make sure the right board is selected by looking at the bottom of the window eg. `env:lolin_s2_mini (netpins)`.
 
 
-## Getting Started
-
-### Requirements
-
-- ESP32 or compatible microcontroller
-- [PlatformIO](https://platformio.org/)
-
-### Installation
-
-Recommended option is to use [PlatformIO for VSCode](https://docs.platformio.org/en/latest/integration/ide/vscode.html#ide-vscode).
-
-1. **Compile and Upload**:
-   - Compile the project and upload it to your microcontroller.
-
-2. **Create and Upload Filesystem Image**:
-   - Create and upload the filesystem image for the Web UI.
-
-### Configuration
+## Configuration
 
 1. **Initial Setup**:
-   - If you did not put WiFi credentials in the `src/config.h`, NetPins will start in AP (WiFi access point) mode.
+   - NetPins will start in AP (WiFi access point) mode.
    - Connect with your PC (or phone) to the WiFi network named `netpins-<mac-address>` and visit `http://192.168.4.1/` with your web browser to access the Admin console.
    - Set up your WiFi credentials.
    - Connect your PC back to your WiFi network.
