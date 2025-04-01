@@ -68,6 +68,21 @@ You also need a [git scm](https://git-scm.com/) installed.
   - Servos: 1 channel per pin
   - Waves: 7 channels per wave (2 x RGB + fade) (8 if dimmer is enabled)
 
+## Factory Reset
+
+To clear all settings and reset the device to factory defaults, a power cycle is required.
+After power-on wait between 5 and 10 seconds and press the `RST` button or disconnect the power.
+The power cycle needs to be repeated 5 times in a row.
+The device will start in AP mode with the default SSID `netpins-<mac-address>`.
+
+Power cycle sequence:
+- Power-off, power-on (or press `RST` button)
+- Wait 5-10 seconds
+- power-off, power-on (or press `RST` button)
+- Wait 5-10 seconds
+- *Repeat 3 more times*
+
+
 ## Sample Configuration
 
 ```yaml
