@@ -94,10 +94,10 @@ class MqttUtils {
 
         void publish(const char* topic, const char* payload) {
             if (mqttClient->connected()) {
-                Log.noticeln("Publishing to topic: %s, payload: %s", topic, payload);
+                //Log.traceln("Publishing to topic: %s, payload: %s", topic, payload);
                 mqttClient->publish(topic, payload);
             } else {
-                Log.noticeln("Mqtt NOT connected, dropping: topic: %s, payload: %s", topic, payload);
+                //Log.traceln("Mqtt NOT connected, dropping: topic: %s, payload: %s", topic, payload);
             }
         }
 };

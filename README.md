@@ -120,21 +120,36 @@ servos:
 
 ### Experimental
 ```yaml
+digital_reads:
+  - pin: 4
+    read_ms: 100
+hum_temps:
+  - pin: 4
+    read_ms: 1000
+touch_sensors:
+  - pin: 4
+    threshold: 250 # works ok with a wire on a s2_mini pin
+
 waves: # Works only with rgb strip
   - max_fade_time: 10000
-    # RGB slice sequential number in order they are defined, ignoring "pin groups"
+    # RGB slice sequential number in order they are defined, ignoring "pin groups" (supports cross pin slices)
     slice_indexes:
       - 0
       - 1
       - 2
       - 3
       - 4
-hum_temps:
-  - pin: 4
-    read_ms: 1000
-touch_sensors:
-  - pin: 4
-    threshold: 250 # work ok with a wire on a s2_mini pin
+
+pwm_fades:
+  - name: fade-13
+    led: 13 # led identified by pin number
+
+# animation_control:
+thing_controls:
+  - name: fade-13
+    sensor:
+      pin: 4
+
 ```
 
 ## Testing

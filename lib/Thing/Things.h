@@ -6,9 +6,19 @@
 #include <ESP32Servo.h>
 
 class Thing {
+    private:
+        String name;
     public:
         virtual int numChannels() = 0;
         virtual void setData(uint8_t* data) = 0;
+
+        void setName(String name) {
+            this->name = name;
+        }
+
+        String getName() {
+            return name;
+        }
 };
 
 class Switchabe {
@@ -140,6 +150,10 @@ class LedThing : public SwitchableThing {
                 gammaTable[i] = map8bitTo14bit(i);
                 // Serial.println(String(i) + " -> " + gammaTable[i]);
             }
+        }
+
+        int getPin() {
+            return pin;
         }
 };
 
@@ -364,3 +378,5 @@ class RgbwThingGroup : public ThingGroup {
             }
         }
 };
+
+LedThing* findLedThing(std::vector<LedThing*> leds, int pin);

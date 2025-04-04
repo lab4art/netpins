@@ -17,7 +17,6 @@ class DmxListener {
     private:
         int firstDmxChannel;
         std::vector<Thing*> thingList;
-        std::map<int, Thing*> thingMap;
         Preferences preferences;
         uint8_t lastStoreFlag = 0;
 
@@ -94,4 +93,17 @@ class DmxListener {
             preferences.getBytes("data", dmxData, 512);
             preferences.end();
         }
+
+        int getThingChannel(String name) {
+            int channel = 0;
+            for (auto& thing : thingList) {
+                if (thing->getName().equals(name)) {
+                    return channel + 1;
+                }
+                channel += thing->numChannels();
+            }
+            return -1; // not found
+        }
+
 };
+

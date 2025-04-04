@@ -8,94 +8,207 @@
 #include <NeoPixelBus.h>
 #include <Things.h>
 
+class AnimationTask: private Task {
+    private:
+        std::function<void()> onFrame = []() {};
 
-class Animation: private Task {
+    public:
+        AnimationTask(
+            unsigned int framerate,
+            Scheduler* scheduler):
+            Task(1000 / framerate, -1, scheduler, true) {
+        }
+
+        bool Callback() {
+            onFrame();
+            return true;
+        }
+
+        void setOnFrame(std::function<void()> onFrame) {
+            this->onFrame = onFrame;
+        }
+
+};
+
+class Animation {
   private:
+    AnimationTask task;
     bool repeat;
-    int frames = 0;
     uint8_t frameRate;
+    unsigned long frames = 0;
+    unsigned long remainingFrames = 0;
+    
     /**
      * Duration is set before the animation starts.
      * It must be constant during the animation because it is used to calculate the number of frames (progress).
      */
-    unsigned int nextDuration;
-    std::function<void()> onEnd;
+    // unsigned int nextDuration = 0;
+    std::function<void()> onEnd = []() {};
+    std::function<void()> onStart = []() {};
   
   protected:
-      String name;
 
   public:
-    Animation(Scheduler* aScheduler, bool repeat = true, unsigned long frameRate = 50/*Hz*/):
-        repeat(repeat),
-        frameRate(frameRate),
-          Task(1000 / frameRate, 0, aScheduler, false) {
+    Animation(Scheduler* aScheduler, bool repeat = true, unsigned int frameRate = 50/*Hz*/):
+            repeat(repeat),
+            frameRate(frameRate),
+            task(frameRate, aScheduler) {
+        task.setOnFrame([this]() {
+            if (remainingFrames == frames) {
+                onStart();
+            }
+            if (remainingFrames > 0) {
+                // Log.traceln("Remaining frames: %d, progress: %s", remainingFrames, String(getProgress(), 4));
+                this->animate();
+                this->remainingFrames--;
+            }
+            if (remainingFrames == 0) {
+                onEnd();
+                if (this->repeat) {
+                    restart();
+                }
+            }
+        });
     }
 
-    virtual void onStart() {}
     virtual void animate() {}
     
-    void restart() {
-        frames = nextDuration * frameRate / 1000; // store total iterations, function is returning remaining iterations
-        setIterations(frames);
-        Log.traceln("Staring animation with duration: %d, refreshRate: %d, interval: %d, frames: %d, repeat: %d", nextDuration, frameRate, getInterval(), frames, repeat);
-        Task::restart();
-    }
-
-    bool OnEnable() {
-        onStart();
-        return true;
-    }
-
-    void onDisable() {
-        onEnd();
-    }
-
-    bool Callback() {
-        animate();
-        if (isLastIteration()) {
-            onEnd();
-            if (repeat) {
-                restart();
-            }
-            return false;
-        }
-        return true;
+    void restart(float progress = 0.0f) {
+        // frames = nextDuration * frameRate / 1000; // store total iterations, function is returning remaining iterations
+        remainingFrames = frames * (1 - progress);
+        Log.traceln("Staring animation with refreshRate: %d, frames: %d, remaining frames: %d, repeat: %d", frameRate, frames, remainingFrames, repeat);
     }
 
     /**
      * Get the progress of the animation as a float between 0 and 1.
      * 
      * frames = 5
-     * iterations = 5
+     * remainingFrames = 5
      * 
-     * iterations:
-     * 4 -> progress = 0
+     * remainingFrames:
+     * 5 -> progress = 0 (start)
+     * 4
      * 3
      * 2
-     * 1
-     * 0 -> progress = 1
+     * 1 -> progress = 1 (end)
+     * 
+     * frame - time - value
+     * 0 - 0.0 - 0 
+     * 1 - 0.2 - 0.25
+     * 2 - 0.4 - 0.5
+     * 3 - 0.6 - 0.75
+     * 4 - 0.8 - 1
      */
     float getProgress() {
-        long currentIteration = frames - 1 - getIterations(); // 1st current iteration is 0
-        float progress = (float)currentIteration / (float)(frames - 1);
-        // Serial.println(String("Animation [") + name + "] Progress: " + progress + ", currentIteration: " + currentIteration);
-        return progress;
+        float delta = 1.0f / ((float)frames - 1.0f); // one frame less to caltulate delta, to get a value between 0 and 1
+        return 1.0f - (float)remainingFrames * delta + delta; 
+    }
+
+    void setDuration(unsigned int duration) {
+        frames = duration * frameRate / 1000; // store total iterations, function is returning remaining iterations
+    }
+
+    bool isRunning() {
+        return getProgress() > 0.0f && getProgress() < 1.0f;
     }
 
     void setRepeat(bool repeat) {
-        if (repeat && !isEnabled()) {
+        if (repeat && getProgress() == 1) {
             restart();
         }
         this->repeat = repeat;
     }
 
-    void setDuration(unsigned int duration) {
-        nextDuration = duration;
-    }
-
     void setOnEnd(std::function<void()> onEnd) {
         this->onEnd = onEnd;
     }
+};
+
+class PWMFadeAnimation: public Animation {
+    private:
+        LedThing* led;
+        uint8_t value1; // value to fade from (off)
+        uint8_t value2; // value to fade to (on)
+        boolean fadeInMode = false; // if false, fadeOut
+
+        uint8_t linearBlend(uint8_t left, uint8_t right, float progress) {
+            return left + (right - left) * progress;
+        }
+
+        uint8_t getCurrentValue() {
+            if (fadeInMode) {
+                return linearBlend(value1, value2, getProgress());
+            } else {
+                return linearBlend(value2, value1, getProgress());
+            }
+        }
+
+    public:
+        PWMFadeAnimation(
+            Scheduler* aScheduler, 
+            LedThing* led):
+            Animation(aScheduler, false),
+            led(led) {
+        }
+
+        void animate() {
+            uint8_t data[1] = {getCurrentValue()};
+            // Log.traceln("Setting PWM fade animation data: %d", data[0]);
+            led->setData(data);
+        }
+
+        void setValue1(uint8_t value) {
+            value1 = value;
+            if (!fadeInMode && !isRunning()) {
+                led->setData(new uint8_t[1]{value});
+            }
+        }
+
+        void setValue2(uint8_t value) {
+            value2 = value;
+            if (fadeInMode && !isRunning()) {
+                led->setData(new uint8_t[1]{value});
+            }
+        }
+
+        void fadeIn(std::uint16_t fadeInDuration) {
+            if (!isRunning()) {
+                Log.traceln("Fresh Fade in to: %d, duration: %d, progress: %s.", this->value2, fadeInDuration, String(getProgress(), 4));
+                this->fadeInMode = true;
+                setDuration(fadeInDuration);
+                restart();
+            } else if (!fadeInMode) {
+                Log.traceln("Middle Fade in to: %d, duration: %d, progress: %s.", this->value2, fadeInDuration, String(getProgress(), 4));
+                float currentProgress = getProgress();
+                this->fadeInMode = true;
+                setDuration(fadeInDuration * getProgress());
+                restart(1 - currentProgress);
+            }
+        }
+        void fadeOut(std::uint16_t fadeOutDuration) {
+            if (!isRunning()) {
+                Log.traceln("Fresh Fade out to: %d, duration: %d, progress: %s.", this->value1, fadeOutDuration, String(getProgress(), 4));
+                this->fadeInMode = false;
+                setDuration(fadeOutDuration);
+                restart();
+            } else if (fadeInMode) {
+                Log.traceln("Middle Fade out to: %d, duration: %d, progress: %s.", this->value1, fadeOutDuration, String(getProgress(), 4));
+                float currentProgress = getProgress();
+                this->fadeInMode = false;
+                setDuration(fadeOutDuration);
+                restart(1 - currentProgress);
+            }
+        }
+
+        void togleFade(
+                std::uint16_t fadeInDuration,
+                std::uint16_t fadeOutDuration) {
+            if (fadeInMode) {
+                fadeOut(fadeOutDuration);
+            } else {
+                fadeIn(fadeInDuration);
+            }
+        }
 };
 
 /**
@@ -126,14 +239,11 @@ class TailAnimation: public Animation {
             Scheduler* aScheduler, 
             RgbThing* line, 
             Direction direction = RIGHT,
-            bool repeat = false,
-            String name = "Tail Ani"):
+            bool repeat = false):
         line(line),
         tailLength(tailLength),
         direction(direction),
         Animation(aScheduler, repeat) {
-            this->name = name;
-
     }
 
   private:
@@ -218,7 +328,7 @@ class TailAnimation: public Animation {
         // at hight speeds the head can jump over multiple pixels, calculate the effective tail length, not to leave behind color1 pixels
         int headJump = headPosition - previousHeadPosition;
         u_int32_t effectivetail = tailLength + headJump;
-        Serial.println(String("[") + name + "] New head position: " + headPosition + ", previousHeadPosition: " + previousHeadPosition + ", headJump: " + headJump + ", effectivetail: " + effectivetail + " progress: " + getProgress());
+        // Serial.println(String("[") + name + "] New head position: " + headPosition + ", previousHeadPosition: " + previousHeadPosition + ", headJump: " + headJump + ", effectivetail: " + effectivetail + " progress: " + getProgress());
         // for (int i = 0; i <= effectivetail; i++) {
         for (int i = 0; i < effectivetail; i++) { // TODO test this compared to ^
             if (headPosition - i < 0 || headPosition - i >= line->size()) {
@@ -247,7 +357,7 @@ class TailAnimation: public Animation {
                     blendFactor = (float)(i / (tailLength / 2)) - 1;
                 }
                 color = RgbColor::LinearBlend(color1, color2, blendFactor);
-                Serial.println(String("[") + name + "] Setting color " + color.R + "-" + color.G + "-" + color.B + ", i: " + i + ", blendFactor: " + blendFactor + ", position: " + (headPosition - i));
+                // Serial.println(String("[") + name + "] Setting color " + color.R + "-" + color.G + "-" + color.B + ", i: " + i + ", blendFactor: " + blendFactor + ", position: " + (headPosition - i));
             }
             line->setColor(headPosition - i, color);
         }
@@ -255,12 +365,13 @@ class TailAnimation: public Animation {
     }
 
   public:
-    void onStart() {
-        previousHeadPosition = 0;
-        reachedEndCalled = false;
-    }
 
     void animate() {
+        if (getProgress() == 0) {
+            this->previousHeadPosition = 0;
+            this->reachedEndCalled = false;
+        }
+
         if (direction == RIGHT) {
             moveRight();
         } else {

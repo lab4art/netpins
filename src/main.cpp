@@ -35,6 +35,7 @@
 #include <Things.h>
 #include <sensors.h>
 #include <mqttUtils.h>
+#include <animatedThings.h>
 
 
 #define ON_WIFI_EXECUTION_CALLBACK_SIGNATURE std::function<void(String)> wifiExecutionCallback
@@ -46,6 +47,8 @@ std::vector<LedThing*> leds;
 std::vector<ServoThing*> servos;
 std::vector<HumTempSensor*> humTempSensors;
 std::vector<TouchSensor*> touchSensors;
+std::map<uint8_t /* pin */, DigitalReadSensor*> digitalReadSensors;
+std::vector<PWMFadeAnimationThing*> pwmFades;
 
 unsigned long lastCommandReceivedAt = 0;
 unsigned long maxIdleMillis = 0;
@@ -313,6 +316,17 @@ std::vector<Switchabe*> createThings(Settings& settings) {
         servos.push_back(thing);
     }
 
+    Log.noticeln("Creating PWM fades ...");
+    for (auto& pwmFadeCfg : settings.pwmFades) {
+        auto led = findLedThing(leds, pwmFadeCfg.led);
+        auto pwmFade = new PWMFadeAnimationThing(
+            &scheduler, 
+            led,
+            String(pwmFadeCfg.name.c_str()));
+        pwmFades.push_back(pwmFade);
+        dmxListener->removeThing(led);
+        dmxListener->addThing(pwmFade);
+    }
   // ANIMATIONS
   // auto rgbThing = rgbThings[0]; //TODO make this configurable
   // tailAnimation1 = new TailAnimation(
@@ -418,9 +432,13 @@ void beforeWiFiReboot() {
 void setup() {
     Serial.begin(115200);
     delay(500);
-    // wait for serial monitor
-    while (WAIT_FOR_SERIAL && !Serial) {
-        delay(100);
+    if (WAIT_FOR_SERIAL) {
+        // reset the counter if in debug mode
+        FactoryReset::getInstance().resetCounter(true);
+        // wait for serial monitor
+        while (!Serial) {
+            delay(100);
+        }
     }
 
     Serial.println("Booting ...");
@@ -476,6 +494,62 @@ void setup() {
         Serial.println("Things created.");
     } catch(const std::exception& e) {
         Serial.println(String("ERR: creating things. ") + e.what());
+    }
+
+    // SENSORS ////
+    Log.noticeln("Creating Hum/Temp sensor ...");
+    for (auto& humTempCfg : settings.humTemps) {
+        auto humTempSensor = new HumTempSensor(humTempCfg.pin, humTempCfg.readMs);
+        humTempSensors.push_back(humTempSensor);
+    }
+
+    Log.noticeln("Creating touch sensors ...");
+    for (auto& touch : settings.touchSensors) {
+        auto touchSensor = new TouchSensor(touch.pin, 200, touch.threshold);
+        uint8_t pin = touch.pin;
+        touchSensor->setOnChangeListener([pin](bool touched) {
+            String topic = String("/sensor/touch-") + pin;
+            mqtt->publish(topic.c_str(), touched ? "1" : "0"); // TODO require mapping
+        });
+        touchSensors.push_back(touchSensor);
+    }
+
+    Log.noticeln("Creating digital read sensors ...");
+    for (auto& dreadCfg : settings.digitalReadSensors) {
+        auto digitalReadSensor = new DigitalReadSensor(dreadCfg.pin, dreadCfg.readMs, INPUT_PULLUP);
+        digitalReadSensor->setOnChangeListener([digitalReadSensor](bool value) {
+            String topic = String("/sensor/") + digitalReadSensor->getPin();
+            mqtt->publish(topic.c_str(), value ? "1" : "0");
+        });
+        Log.traceln("Digital read sensor %d created.", dreadCfg.pin);
+        digitalReadSensors[dreadCfg.pin] = digitalReadSensor;
+    }
+
+    Log.noticeln("Mapping thing controls ...");
+    for (auto& control : settings.thingControls) {
+        Log.traceln("Searching for fadeThing %s ...", control.name.c_str());
+        auto fadeThing = findPwmFadeAnimationThing(pwmFades, String(control.name.c_str()));
+        if (fadeThing == nullptr) {
+            Log.errorln("Control %s not found.", control.name.c_str());
+            continue;
+        }
+        Log.traceln("Found control %s.", fadeThing->getName());
+        auto fadeThingDmx = dmxListener->getThingChannel(fadeThing->getName());
+        if (fadeThingDmx == -1) {
+            Log.errorln("Thing %s not found in DMXListener.", fadeThing->getName());
+            continue;
+        }
+        Log.traceln("Found 1st DMX channel %d.", fadeThingDmx);
+        auto dReadSensor = digitalReadSensors[control.sensorPin];
+        if (dReadSensor == nullptr) {
+            Log.errorln("Sensor %d not found.", control.sensorPin);
+            continue;
+        }
+        Log.traceln("Found sensor %d.", control.sensorPin);
+        dReadSensor->setOnChangeListener([fadeThingDmx](bool value) {
+            Log.traceln("Sensor for dmx %d changed to %d.", fadeThingDmx, value);
+            dmxData[fadeThingDmx + 3] = (value ? 255 : 0);
+        });
     }
 
     Serial.println("Mounting LittleFS ...");
@@ -546,6 +620,26 @@ void setup() {
   //   "settings.mqttTopic.c_str()",
   //   onMqttMessage
   // );
+
+    webAdmin->setPropertiesSupplier([](){
+        std::map<String, String> props;
+        for (auto& humTempSensor : humTempSensors) {
+            props[String("temp-") + humTempSensor->getPin()] = String(humTempSensor->getValue().humidity, 2);
+            props[String("hum-") + humTempSensor->getPin()] = String(humTempSensor->getValue().temperature, 2);
+        }
+
+        uint8_t dmxData[512];
+        dmxListener->restoreDmxData(dmxData);
+        // convert dmxData to string
+        String dmxDataStr = ""; // TODO json sub-array
+        for (int i = 0; i < 512; i++) {
+            dmxDataStr += String(i+1) + ":" + String(dmxData[i]) + ",";
+        }
+        props["stored-dmx"] = dmxDataStr;
+
+        return props;
+    });
+
     mqtt = new MqttUtils( // TODO make this configurable
         "host",
         "user",
@@ -553,27 +647,6 @@ void setup() {
         "/command/#",
         onMqttMessage
     );
-
-    for (auto& humTemp : settings.humTemps) {
-        auto humTempSensor = new HumTempSensor(humTemp.pin, humTemp.readMs);
-        humTempSensor->setTempChangeListener([&humTemp](int temp){
-            webAdmin->setProperty(String("temp-") + humTemp.pin, temp);
-        });
-        humTempSensor->setHumidityChangeListener([&humTemp](int hum){
-            webAdmin->setProperty(String("hum-") + humTemp.pin, hum);
-        });
-        humTempSensors.push_back(humTempSensor);
-    }
-
-    for (auto& touch : settings.touchSensors) {
-        auto touchSensor = new TouchSensor(touch.pin, 200, touch.threshold);
-        uint8_t pin = touch.pin;
-        touchSensor->setOnChangeListener([pin](bool touched) {
-            String topic = String("/sensor/touch-") + pin;
-            mqtt->publish(topic.c_str(), touched ? "1" : "0");
-        });
-        touchSensors.push_back(touchSensor);
-    }
 
     Log.noticeln("Running ...");
 }
@@ -614,7 +687,7 @@ void onWifiExecutionCallback(String ip) {
 int loopCounter = 0;
 int executionTimeSum = 0;
 int maxExecutionTime = 0;
-unsigned long lastCommit = 0;
+unsigned long lastDmxCommit = 0;
 void loop() {
     unsigned long loopStartTime = micros();
 
@@ -627,10 +700,10 @@ void loop() {
     20ms = 50fps
     13ms = 75fps
     */
-    if (millis() - lastCommit > 20) {
+    if (millis() - lastDmxCommit > 20) {
         dmxListener->processDmxData(512, dmxData);
         commitNeoStip();
-        lastCommit = millis();
+        lastDmxCommit = millis();
     }
 
     if (wifi != nullptr) {
@@ -647,6 +720,11 @@ void loop() {
 
     for (TouchSensor* touchSensor : touchSensors) {
         touchSensor->read();
+    }
+
+    for (auto& pair : digitalReadSensors) {
+        auto& sensor = pair.second;
+        sensor->read();
     }
 
     mqtt->tryReconnect();

@@ -154,28 +154,54 @@ struct ServoCfg {
     }
 };
 
-
-struct HumTempCfg {
+struct DigitalReadSensorCfg {
     std::uint8_t pin;
     int readMs;
 
-    bool operator==(const HumTempCfg& other) const {
+    bool operator==(const DigitalReadSensorCfg& other) const {
         return pin == other.pin &&
             readMs == other.readMs;
     };
 
-    bool operator!=(const HumTempCfg& other) const {
+    bool operator!=(const DigitalReadSensorCfg& other) const {
         return !(*this == other);
     };
 
-    static HumTempCfg deserialize(JsonObject& json) {
-        HumTempCfg h;
+    static DigitalReadSensorCfg deserialize(JsonObject& json) {
+        DigitalReadSensorCfg s;
+        s.pin = json["pin"].as<std::uint8_t>();
+        s.readMs = json["read_ms"].as<int>();
+        return s;
+    };
+
+    static void serialize(JsonObject& json, const DigitalReadSensorCfg& h) {
+        json["pin"] = h.pin;
+        json["read_ms"] = h.readMs;
+    };
+
+};
+
+struct HumTempSensorCfg {
+    std::uint8_t pin;
+    int readMs;
+
+    bool operator==(const HumTempSensorCfg& other) const {
+        return pin == other.pin &&
+            readMs == other.readMs;
+    };
+
+    bool operator!=(const HumTempSensorCfg& other) const {
+        return !(*this == other);
+    };
+
+    static HumTempSensorCfg deserialize(JsonObject& json) {
+        HumTempSensorCfg h;
         h.pin = json["pin"].as<std::uint8_t>();
         h.readMs = json["read_ms"].as<int>();
         return h;
     };
 
-    static void serialize(JsonObject& jsonHumTemp, const HumTempCfg& h) {
+    static void serialize(JsonObject& jsonHumTemp, const HumTempSensorCfg& h) {
         jsonHumTemp["pin"] = h.pin;
         jsonHumTemp["read_ms"] = h.readMs;
     };
@@ -207,6 +233,68 @@ struct TouchSensorCfg {
     };
 };
 
+struct PwmFadeCfg {
+    std::string name;
+    std::uint8_t led;
+
+    bool operator==(const PwmFadeCfg& other) const {
+        return name == other.name &&
+            led == other.led;
+    };
+
+    bool operator!=(const PwmFadeCfg& other) const {
+        return !(*this == other);
+    };
+
+    static PwmFadeCfg deserialize(JsonObject& json) {
+        PwmFadeCfg p;
+        p.name = json["name"].as<std::string>();
+        p.led = json["led"].as<std::uint8_t>();
+        return p;
+    };
+
+    static void serialize(JsonObject& json, const PwmFadeCfg& p) {
+        json["name"] = p.name;
+        json["led"] = p.led;
+    };
+};
+
+struct ThingControlCfg {
+    std::string name; // name of the thing (aminationThing)
+    std::string mqttTopic;
+    std::uint8_t sensorPin;
+
+    bool operator==(const ThingControlCfg& other) const {
+        return name == other.name &&
+            mqttTopic == other.mqttTopic &&
+            sensorPin == other.sensorPin;
+    };
+
+    bool operator!=(const ThingControlCfg& other) const {
+        return !(*this == other);
+    };
+
+    static ThingControlCfg deserialize(JsonObject& json) {
+        ThingControlCfg o;
+        o.name = json["name"].as<std::string>();
+        o.sensorPin = json["sensor"]["pin"].as<std::uint8_t>();
+        if (json.containsKey("mqtt")) {
+            o.mqttTopic = json["mqtt"]["topic"].as<std::string>();
+        }
+        return o;
+    }
+
+    static void serialize(JsonObject& json, const ThingControlCfg& o) {
+        json["name"] = o.name;
+        JsonObject sensor = json["sensor"].to<JsonObject>();
+        sensor["pin"] = o.sensorPin;
+        if (o.mqttTopic != "") {
+            JsonObject mqtt = json["mqtt"].to<JsonObject>();
+            mqtt["topic"] = o.mqttTopic;
+        }
+    };
+};
+
 struct Settings {
     std::string wifiSsid;
     std::string wifiPass;
@@ -218,11 +306,18 @@ struct Settings {
     std::vector<StripeCfg> rgbwStrips;
     std::vector<StripeCfg> rgbStrips;
     std::vector<ServoCfg> servos;
+    
+    std::vector<HumTempSensorCfg> humTemps;
+    std::vector<TouchSensorCfg> touchSensors;
+    std::vector<DigitalReadSensorCfg> digitalReadSensors;
+    
     // waves
     // stripes that are part of the animation must be excluded from the dmx listener
     std::vector<WaveCfg> waves;
-    std::vector<HumTempCfg> humTemps;
-    std::vector<TouchSensorCfg> touchSensors;
+    std::vector<PwmFadeCfg> pwmFades;
+    
+    std::vector<ThingControlCfg> thingControls;
+
 
     bool lightsTest;
     std::uint16_t maxIdle; // max idle time in min, 0 means no sleep
@@ -235,17 +330,24 @@ struct Settings {
             hostname == other.hostname &&
             hbInt == other.hbInt &&
             udpPort == other.udpPort &&
+            lightsTest == other.lightsTest &&
+            maxIdle == other.maxIdle &&
+            rebootAfterWifiFailed == other.rebootAfterWifiFailed &&
+            disableWifiPowerSave == other.disableWifiPowerSave &&
+
             leds == other.leds &&
             rgbwStrips == other.rgbwStrips &&
             rgbStrips == other.rgbStrips &&
             servos == other.servos &&
-            waves == other.waves &&
+
             humTemps == other.humTemps &&
             touchSensors == other.touchSensors &&
-            lightsTest == other.lightsTest &&
-            maxIdle == other.maxIdle &&
-            rebootAfterWifiFailed == other.rebootAfterWifiFailed &&
-            disableWifiPowerSave == other.disableWifiPowerSave;
+            digitalReadSensors == other.digitalReadSensors &&
+    
+            waves == other.waves &&
+            pwmFades == other.pwmFades &&
+            
+            thingControls == other.thingControls;
     }
 
     bool operator!=(const Settings& other) const {
@@ -267,6 +369,8 @@ struct Settings {
             s.disableWifiPowerSave = false;
         }
 
+        
+        // actuators
         JsonArray ledsArray = json["leds"].as<JsonArray>();
         for (JsonVariant v : ledsArray) {
             s.leds.push_back(v.as<std::uint8_t>());
@@ -290,16 +394,18 @@ struct Settings {
             s.servos.push_back(ServoCfg::deserialize(jsonServo));
         }
 
-        JsonArray wavesArray = json["waves"].as<JsonArray>();
-        for (JsonVariant v : wavesArray) {
-            JsonObject jsonWave = v.as<JsonObject>();
-            s.waves.push_back(WaveCfg::deserialize(jsonWave));
+
+        // sensors
+        JsonArray digitalReadSensorsArray = json["digital_reads"].as<JsonArray>();
+        for (JsonVariant v : digitalReadSensorsArray) {
+            JsonObject jsonDigitalRead = v.as<JsonObject>();
+            s.digitalReadSensors.push_back(DigitalReadSensorCfg::deserialize(jsonDigitalRead));
         }
 
         JsonArray humTempsArray = json["hum_temps"].as<JsonArray>();
         for (JsonVariant v : humTempsArray) {
             JsonObject jsonHumTemp = v.as<JsonObject>();
-            s.humTemps.push_back(HumTempCfg::deserialize(jsonHumTemp));
+            s.humTemps.push_back(HumTempSensorCfg::deserialize(jsonHumTemp));
         }
 
         JsonArray touchSensorsArray = json["touch_sensors"].as<JsonArray>();
@@ -307,6 +413,28 @@ struct Settings {
             JsonObject jsonTouchSensor = v.as<JsonObject>();
             s.touchSensors.push_back(TouchSensorCfg::deserialize(jsonTouchSensor));
         }
+
+
+        // aminations
+        JsonArray wavesArray = json["waves"].as<JsonArray>();
+        for (JsonVariant v : wavesArray) {
+            JsonObject jsonWave = v.as<JsonObject>();
+            s.waves.push_back(WaveCfg::deserialize(jsonWave));
+        }
+
+        JsonArray pwmFadesArray = json["pwm_fades"].as<JsonArray>();
+        for (JsonVariant v : pwmFadesArray) {
+            JsonObject jsonPwmFade = v.as<JsonObject>();
+            s.pwmFades.push_back(PwmFadeCfg::deserialize(jsonPwmFade));
+        }
+
+        // controls
+        JsonArray thingControlsArray = json["thing_controls"].as<JsonArray>();
+        for (JsonVariant v : thingControlsArray) {
+            JsonObject jsonThingControl = v.as<JsonObject>();
+            s.thingControls.push_back(ThingControlCfg::deserialize(jsonThingControl));
+        }
+
     };
 
     void serialize(JsonDocument& json) {
@@ -320,6 +448,8 @@ struct Settings {
         json["reboot_after_wifi_failed"] = rebootAfterWifiFailed;
         json["disable_wifi_power_save"] = disableWifiPowerSave;
 
+
+        // actuators
         if (leds.size() > 0) {
             JsonArray jsonLeds = json["leds"].to<JsonArray>();
             for (auto led : this->leds) {
@@ -351,11 +481,13 @@ struct Settings {
             }
         }
 
-        if (waves.size() > 0) {
-            JsonArray waves = json["waves"].to<JsonArray>();
-            for (auto wave : this->waves) {
-                JsonObject jsonWave = waves.add<JsonObject>();
-                WaveCfg::serialize(jsonWave, wave);
+        
+        // sensors
+        if (digitalReadSensors.size() > 0) {
+            JsonArray digitalReadSensors = json["digital_reads"].to<JsonArray>();
+            for (auto digitalReadSensor : this->digitalReadSensors) {
+                JsonObject jsonDigitalRead = digitalReadSensors.add<JsonObject>();
+                DigitalReadSensorCfg::serialize(jsonDigitalRead, digitalReadSensor);
             }
         }
 
@@ -363,7 +495,7 @@ struct Settings {
             JsonArray humTemps = json["hum_temps"].to<JsonArray>();
             for (auto humTemp : this->humTemps) {
                 JsonObject jsonHumTemp = humTemps.add<JsonObject>();
-                HumTempCfg::serialize(jsonHumTemp, humTemp);
+                HumTempSensorCfg::serialize(jsonHumTemp, humTemp);
             }
         }
 
@@ -372,6 +504,33 @@ struct Settings {
             for (auto touchSensor : this->touchSensors) {
                 JsonObject jsonTouchSensor = touchSensors.add<JsonObject>();
                 TouchSensorCfg::serialize(jsonTouchSensor, touchSensor);
+            }
+        }
+
+
+        // aminations
+        if (waves.size() > 0) {
+            JsonArray waves = json["waves"].to<JsonArray>();
+            for (auto wave : this->waves) {
+                JsonObject jsonWave = waves.add<JsonObject>();
+                WaveCfg::serialize(jsonWave, wave);
+            }
+        }
+
+        if (pwmFades.size() > 0) {
+            JsonArray pwmFades = json["pwm_fades"].to<JsonArray>();
+            for (auto pwmFade : this->pwmFades) {
+                JsonObject jsonPwmFade = pwmFades.add<JsonObject>();
+                PwmFadeCfg::serialize(jsonPwmFade, pwmFade);
+            }
+        }
+
+        // controls
+        if (thingControls.size() > 0) {
+            JsonArray thingControls = json["thing_controls"].to<JsonArray>();
+            for (auto thingControl : this->thingControls) {
+                JsonObject jsonThingControl = thingControls.add<JsonObject>();
+                ThingControlCfg::serialize(jsonThingControl, thingControl);
             }
         }
     };

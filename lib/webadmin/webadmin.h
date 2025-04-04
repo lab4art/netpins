@@ -32,7 +32,7 @@ class WebAdmin {
         SettingsManager<Settings>* settingsManager;
         SettingsManager<DmxSettings>* dmxSettingsManager;
         std::function<CommandResult(JsonVariant&)> onSystemCommand = [](JsonVariant&){ return CommandResult{OK, "Success."}; };
-        std::map<String, float> properties;
+        std::function<std::map<String, String>()> propertiesSupplier = [](){ return std::map<String, String>(); };
 
         void listFiles() {
             File root = LittleFS.open("/");
@@ -55,6 +55,10 @@ class WebAdmin {
 
             listFiles();
 
+            webServer->on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+                request->redirect("/admin.html");
+            });
+
             webServer->on("/sys-info", HTTP_GET, [this](AsyncWebServerRequest *request){
                 this->onReceivedCallback();
 
@@ -65,19 +69,22 @@ class WebAdmin {
                 doc["ip"] = WiFi.localIP().toString();
                 doc["hostname"] = this->settingsManager->getSettings().hostname;
                 doc["uptime"] = std::to_string(millis());
-                for (auto const& pair : properties) {
-                    const auto& key = pair.first;
-                    const auto& val = pair.second;
-                    doc[key] = val;
+
+                // if query parameter mode equas "details" add more details
+                if (request->hasParam("show")) {
+                    String show = request->getParam("show")->value();
+                    if (show == "all") {
+                        for (auto const& pair : propertiesSupplier()) {
+                            const auto& key = pair.first;
+                            const auto& val = pair.second;
+                            doc[key] = val;
+                        }
+                    }
                 }
                 serializeJson(doc, output);
-
                 request->send(200, "application/json", output);
             });
 
-            webServer->on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-                request->redirect("/admin.html");
-            });
             webServer->serveStatic("/admin.html", LittleFS, "/admin.html");
             webServer->serveStatic("/script.js", LittleFS, "/script.js");
             webServer->serveStatic("/js-yaml-4.1.0.min.js", LittleFS, "/js-yaml-4.1.0.min.js");
@@ -137,8 +144,8 @@ class WebAdmin {
             this->onReceivedCallback = onReceivedCallback;
         }
 
-        void setProperty(String key, float value) {
-            properties[key] = value;
+        void setPropertiesSupplier(std::function<std::map<String, String>()> propertiesSupplier) {
+            this->propertiesSupplier = propertiesSupplier;
         }
 
         void end() {

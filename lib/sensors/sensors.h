@@ -47,14 +47,17 @@ class MovingAverage {
         }
 };
 
-class SensorThing {
+template <typename VALUE_TYPE>
+class SensorBase {
     private:
+        uint8_t pin;
         unsigned long pullMillis;
         unsigned long lastPullMillis = 0;
 
-    protected:
-        uint8_t pin;
+        VALUE_TYPE value;
+        std::function<void(VALUE_TYPE)> onChangeListener = nullptr;
 
+    protected:
         boolean shouldPull() {
             unsigned long currentMillis = millis();
             if (currentMillis - lastPullMillis > pullMillis) {
@@ -64,43 +67,18 @@ class SensorThing {
                 return false;
             }
         }
-
+        
         unsigned long getLastPullMillis() {
             return lastPullMillis;
         }
 
+        /*
+         * Read the sensor and set the value.
+         * Return true if the value has changed, false otherwise.
+        */
+        virtual boolean doRead() = 0;
 
-    public:
-        SensorThing(uint8_t pin, unsigned long pullMillis): 
-                pin(pin),
-                pullMillis(pullMillis) {
-        }
-
-        /**
-         * Returns true if the sensor value was read, false otherwise.
-         */
-        virtual boolean read() = 0;
-
-        uint8_t getPin() {
-            return pin;
-        }
-};
-
-class FloatSensor : public SensorThing {
-    private:
-        float value;
-        std::function<void(float)> onChangeListener = nullptr;
-
-    public:
-        FloatSensor(uint8_t pin, unsigned long pullMillis):
-                SensorThing(pin, pullMillis) {
-        }
-
-        float getValue() {
-            return value;
-        }
-
-        boolean setValue(float value) {
+        boolean setValue(VALUE_TYPE value) {
             if (this->value == value) {
                 return false;
             } else {
@@ -112,45 +90,46 @@ class FloatSensor : public SensorThing {
             }
         }
 
-        void setOnChangeListener(std::function<void(float)> onChangeListener) {
-            this->onChangeListener = onChangeListener;
-        }
-};
-
-class BooleanSensor : public FloatSensor {
-
     public:
-        BooleanSensor(uint8_t pin, unsigned long pullMillis):
-                FloatSensor(pin, pullMillis) {
-        }
-
-        boolean getValue() {
-            return FloatSensor::getValue() == 1.0f;
-        }
-
-        boolean setValue(boolean value) {
-            return FloatSensor::setValue(value ? 1.0f : 0.0f);
-        }
-};
-
-class DigitalReadSensor : public FloatSensor {
-
-    public:
-        DigitalReadSensor(uint8_t pin, unsigned long pullMillis):
-                FloatSensor(pin, pullMillis) {
-            pinMode(pin, INPUT);
+        SensorBase(uint8_t pin, unsigned long pullMillis): 
+                pin(pin),
+                pullMillis(pullMillis) {
         }
 
         boolean read() {
             if (!shouldPull()) {
                 return false;
             }
-            setValue(digitalRead(pin));
-            return true;
+            return doRead();
+        }
+
+        uint8_t getPin() {
+            return pin;
+        }
+
+        VALUE_TYPE getValue() {
+            return value;
+        }
+
+        void setOnChangeListener(std::function<void(VALUE_TYPE)> onChangeListener) {
+            this->onChangeListener = onChangeListener;
         }
 };
 
-class TouchSensor : public BooleanSensor {
+class DigitalReadSensor : public SensorBase<boolean> {
+
+    public:
+        DigitalReadSensor(uint8_t pin, unsigned long pullMillis, uint8_t pinInputMode = INPUT):
+                SensorBase(pin, pullMillis) {
+            pinMode(pin, pinInputMode);
+        }
+
+        boolean doRead() {
+            return setValue(digitalRead(getPin()) == HIGH);
+        }
+};
+
+class TouchSensor : public SensorBase<boolean> {
     private:
         int threshold;
 
@@ -161,8 +140,8 @@ class TouchSensor : public BooleanSensor {
         /**
          * Return true if touch is detected, false otherwise.
          */
-        boolean doReadTouch() {
-            int currentRead = touchRead(pin);
+        boolean doRead() {
+            int currentRead = touchRead(getPin());
             if (nonTouchedAverage->isFull() && abs(nonTouchedAverage->get() - currentRead) > threshold) {
                 // Log.infoln("Touched. Avg touch %d, current touch %d", nonTouchedAverage->get(), currentRead);
                 return true;
@@ -175,7 +154,7 @@ class TouchSensor : public BooleanSensor {
 
     public:
         TouchSensor(uint8_t pin, unsigned long pullMillis, int threshold):
-                BooleanSensor(pin, pullMillis),
+                SensorBase(pin, pullMillis),
                 threshold(threshold) {
             pinMode(pin, INPUT);
         }
@@ -184,29 +163,26 @@ class TouchSensor : public BooleanSensor {
         boolean read() {
             if (shouldPull()) {
                 veryfingTouch = 1;
-                unveryfiedTouch = doReadTouch();
+                unveryfiedTouch = doRead();
                 if (unveryfiedTouch) {
                     return false;
                 } else {
-                    BooleanSensor::setValue(false);
-                    return true;
+                    return setValue(false);
                 }
             } else if (unveryfiedTouch && (millis() - getLastPullMillis() > 10 * veryfingTouch)) {
                 // if short time passed since last touched, verify the touch
                 // Log.infoln("Verifying touch. unveryfiedTouch: %d, veryfingTouch: %d", unveryfiedTouch ? 1 : 0, veryfingTouch);
-                if (doReadTouch()) {
+                if (doRead()) {
                     veryfingTouch++;
                     if (veryfingTouch == 3) {
                         unveryfiedTouch = false; // prevent verification untill next pull time
-                        BooleanSensor::setValue(true);
-                        return true;
+                        return setValue(true);
                     } else {
                         return false;
                     }
                 } else {
                     unveryfiedTouch = false; // if no-touch prevent verification untill next pull time
-                    BooleanSensor::setValue(false);
-                    return true;
+                    return setValue(false);
                 }
             } else {
                 return false;
@@ -214,59 +190,48 @@ class TouchSensor : public BooleanSensor {
         }
 };
 
-class HumTempSensor : public SensorThing {
+struct HumTemp {
+    float humidity;
+    float temperature;
+
+    bool operator==(const HumTemp& other) const {
+        return humidity == other.humidity && temperature == other.temperature;
+    }
+
+    bool operator!=(const HumTemp& other) const {
+        return !(*this == other);
+    }
+};
+
+class HumTempSensor : public SensorBase<HumTemp> {
     private:
         DHT_Unified* dht;
-        FloatSensor* tempSensor;
-        FloatSensor* humiditySensor;
 
     public:
         HumTempSensor(uint8_t pin, unsigned long pullMillis):
-                SensorThing(pin, pullMillis) {
+                SensorBase(pin, pullMillis) {
             pinMode(pin, INPUT_PULLUP);
             dht = new DHT_Unified(pin, DHT22);
             dht->begin();
         }
 
-        boolean read() {
-            if (!shouldPull()) {
-                return false;
-            }
+        boolean doRead() {
             sensors_event_t tempEvent;
             sensors_event_t humidityEvent;
             dht->temperature().getEvent(&tempEvent);
             dht->humidity().getEvent(&humidityEvent);
-            tempSensor->setValue(tempEvent.temperature);
-            humiditySensor->setValue(humidityEvent.relative_humidity);
-            return true;
-        }
-
-        float getTemperature() {
-            return tempSensor->getValue();
-        }
-
-        float getHumidity() {
-            return humiditySensor->getValue();
-        }
-
-        void setTempChangeListener(std::function<void(float)> onChangeListener) {
-            tempSensor->setOnChangeListener(onChangeListener);
-        }
-
-        void setHumidityChangeListener(std::function<void(float)> onChangeListener) {
-            humiditySensor->setOnChangeListener(onChangeListener);
+            return setValue({humidityEvent.relative_humidity, tempEvent.temperature});
         }
 };
 
-class DistanceSensor : public FloatSensor {
+class DistanceSensor : public SensorBase<int> {
     private:
         VL53L1X sensor;
-        int lastValue = 0;
-        int threshold = 100;
+        int threshold = 100; // TODO configurable
 
     public:
         DistanceSensor(uint8_t pin, unsigned long pullMillis, int threshold):
-                FloatSensor(pin, pullMillis),
+                SensorBase(pin, pullMillis),
                 threshold(threshold) {
             pinMode(pin, INPUT);
             Wire.begin();
@@ -282,18 +247,15 @@ class DistanceSensor : public FloatSensor {
             }
         }
 
-        boolean read() {
-            if (!shouldPull()) {
-                return false;
-            }
+        boolean doRead() {
             // sensor.read(false);
             // sensor.read(true);
             int currentValue = sensor.ranging_data.range_mm;
-            if (abs(lastValue - currentValue) > threshold) {
-                lastValue = currentValue;
-                setValue(currentValue);
+            if (abs(getValue() - currentValue) > threshold) {
+                return setValue(currentValue);
             }
-            return true;
+            return false;
         }
-
 };
+
+
