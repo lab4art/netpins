@@ -138,7 +138,12 @@ function postFormAsJson(formId) {
     const formEl = document.getElementById(formId);
     const formData = new FormData(formEl);
 
-    postJson(formId, formData);
+    const data = {};
+    formData.forEach((value, key) => {
+        data[key] = value;
+    });
+
+    postJson(formId, data);
 }
 
 function postJson(command, data) {
