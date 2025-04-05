@@ -20,18 +20,18 @@
     <div class="parent">
         <div class="main">
             <h1>NetPins: <span id="hostname"></span></h1>
-            <p class="version">Ver. <span id="firmware"></span> (UI 1.1.2.1) <a href="/sys-info" target="_blank">&#9432;</a></p>
+            <p class="version">Ver. <span id="firmware"></span> (UI 1.2.0) <a href="/sys-info" target="_blank">&#9432;</a></p>
 
             <p class="title">Commands</p>
-            <div class="form-container">
-                <p class="command" onclick="postJson('save-dmx', {}); return false;">save current dmx state</p>
-                <p class="command" onclick="postJson('reset-dmx', {}); return false;">clear dmx state</p>
-                <p class="command" onclick="postJson('reboot', {}); return false;">reboot</p>
+            <div class="form-container command-buttons">
+                <input type="button" class="command" onclick="postJson('save-dmx', {}); return false;" value="save current dmx state"/>
+                <input type="button" class="command" onclick="postJson('reset-dmx', {}); return false;" value="clear dmx state" />
+                <input type="button" class="command" onclick="postJson('reboot', {}); return false;" value="reboot" />
             </div>
 
             <p class="title">DMX Configuration</p>
             <div class="form-container">
-                <form id="dmx-config" onsubmit="postFormAsJson('dmx-config'); return false;">
+                <form id="dmx-config">
                     <div class="form-group">
                         <label for="universe">Universe</label>
                         <input type="number" name="universe" id="universe" required="required" placeholder="0"/>
@@ -40,7 +40,7 @@
                         <label for="channel">First Address</label>
                         <input type="number" name="channel" id="channel" required="required" placeholder="1">
                     </div>
-                    <input type="submit" class="command" value="Save">
+                    <input type="button" class="command" value="Save" onclick="postFormAsJson('dmx-config'); return false;">
                 </form>
             </div>
             
