@@ -7,7 +7,6 @@
 
 #include <NeoPixelBus.h>
 #include <ArtnetWiFi.h>
-#include <WiFiUdp.h>
 
 #include <map>
 #include <set>
@@ -225,8 +224,8 @@ void initNeoStipTask() {
     semaphore = xSemaphoreCreateBinary();
 
     xTaskCreatePinnedToCore(
-        commitNeoStipTaskProcedure,         /* Task function. */
-        "NeoFxRunnerTask",            /* name of task. */
+        commitNeoStipTaskProcedure,  /* Task function. */
+        "ThingsCommitTask",          /* name of task. */
         10000,                       /* Stack size of task */
         NULL,                        /* parameter of the task */
         configMAX_PRIORITIES-1,      /* priority of the task higer number higher priority */
@@ -540,16 +539,17 @@ void setup() {
             continue;
         }
         Log.traceln("Found 1st DMX channel %d.", fadeThingDmx);
-        auto dReadSensor = digitalReadSensors[control.sensorPin];
-        if (dReadSensor == nullptr) {
-            Log.errorln("Sensor %d not found.", control.sensorPin);
-            continue;
+        if (digitalReadSensors.find(control.sensorPin) != digitalReadSensors.end()) { // if map is accesssed with missing key, it causes a crash at some later point. No idea why?.
+            auto dReadSensor = digitalReadSensors[control.sensorPin];
+            if (dReadSensor == nullptr) {
+                Log.errorln("Sensor %d not found.", control.sensorPin);
+                continue;
+            }
+            Log.traceln("Found sensor %d.", control.sensorPin);
+            dReadSensor->setOnChangeListener([fadeThingDmx](bool value) { //TODO fix, this repalces mqqt listener
+                dmxData[fadeThingDmx + 3] = (value ? 255 : 0);
+            });
         }
-        Log.traceln("Found sensor %d.", control.sensorPin);
-        dReadSensor->setOnChangeListener([fadeThingDmx](bool value) {
-            Log.traceln("Sensor for dmx %d changed to %d.", fadeThingDmx, value);
-            dmxData[fadeThingDmx + 3] = (value ? 255 : 0);
-        });
     }
 
     Serial.println("Mounting LittleFS ...");
@@ -687,6 +687,10 @@ void onWifiExecutionCallback(String ip) {
 int loopCounter = 0;
 int executionTimeSum = 0;
 int maxExecutionTime = 0;
+
+uint32_t minFreeHeap = UINT32_MAX;
+uint32_t minFreePsram = UINT32_MAX;
+
 unsigned long lastDmxCommit = 0;
 void loop() {
     unsigned long loopStartTime = micros();
@@ -751,19 +755,31 @@ void loop() {
         esp_deep_sleep_start();
     }
 
-    if (PRINT_EXECUTION_TIME) {
+    if (PRINT_EXECUTION_STAT) {
         loopCounter++;
         auto executionTime = micros() - loopStartTime;
         executionTimeSum += executionTime;
         if (executionTime > maxExecutionTime) {
             maxExecutionTime = executionTime;
         }
-        if (loopCounter % 1000 == 0) {
+
+        if (ESP.getFreeHeap() < minFreeHeap) {
+            minFreeHeap = ESP.getFreeHeap();
+        }
+        
+        if (ESP.getFreePsram() < minFreePsram) {
+            minFreePsram = ESP.getFreePsram();
+        }
+
+        if (loopCounter % 5000 == 0) {
             Log.noticeln("Max loop execution time: %d us, avg loop execution time: %d us", maxExecutionTime, executionTimeSum / loopCounter);
             executionTimeSum = 0;
             maxExecutionTime = 0;
             loopCounter = 0;
-            Serial.println(String("Free memory: ") + ESP.getFreeHeap());
+            Log.noticeln("Min free heap: %d, low water mark: %d of %d. Min free psram: %d, low water mark: %d of %d", 
+                minFreeHeap, ESP.getMinFreeHeap(), ESP.getHeapSize(), minFreePsram, ESP.getMinFreePsram(), ESP.getPsramSize());
+            minFreeHeap = UINT32_MAX;
+            minFreePsram = UINT32_MAX;
         }
     }
 }

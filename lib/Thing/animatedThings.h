@@ -80,7 +80,7 @@ class PWMFadeAnimationThing: public Thing {
                 fadeAnimation->setValue1(data[0]);
                 fadeAnimation->setValue2(data[1]);
                 // trigger fade only if data[4] (on/off) changed
-                if (onOffChanged) {
+                if (onOffChanged) { // TODO apply new fade data although on/off does not change
                     if (data[4] > 0) {
                         fadeAnimation->fadeIn(data[2] * 100);
                     } else {

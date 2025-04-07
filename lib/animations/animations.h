@@ -160,14 +160,16 @@ class PWMFadeAnimation: public Animation {
         void setValue1(uint8_t value) {
             value1 = value;
             if (!fadeInMode && !isRunning()) {
-                led->setData(new uint8_t[1]{value});
+                uint8_t data[1] = {value};
+                led->setData(data);
             }
         }
 
         void setValue2(uint8_t value) {
             value2 = value;
             if (fadeInMode && !isRunning()) {
-                led->setData(new uint8_t[1]{value});
+                uint8_t data[1] = {value};
+                led->setData(data);
             }
         }
 

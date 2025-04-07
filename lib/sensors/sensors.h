@@ -84,6 +84,7 @@ class SensorBase {
             } else {
                 this->value = value;
                 if (onChangeListener != nullptr) {
+                    //Log.traceln("Invoking on change with value: %d", value);
                     onChangeListener(value);
                 }
                 return true;

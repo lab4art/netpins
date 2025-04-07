@@ -261,12 +261,10 @@ struct PwmFadeCfg {
 
 struct ThingControlCfg {
     std::string name; // name of the thing (aminationThing)
-    std::string mqttTopic;
     std::uint8_t sensorPin;
 
     bool operator==(const ThingControlCfg& other) const {
         return name == other.name &&
-            mqttTopic == other.mqttTopic &&
             sensorPin == other.sensorPin;
     };
 
@@ -277,21 +275,22 @@ struct ThingControlCfg {
     static ThingControlCfg deserialize(JsonObject& json) {
         ThingControlCfg o;
         o.name = json["name"].as<std::string>();
-        o.sensorPin = json["sensor"]["pin"].as<std::uint8_t>();
-        if (json.containsKey("mqtt")) {
-            o.mqttTopic = json["mqtt"]["topic"].as<std::string>();
+        if (json.containsKey("sensor")) {
+            if (json["sensor"].containsKey("pin")) {
+                o.sensorPin = json["sensor"]["pin"].as<std::uint8_t>();        
+            }
         }
         return o;
     }
 
     static void serialize(JsonObject& json, const ThingControlCfg& o) {
         json["name"] = o.name;
+        if (o.sensorPin != 0) {
+            JsonObject sensor = json["sensor"].to<JsonObject>();
+            sensor["pin"] = o.sensorPin;
+        }
         JsonObject sensor = json["sensor"].to<JsonObject>();
         sensor["pin"] = o.sensorPin;
-        if (o.mqttTopic != "") {
-            JsonObject mqtt = json["mqtt"].to<JsonObject>();
-            mqtt["topic"] = o.mqttTopic;
-        }
     };
 };
 

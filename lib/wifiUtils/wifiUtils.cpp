@@ -102,6 +102,7 @@ class WifiUtils {
                     }
                 } else {
                   connectAttempt = 0;
+                  // TODO reset reconnectDelay
                 }
                 if (!connectedCallbackCalled && WiFi.status() == WL_CONNECTED) {
                   wifiExecutionCallback(WiFi.localIP().toString());
