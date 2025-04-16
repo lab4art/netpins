@@ -26,10 +26,15 @@ class WifiUtils {
         unsigned int connectAttempt = 0;
         std::function<void()> beforeWiFiReboot;
 
+        void resetReconnectDelay() {
+            connectAttempt = 0;
+            reconnectDelay = random(reconnectInterval, 2 * reconnectInterval);
+        }
+
     public:
         static String macAddress;
 
-        WifiUtils(const char* ssid, const char* password, static_ip_t staticIp, unsigned long reconnectInterval, unsigned int rebootAfterWiFiFailed, std::function<void()> beforeWiFiReboot = nullptr, const char* hostname = "", const char* hostnamePrefix = "esp-") : 
+        WifiUtils(const char* ssid, const char* password, static_ip_t staticIp, unsigned long reconnectInterval, unsigned int rebootAfterWiFiFailed, std::function<void()> beforeWiFiReboot = nullptr, const char* hostname = "", const char* hostnamePrefix = "netpins-") : 
                 reconnectInterval(reconnectInterval),
                 rebootAfterWiFiFailed(rebootAfterWiFiFailed),
                 beforeWiFiReboot(beforeWiFiReboot) {
@@ -41,39 +46,23 @@ class WifiUtils {
             sprintf(macBuffer, "%02X-%02X-%02X-%02X-%02X-%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
             WifiUtils::macAddress = String(macBuffer);
 
-            if (hostname != "") {
-              String hname = hostname;
-              // replace non alpha-numeric characters with '-'
-              for (int i = 0; i < hname.length(); i++) {
-                  if (!isalnum(hname[i])) {
-                      hname[i] = '-';
-                  }
-              }              
-              hname = hname.substring(0, 32);
-              WiFi.setHostname(hname.c_str());
-            } else {
-              // mac based hostname
-              String hostname = hostnamePrefix + WifiUtils::macAddress;
-              WiFi.setHostname(hostname.c_str());
-            }
+            WiFi.setHostname(getHostname(hostname).c_str());
+
             if (ssid == nullptr || strlen(ssid) == 0 || ssid == "null") {
-              Log.noticeln("Starting WiFi in AP mode.");
-              WiFi.mode(WIFI_AP);
-              String apSsid = "netpins-" + WifiUtils::macAddress;
-              WiFi.softAP(apSsid);
-              Log.noticeln("AP IP address: %s", WiFi.softAPIP().toString().c_str()); // default IP is 192.168.4.1
+                Log.noticeln("Starting WiFi in AP mode.");
+                WiFi.mode(WIFI_AP);
+                String apSsid = "netpins-" + WifiUtils::macAddress;
+                WiFi.softAP(apSsid);
+                Log.noticeln("AP IP address: %s", WiFi.softAPIP().toString().c_str()); // default IP is 192.168.4.1
             } else {
-              WiFi.mode(WIFI_STA);
-
-              if (staticIp.ip != IPAddress(0, 0, 0, 0)) {
-                WiFi.config(staticIp.ip, staticIp.gateway, staticIp.subnet, staticIp.dns1);
-              }
-
-              WiFi.begin(ssid, password);
+                WiFi.mode(WIFI_STA);
+                if (staticIp.ip != IPAddress(0, 0, 0, 0)) {
+                    WiFi.config(staticIp.ip, staticIp.gateway, staticIp.subnet, staticIp.dns1);
+                }
+                WiFi.begin(ssid, password);
             }
-
             randomSeed(micros());
-            reconnectDelay = random(reconnectInterval, 2 * reconnectInterval);
+            resetReconnectDelay();
         }
 
         void tryReconnect(ON_WIFI_EXECUTION_CALLBACK_SIGNATURE) {
@@ -92,23 +81,40 @@ class WifiUtils {
                     connectedCallbackCalled = false;
                     connectAttempt++;
                     if (rebootAfterWiFiFailed > 0 && connectAttempt >= rebootAfterWiFiFailed) {
-                      // prevent factory reset by WiFi failure, reset the counter
-                      FactoryReset::getInstance().resetCounter(true);
-                      if (beforeWiFiReboot != nullptr) {
-                        beforeWiFiReboot();
-                      }
-                      Log.errorln("Too many failed attempts to connect to WiFi. Restarting ...");
-                      ESP.restart();
+                        // prevent factory reset by WiFi failure, reset the counter
+                        FactoryReset::getInstance().resetCounter(true);
+                        if (beforeWiFiReboot != nullptr) {
+                          beforeWiFiReboot();
+                        }
+                        Log.errorln("Too many failed attempts to connect to WiFi. Restarting ...");
+                        ESP.restart();
                     }
                 } else {
-                  connectAttempt = 0;
-                  // TODO reset reconnectDelay
+                    resetReconnectDelay();
                 }
                 if (!connectedCallbackCalled && WiFi.status() == WL_CONNECTED) {
-                  wifiExecutionCallback(WiFi.localIP().toString());
-                  connectedCallbackCalled = true;
+                    wifiExecutionCallback(WiFi.localIP().toString());
+                    connectedCallbackCalled = true;
+                    resetReconnectDelay();                
                 }
                 previousMillis = currentMillis;
+            }
+        }
+
+        static String getHostname(String hostname, String hostnamePrefix = "netpins-") {
+            if (hostname != "") {
+                String hname = hostname;
+                // replace non alpha-numeric characters with '-'
+                for (int i = 0; i < hname.length(); i++) {
+                    if (!isalnum(hname[i])) {
+                        hname[i] = '-';
+                    }
+                }              
+                hname = hname.substring(0, 32);
+                return hname;
+            } else {
+                // mac based hostname
+                return hostnamePrefix + WifiUtils::macAddress;
             }
         }
 };

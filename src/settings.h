@@ -294,6 +294,39 @@ struct ThingControlCfg {
     };
 };
 
+struct MqttCfg {
+    std::string server;
+    std::uint16_t port;
+    std::string user;
+    std::string password;
+
+    bool operator==(const MqttCfg& other) const {
+        return server == other.server &&
+            port == other.port &&
+            user == other.user &&
+            password == other.password;
+    };
+    bool operator!=(const MqttCfg& other) const {
+        return !(*this == other);
+    };
+
+    static MqttCfg deserialize(JsonObject& json) {
+        MqttCfg m;
+        m.server = json["server"].as<std::string>();
+        m.port = json["port"].as<std::uint16_t>();
+        m.user = json["user"].as<std::string>();
+        m.password = json["password"].as<std::string>();
+        return m;
+    };
+
+    static void serialize(JsonObject& json, const MqttCfg& m) {
+        json["server"] = m.server;
+        json["port"] = m.port;
+        json["user"] = m.user;
+        json["password"] = m.password;
+    };
+};
+
 struct Settings {
     std::string wifiSsid;
     std::string wifiPass;
@@ -322,6 +355,7 @@ struct Settings {
     std::uint16_t maxIdle; // max idle time in min, 0 means no sleep
     unsigned int rebootAfterWifiFailed = 15; // reboot after 15 failed wifi connections, 0 means no reboot
     bool disableWifiPowerSave;
+    MqttCfg mqtt;
 
     bool operator==(const Settings& other) const {
         return wifiSsid == other.wifiSsid &&
@@ -333,6 +367,7 @@ struct Settings {
             maxIdle == other.maxIdle &&
             rebootAfterWifiFailed == other.rebootAfterWifiFailed &&
             disableWifiPowerSave == other.disableWifiPowerSave &&
+            mqtt == other.mqtt &&
 
             leds == other.leds &&
             rgbwStrips == other.rgbwStrips &&
@@ -366,6 +401,12 @@ struct Settings {
             s.disableWifiPowerSave = json["disable_wifi_power_save"].as<bool>();
         } else {
             s.disableWifiPowerSave = false;
+        }
+        if (json.containsKey("mqtt")) {
+            JsonObject jsonMqtt = json["mqtt"].as<JsonObject>();
+            s.mqtt = MqttCfg::deserialize(jsonMqtt);
+        } else {
+            s.mqtt = MqttCfg();
         }
 
         
@@ -447,6 +488,10 @@ struct Settings {
         json["reboot_after_wifi_failed"] = rebootAfterWifiFailed;
         json["disable_wifi_power_save"] = disableWifiPowerSave;
 
+        if (mqtt.server != "") {
+            JsonObject jsonMqtt = json["mqtt"].to<JsonObject>();
+            MqttCfg::serialize(jsonMqtt, mqtt);
+        }
 
         // actuators
         if (leds.size() > 0) {
@@ -535,7 +580,6 @@ struct Settings {
     };
 
     String asJson() {
-        // Serial.println("Serializing settings ...");
         JsonDocument jsonDoc;
         serialize(jsonDoc);
         String output;
@@ -544,13 +588,13 @@ struct Settings {
     };
 
     void setDefaults() {
-            this->wifiSsid = WIFI_SSID;
-            this->wifiPass = WIFI_PASS;
-            this->hostname = "";
-            this->hbInt = 5000;
-            this->udpPort = 5824;
-            this->lightsTest = true;
-            this->maxIdle = 0;
+        this->wifiSsid = WIFI_SSID;
+        this->wifiPass = WIFI_PASS;
+        this->hostname = "";
+        this->hbInt = 5000;
+        this->udpPort = 5824;
+        this->lightsTest = true;
+        this->maxIdle = 0;
     };
 };
 
@@ -577,8 +621,7 @@ struct DmxSettings {
         json["channel"] = channel;
     };
 
-    String asJson() { // TODO move to base class
-        // Serial.println("Serializing settings ...");
+    String asJson() {
         JsonDocument jsonDoc;
         serialize(jsonDoc);
         String output;
@@ -665,7 +708,6 @@ class SettingsManager {
             // parse jsonString to jsonDoc
             JsonDocument jsonDoc;
             deserializeJson(jsonDoc, jsonString);
-
             fromJsonDoc(jsonDoc);
         }
 
@@ -692,9 +734,12 @@ class SettingsManager {
         }
 
         void setDefaults() {
-            // T::setDefaults(this->settings);
+            T oldSettings = this->settings;
             this->settings.setDefaults();
-            dirty = true; // TODO set dirty only if settings changed
+            if (oldSettings != this->settings) {
+                // Serial.println("Settings changed.");
+                dirty = true;
+            }
         }
 
         bool isDirty() {

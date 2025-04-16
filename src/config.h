@@ -17,7 +17,7 @@
 
 // Uncomment line below to fully disable logging, and reduce project size
 //#define DISABLE_LOGGING
-#define LOG_LEVEL LOG_LEVEL_NOTICE
 // #define LOG_LEVEL LOG_LEVEL_TRACE
+#define LOG_LEVEL LOG_LEVEL_NOTICE
 
 #define PRINT_EXECUTION_STAT false

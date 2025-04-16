@@ -428,6 +428,8 @@ void beforeWiFiReboot() {
     preferences.end();
 };
 
+String mqttSensorTopicPreffix = "";
+
 void setup() {
     Serial.begin(115200);
     delay(500);
@@ -507,8 +509,8 @@ void setup() {
         auto touchSensor = new TouchSensor(touch.pin, 200, touch.threshold);
         uint8_t pin = touch.pin;
         touchSensor->setOnChangeListener([pin](bool touched) {
-            String topic = String("/sensor/touch-") + pin;
-            mqtt->publish(topic.c_str(), touched ? "1" : "0"); // TODO require mapping
+            String topic = mqttSensorTopicPreffix + pin;
+            mqtt->publish(topic.c_str(), touched ? "1" : "0");
         });
         touchSensors.push_back(touchSensor);
     }
@@ -516,8 +518,8 @@ void setup() {
     Log.noticeln("Creating digital read sensors ...");
     for (auto& dreadCfg : settings.digitalReadSensors) {
         auto digitalReadSensor = new DigitalReadSensor(dreadCfg.pin, dreadCfg.readMs, INPUT_PULLUP);
-        digitalReadSensor->setOnChangeListener([digitalReadSensor](bool value) {
-            String topic = String("/sensor/") + digitalReadSensor->getPin();
+        digitalReadSensor->setOnChangeListener([dreadCfg](bool value) {
+            String topic = mqttSensorTopicPreffix + dreadCfg.pin;
             mqtt->publish(topic.c_str(), value ? "1" : "0");
         });
         Log.traceln("Digital read sensor %d created.", dreadCfg.pin);
@@ -613,14 +615,6 @@ void setup() {
         Log.noticeln("Web server listening on %s", WiFi.localIP().toString().c_str());
     }
 
-  // mqtt = new MqttUtils( // TODO make this configurable
-  //   "settings.mqttServer.c_str()",
-  //   "settings.mqttUser.c_str()",
-  //   "settings.mqttPass.c_str()",
-  //   "settings.mqttTopic.c_str()",
-  //   onMqttMessage
-  // );
-
     webAdmin->setPropertiesSupplier([](){
         std::map<String, String> props;
         for (auto& humTempSensor : humTempSensors) {
@@ -640,11 +634,15 @@ void setup() {
         return props;
     });
 
-    mqtt = new MqttUtils( // TODO make this configurable
-        "host",
-        "user",
-        "pass",
-        "/command/#",
+    String hostName = WifiUtils::getHostname(settings.hostname.c_str());
+    mqttSensorTopicPreffix = String("netpins/") + hostName + "/sensor/";
+    mqtt = new MqttUtils(
+        settings.mqtt.server.c_str(),
+        settings.mqtt.port,
+        settings.mqtt.user.c_str(),
+        settings.mqtt.password.c_str(),
+        (String("netpins/") + hostName + "/command/#").c_str(),
+        hostName,
         onMqttMessage
     );
 

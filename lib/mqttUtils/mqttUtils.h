@@ -4,9 +4,19 @@
 #include <PubSubClient.h>
 #include <esp_wifi.h>
 
+void serialPrintln(const char* templateString, ...) {
+    va_list args;
+    va_start(args, templateString);
+    char buffer[256];
+    vsnprintf(buffer, 256, templateString, args);
+    va_end(args);
+    Serial.println(buffer);
+}
 
 class MqttUtils {
     private:
+        String host;
+        uint16_t port;
         String clientId;
         String topic;
         String user;
@@ -16,74 +26,55 @@ class MqttUtils {
         PubSubClient* mqttClient;
 
     public:
-        MqttUtils(const char* mqtt_server, const char* user, const char* pass, const char* topic, MQTT_CALLBACK_SIGNATURE):
-                topic(topic),
+        MqttUtils(String mqttHost, uint16_t mqttPort, String user, String pass, String subscribeTopic, String clientId, MQTT_CALLBACK_SIGNATURE):
+                host(mqttHost),
+                port(mqttPort),
+                topic(subscribeTopic),
                 user(user),
-                pass(pass) {
-            mqttClient = new PubSubClient(espClient);
-
-            mqttClient->setServer(mqtt_server, 1883);
-            mqttClient->setCallback(callback);
-            clientId = String("ESP-") + WifiUtils::macAddress; //TODO use hostname for clietnId
-            // serialPrintln("MQTT server: %s.", mqtt_server);
-            // Serial.println(String("Topic: ") + topic);
-            // Serial.println(String("this->topic: ") + this->topic);
-            // Serial.println(String("MQTT server: ") + mqtt_server);
-            // Serial.println(String("MQTT client id: ") + clientId);
+                pass(pass),
+                clientId(clientId) {
+            if (mqttHost == nullptr || mqttHost.isEmpty()) {
+                Serial.println("MQTT DISABLED, host is not defined.");
+            } else {
+                serialPrintln("Creating MQTT client with host: %s, port: %d, user: %s, topic: %s, clientId: %s", mqttHost.c_str(), mqttPort, user.c_str(), subscribeTopic.c_str(), clientId.c_str());
+                mqttClient = new PubSubClient(espClient);
+                mqttClient->setServer(host.c_str(), port);
+                mqttClient->setCallback(callback);
+                Serial.println("MQTT client created.");
+            }
         }
 
         void loop() {
-            mqttClient->loop();
+            if (mqttClient != nullptr) {
+                mqttClient->loop();
+            }
         }
 
-        // void reconnectBlocking() {
-        // // Loop until we're reconnected
-        //     while (!mqttClient->connected()) {
-        //         serialPrintln("Attempting blocking MQTT connection as %s ...", clientId.c_str());
-        //         // Attempt to connect
-        //         if (mqttClient->connect(clientId.c_str(), user.c_str(), pass.c_str())) {
-        //             serialPrintln("connected.");
-        //             // ... and resubscribe
-        //             if (topic != NULL) {
-        //                 mqttClient->subscribe(topic.c_str(), /*QoS:1 = at least once */ 1);
-        //             }
-        //         } else {
-        //             serialPrintln("Failed, rc=%s.", mqttClient->state());
-        //             // Wait 2 seconds before retrying
-        //             delay(2000);
-        //         }
-        //     }
-        // }
-
         void tryReconnect(unsigned long interval = 10000) {
+            if (mqttClient == nullptr) {
+                return;
+            }
             unsigned long currentMillis = millis();
             // if MQTT is down, try reconnecting every interval seconds
-            if ((!mqttClient->connected()) && (currentMillis - previousMillis >=interval)) {
-                // if WiFi is down skip mqtt reconnect
-                if (WiFi.status() == WL_CONNECTED) {
-                    // serialPrintln("Attempting MQTT connection as %s ...", clientId.c_str());
-                    // Attempt to connect
-                    if (mqttClient->connect(clientId.c_str(), user.c_str(), pass.c_str())) {
-                        // serialPrintln("Connected.");
-                        // ... and resubscribe
-                        if (topic != NULL) {
-                            // serialPrintln("Subscribing to topic: %s", topic.c_str());
-                            if (mqttClient->subscribe(topic.c_str(), /*QoS:1 = at least once */ 1)) {
-                                // serialPrintln("Subscribed to topic: %s", topic.c_str());
-                            } else {
-                                // serialPrintln("Failed to subscribe to topic: %s", topic.c_str());
+            if (currentMillis - previousMillis >=interval) {
+                if (WiFi.status() == WL_CONNECTED && WiFi.getMode() == WIFI_STA) {
+                    if ((!mqttClient->connected())) {
+                        serialPrintln("Attempting MQTT connection as %s ...", clientId.c_str());
+                        // Attempt to connect
+                        if (mqttClient->connect(clientId.c_str(), user.c_str(), pass.c_str())) {
+                            serialPrintln("MQTT connected.");
+                            // ... and resubscribe
+                            if (topic != nullptr) {
+                                // serialPrintln("Subscribing to topic: %s", topic.c_str());
+                                if (mqttClient->subscribe(topic.c_str(), /*QoS:1 = at least once */ 1)) {
+                                    serialPrintln("Subscribed to topic: %s", topic.c_str());
+                                } else {
+                                    serialPrintln("Failed to subscribe to topic: %s", topic.c_str());
+                                }
                             }
-                            // auto sysTopic = "/system/" + WifiUtils::macAddress + "/#";
-                            // serialPrintln("Subscribing to topic: %s", sysTopic.c_str());
-                            // if (mqttClient->subscribe(sysTopic.c_str(), /*QoS:1 = at least once */ 1)) { //TODO
-                            if (mqttClient->subscribe("sysTopic.c_str()", /*QoS:1 = at least once */ 1)) {
-                                // serialPrintln("Subscribed to topic: %s", sysTopic.c_str());
-                            } else {
-                                // serialPrintln("Failed to subscribe to topic: %s", sysTopic.c_str());
-                            }
+                        } else {
+                            serialPrintln("Failed, rc= %s.", mqttClient->state());
                         }
-                    } else {
-                        // serialPrintln("Failed, rc= %s.", mqttClient->state());
                     }
                 } else {
                     // serialPrintln("WiFi is down, skipping MQTT reconnect");
@@ -93,11 +84,8 @@ class MqttUtils {
         }
 
         void publish(const char* topic, const char* payload) {
-            if (mqttClient->connected()) {
-                //Log.traceln("Publishing to topic: %s, payload: %s", topic, payload);
+            if (mqttClient != nullptr) {
                 mqttClient->publish(topic, payload);
-            } else {
-                //Log.traceln("Mqtt NOT connected, dropping: topic: %s, payload: %s", topic, payload);
             }
         }
 };
