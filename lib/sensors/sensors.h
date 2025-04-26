@@ -130,6 +130,19 @@ class DigitalReadSensor : public SensorBase<boolean> {
         }
 };
 
+class AnalogReadSensor : public SensorBase<int> {
+
+    public:
+        AnalogReadSensor(uint8_t pin, unsigned long pullMillis):
+                SensorBase(pin, pullMillis) {
+            pinMode(pin, INPUT);
+        }
+
+        boolean doRead() {
+            return setValue(analogRead(getPin()));
+        }
+};
+
 class TouchSensor : public SensorBase<boolean> {
     private:
         int threshold;

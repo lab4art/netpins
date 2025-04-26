@@ -47,6 +47,7 @@ std::vector<ServoThing*> servos;
 std::vector<HumTempSensor*> humTempSensors;
 std::vector<TouchSensor*> touchSensors;
 std::map<uint8_t /* pin */, DigitalReadSensor*> digitalReadSensors;
+std::map<uint8_t /* pin */, AnalogReadSensor*> analogReadSensors;
 std::vector<PWMFadeAnimationThing*> pwmFades;
 
 unsigned long lastCommandReceivedAt = 0;
@@ -428,6 +429,17 @@ void beforeWiFiReboot() {
     preferences.end();
 };
 
+AnalogReadSensor* getAnalogReadSensor(int pin) {
+    if (analogReadSensors.find(pin) != analogReadSensors.end()) {
+        auto aReadSensor = analogReadSensors[pin];
+        Log.noticeln("Found sensor at pin %d.", pin);
+        return aReadSensor;
+    } else {
+        Log.errorln("Sensor at pin %d not found.", pin);
+        return nullptr;
+    }
+}
+
 String mqttSensorTopicPreffix = "";
 
 void setup() {
@@ -526,21 +538,29 @@ void setup() {
         digitalReadSensors[dreadCfg.pin] = digitalReadSensor;
     }
 
+    Log.noticeln("Creating analog read sensors ...");
+    for (auto& areadCfg : settings.analogReadSensors) {
+        auto analogReadSensor = new AnalogReadSensor(areadCfg.pin, areadCfg.readMs);
+        analogReadSensor->setOnChangeListener([areadCfg](int value) {
+            String topic = mqttSensorTopicPreffix + areadCfg.pin;
+            mqtt->publish(topic.c_str(), String(value).c_str());
+        });
+        Log.traceln("Analog read sensor %d created.", areadCfg.pin);
+        analogReadSensors[areadCfg.pin] = analogReadSensor;
+    }
+
     Log.noticeln("Mapping thing controls ...");
     for (auto& control : settings.thingControls) {
-        Log.traceln("Searching for fadeThing %s ...", control.name.c_str());
-        auto fadeThing = findPwmFadeAnimationThing(pwmFades, String(control.name.c_str()));
-        if (fadeThing == nullptr) {
-            Log.errorln("Control %s not found.", control.name.c_str());
+        auto thingName = control.name.c_str();
+        Log.traceln("Searching for thing %s ...", thingName);
+        auto thing1stDmxCh = dmxListener->getThingChannel(thingName);
+        if (thing1stDmxCh == -1) {
+            Log.errorln("Missing dmx mapping for thing %s.", thingName);
             continue;
         }
-        Log.traceln("Found control %s.", fadeThing->getName());
-        auto fadeThingDmx = dmxListener->getThingChannel(fadeThing->getName());
-        if (fadeThingDmx == -1) {
-            Log.errorln("Thing %s not found in DMXListener.", fadeThing->getName());
-            continue;
-        }
-        Log.traceln("Found 1st DMX channel %d.", fadeThingDmx);
+        Log.noticeln("Found 1st DMX channel %d for thing %s.", thing1stDmxCh, thingName);
+
+        // TODO make generic mapping for all the sensors and things
         if (digitalReadSensors.find(control.sensorPin) != digitalReadSensors.end()) { // if map is accesssed with missing key, it causes a crash at some later point. No idea why?.
             auto dReadSensor = digitalReadSensors[control.sensorPin];
             if (dReadSensor == nullptr) {
@@ -548,8 +568,17 @@ void setup() {
                 continue;
             }
             Log.traceln("Found sensor %d.", control.sensorPin);
-            dReadSensor->setOnChangeListener([fadeThingDmx](bool value) { //TODO fix, this repalces mqqt listener
-                dmxData[fadeThingDmx + 3] = (value ? 255 : 0);
+            dReadSensor->setOnChangeListener([thing1stDmxCh](bool value) { //TODO fix, this repalces mqqt listener
+                dmxData[thing1stDmxCh + 3] = (value ? 255 : 0); // 4th byte is on/off
+            });
+            continue;
+        }
+        
+        auto aReadSensor = getAnalogReadSensor(control.sensorPin);
+        if (aReadSensor != nullptr) {
+            aReadSensor->setOnChangeListener([thing1stDmxCh](int value) { //TODO fix, this repalces mqqt listener
+                uint8_t normalizedValue = map(value, 0, 4096, 0, 255); // default analogReadResolution is 12bit = 4096
+                dmxData[thing1stDmxCh] = normalizedValue;
             });
         }
     }
@@ -725,6 +754,11 @@ void loop() {
     }
 
     for (auto& pair : digitalReadSensors) {
+        auto& sensor = pair.second;
+        sensor->read();
+    }
+
+    for (auto& pair : analogReadSensors) {
         auto& sensor = pair.second;
         sensor->read();
     }

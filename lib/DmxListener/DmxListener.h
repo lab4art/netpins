@@ -95,7 +95,7 @@ class DmxListener {
         }
 
         int getThingChannel(String name) {
-            int channel = 0;
+            int channel = 0; // channel variable contains the last channel of the last thing compared in the loop
             for (auto& thing : thingList) {
                 if (thing->getName().equals(name)) {
                     return channel + 1;

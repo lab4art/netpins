@@ -181,6 +181,32 @@ struct DigitalReadSensorCfg {
 
 };
 
+struct AnalogReadSensorCfg {
+    std::uint8_t pin;
+    int readMs;
+
+    bool operator==(const AnalogReadSensorCfg& other) const {
+        return pin == other.pin &&
+            readMs == other.readMs;
+    };
+
+    bool operator!=(const AnalogReadSensorCfg& other) const {
+        return !(*this == other);
+    };
+
+    static AnalogReadSensorCfg deserialize(JsonObject& json) {
+        AnalogReadSensorCfg s;
+        s.pin = json["pin"].as<std::uint8_t>();
+        s.readMs = json["read_ms"].as<int>();
+        return s;
+    };
+
+    static void serialize(JsonObject& json, const AnalogReadSensorCfg& h) {
+        json["pin"] = h.pin;
+        json["read_ms"] = h.readMs;
+    };
+};
+
 struct HumTempSensorCfg {
     std::uint8_t pin;
     int readMs;
@@ -342,6 +368,7 @@ struct Settings {
     std::vector<HumTempSensorCfg> humTemps;
     std::vector<TouchSensorCfg> touchSensors;
     std::vector<DigitalReadSensorCfg> digitalReadSensors;
+    std::vector<AnalogReadSensorCfg> analogReadSensors;
     
     // waves
     // stripes that are part of the animation must be excluded from the dmx listener
@@ -377,6 +404,7 @@ struct Settings {
             humTemps == other.humTemps &&
             touchSensors == other.touchSensors &&
             digitalReadSensors == other.digitalReadSensors &&
+            analogReadSensors == other.analogReadSensors &&
     
             waves == other.waves &&
             pwmFades == other.pwmFades &&
@@ -440,6 +468,12 @@ struct Settings {
         for (JsonVariant v : digitalReadSensorsArray) {
             JsonObject jsonDigitalRead = v.as<JsonObject>();
             s.digitalReadSensors.push_back(DigitalReadSensorCfg::deserialize(jsonDigitalRead));
+        }
+
+        JsonArray analogReadSensorsArray = json["analog_reads"].as<JsonArray>();
+        for (JsonVariant v : analogReadSensorsArray) {
+            JsonObject jsonAnalogRead = v.as<JsonObject>();
+            s.analogReadSensors.push_back(AnalogReadSensorCfg::deserialize(jsonAnalogRead));
         }
 
         JsonArray humTempsArray = json["hum_temps"].as<JsonArray>();
@@ -532,6 +566,14 @@ struct Settings {
             for (auto digitalReadSensor : this->digitalReadSensors) {
                 JsonObject jsonDigitalRead = digitalReadSensors.add<JsonObject>();
                 DigitalReadSensorCfg::serialize(jsonDigitalRead, digitalReadSensor);
+            }
+        }
+
+        if (analogReadSensors.size() > 0) {
+            JsonArray analogReadSensors = json["analog_reads"].to<JsonArray>();
+            for (auto analogReadSensor : this->analogReadSensors) {
+                JsonObject jsonAnalogRead = analogReadSensors.add<JsonObject>();
+                AnalogReadSensorCfg::serialize(jsonAnalogRead, analogReadSensor);
             }
         }
 
