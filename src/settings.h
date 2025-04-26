@@ -287,10 +287,16 @@ struct PwmFadeCfg {
 
 struct ThingControlCfg {
     std::string name; // name of the thing (aminationThing)
+    /**
+     * The channel that is controoled by the sensor. Offset 0 means the first channel of the thing.
+     * Eg. if 4th channel of the thing if intensity offset of 3 have to be used to control intensity.
+     */
+    std::uint8_t dmxChOffset;
     std::uint8_t sensorPin;
 
     bool operator==(const ThingControlCfg& other) const {
         return name == other.name &&
+            dmxChOffset == other.dmxChOffset &&
             sensorPin == other.sensorPin;
     };
 
@@ -301,6 +307,7 @@ struct ThingControlCfg {
     static ThingControlCfg deserialize(JsonObject& json) {
         ThingControlCfg o;
         o.name = json["name"].as<std::string>();
+        o.dmxChOffset = json["dmx_ch_offset"].as<std::uint8_t>();
         if (json.containsKey("sensor")) {
             if (json["sensor"].containsKey("pin")) {
                 o.sensorPin = json["sensor"]["pin"].as<std::uint8_t>();        
@@ -311,6 +318,7 @@ struct ThingControlCfg {
 
     static void serialize(JsonObject& json, const ThingControlCfg& o) {
         json["name"] = o.name;
+        json["dmx_ch_offset"] = o.dmxChOffset;
         if (o.sensorPin != 0) {
             JsonObject sensor = json["sensor"].to<JsonObject>();
             sensor["pin"] = o.sensorPin;
@@ -382,6 +390,8 @@ struct Settings {
     std::uint16_t maxIdle; // max idle time in min, 0 means no sleep
     unsigned int rebootAfterWifiFailed = 15; // reboot after 15 failed wifi connections, 0 means no reboot
     bool disableWifiPowerSave;
+    bool disableArtnet = false;
+
     MqttCfg mqtt;
 
     bool operator==(const Settings& other) const {
@@ -394,6 +404,7 @@ struct Settings {
             maxIdle == other.maxIdle &&
             rebootAfterWifiFailed == other.rebootAfterWifiFailed &&
             disableWifiPowerSave == other.disableWifiPowerSave &&
+            disableArtnet == other.disableArtnet &&
             mqtt == other.mqtt &&
 
             leds == other.leds &&
@@ -429,6 +440,11 @@ struct Settings {
             s.disableWifiPowerSave = json["disable_wifi_power_save"].as<bool>();
         } else {
             s.disableWifiPowerSave = false;
+        }
+        if (json.containsKey("disable_artnet")) {
+            s.disableArtnet = json["disable_artnet"].as<bool>();
+        } else {
+            s.disableArtnet = false;
         }
         if (json.containsKey("mqtt")) {
             JsonObject jsonMqtt = json["mqtt"].as<JsonObject>();
@@ -521,6 +537,7 @@ struct Settings {
         json["max_idle"] = maxIdle;
         json["reboot_after_wifi_failed"] = rebootAfterWifiFailed;
         json["disable_wifi_power_save"] = disableWifiPowerSave;
+        json["disable_artnet"] = disableArtnet;
 
         if (mqtt.server != "") {
             JsonObject jsonMqtt = json["mqtt"].to<JsonObject>();

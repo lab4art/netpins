@@ -55,7 +55,7 @@ class SensorBase {
         unsigned long lastPullMillis = 0;
 
         VALUE_TYPE value;
-        std::function<void(VALUE_TYPE)> onChangeListener = nullptr;
+        std::vector<std::function<void(VALUE_TYPE)>> onChangeListeners;
 
     protected:
         boolean shouldPull() {
@@ -83,9 +83,9 @@ class SensorBase {
                 return false;
             } else {
                 this->value = value;
-                if (onChangeListener != nullptr) {
+                for (auto& listener : onChangeListeners) {
                     //Log.traceln("Invoking on change with value: %d", value);
-                    onChangeListener(value);
+                    listener(value);
                 }
                 return true;
             }
@@ -112,8 +112,8 @@ class SensorBase {
             return value;
         }
 
-        void setOnChangeListener(std::function<void(VALUE_TYPE)> onChangeListener) {
-            this->onChangeListener = onChangeListener;
+        void addOnChangeListener(std::function<void(VALUE_TYPE)> onChangeListener) {
+            this->onChangeListeners.push_back(onChangeListener);
         }
 };
 

@@ -286,6 +286,7 @@ std::vector<Switchabe*> createThings(Settings& settings) {
         for (auto& ledPin : settings.leds) {
             // initialize led Things
             auto ledThing = new LedThing(ledPin);
+            ledThing->setName(String("led-") + String(ledPin));
             dmxListener->addThing(ledThing);
             switchables.push_back(ledThing);
             leds.push_back(ledThing);
@@ -429,13 +430,24 @@ void beforeWiFiReboot() {
     preferences.end();
 };
 
+DigitalReadSensor* getDigitalReadSensor(int pin) {
+    if (digitalReadSensors.find(pin) != digitalReadSensors.end()) { // if map is accesssed with missing key, it causes a crash at some later point. No idea why?.
+        auto dReadSensor = digitalReadSensors[pin];
+        Log.noticeln("Found digital sensor at pin %d.", pin);
+        return dReadSensor;
+    } else {
+        Log.errorln("Digital sensor at pin %d not found.", pin);
+        return nullptr;
+    }
+}
+
 AnalogReadSensor* getAnalogReadSensor(int pin) {
-    if (analogReadSensors.find(pin) != analogReadSensors.end()) {
+    if (analogReadSensors.find(pin) != analogReadSensors.end()) { // if map is accesssed with missing key, it causes a crash at some later point. No idea why?.
         auto aReadSensor = analogReadSensors[pin];
-        Log.noticeln("Found sensor at pin %d.", pin);
+        Log.noticeln("Found analog sensor at pin %d.", pin);
         return aReadSensor;
     } else {
-        Log.errorln("Sensor at pin %d not found.", pin);
+        Log.errorln("Analog sensor at pin %d not found.", pin);
         return nullptr;
     }
 }
@@ -520,7 +532,7 @@ void setup() {
     for (auto& touch : settings.touchSensors) {
         auto touchSensor = new TouchSensor(touch.pin, 200, touch.threshold);
         uint8_t pin = touch.pin;
-        touchSensor->setOnChangeListener([pin](bool touched) {
+        touchSensor->addOnChangeListener([pin](bool touched) {
             String topic = mqttSensorTopicPreffix + pin;
             mqtt->publish(topic.c_str(), touched ? "1" : "0");
         });
@@ -530,7 +542,7 @@ void setup() {
     Log.noticeln("Creating digital read sensors ...");
     for (auto& dreadCfg : settings.digitalReadSensors) {
         auto digitalReadSensor = new DigitalReadSensor(dreadCfg.pin, dreadCfg.readMs, INPUT_PULLUP);
-        digitalReadSensor->setOnChangeListener([dreadCfg](bool value) {
+        digitalReadSensor->addOnChangeListener([dreadCfg](bool value) {
             String topic = mqttSensorTopicPreffix + dreadCfg.pin;
             mqtt->publish(topic.c_str(), value ? "1" : "0");
         });
@@ -541,7 +553,7 @@ void setup() {
     Log.noticeln("Creating analog read sensors ...");
     for (auto& areadCfg : settings.analogReadSensors) {
         auto analogReadSensor = new AnalogReadSensor(areadCfg.pin, areadCfg.readMs);
-        analogReadSensor->setOnChangeListener([areadCfg](int value) {
+        analogReadSensor->addOnChangeListener([areadCfg](int value) {
             String topic = mqttSensorTopicPreffix + areadCfg.pin;
             mqtt->publish(topic.c_str(), String(value).c_str());
         });
@@ -560,25 +572,20 @@ void setup() {
         }
         Log.noticeln("Found 1st DMX channel %d for thing %s.", thing1stDmxCh, thingName);
 
-        // TODO make generic mapping for all the sensors and things
-        if (digitalReadSensors.find(control.sensorPin) != digitalReadSensors.end()) { // if map is accesssed with missing key, it causes a crash at some later point. No idea why?.
-            auto dReadSensor = digitalReadSensors[control.sensorPin];
-            if (dReadSensor == nullptr) {
-                Log.errorln("Sensor %d not found.", control.sensorPin);
-                continue;
-            }
-            Log.traceln("Found sensor %d.", control.sensorPin);
-            dReadSensor->setOnChangeListener([thing1stDmxCh](bool value) { //TODO fix, this repalces mqqt listener
-                dmxData[thing1stDmxCh + 3] = (value ? 255 : 0); // 4th byte is on/off
+        auto dmxChannel = thing1stDmxCh + control.dmxChOffset;
+
+        auto dReadSensor = getDigitalReadSensor(control.sensorPin);
+        if (dReadSensor != nullptr) {
+            dReadSensor->addOnChangeListener([dmxChannel](bool value) {
+                dmxData[dmxChannel] = (value ? 255 : 0);
             });
-            continue;
         }
         
         auto aReadSensor = getAnalogReadSensor(control.sensorPin);
         if (aReadSensor != nullptr) {
-            aReadSensor->setOnChangeListener([thing1stDmxCh](int value) { //TODO fix, this repalces mqqt listener
+            aReadSensor->addOnChangeListener([dmxChannel](int value) {
                 uint8_t normalizedValue = map(value, 0, 4096, 0, 255); // default analogReadResolution is 12bit = 4096
-                dmxData[thing1stDmxCh] = normalizedValue;
+                dmxData[dmxChannel] = normalizedValue;
             });
         }
     }
@@ -625,11 +632,15 @@ void setup() {
         settings.hostname.c_str());
     Serial.println("Wifi MAC: " + WifiUtils::macAddress);
 
-    artnet = new ArtnetWiFiReceiver();
-    artnet->begin();
-    artnet->subscribeArtDmx(onDmxFrame);
-    artnet->setArtPollReplyConfigShortName("NetPins");
-    artnet->setArtPollReplyConfigLongName(String(WiFi.getHostname()) + " - " + dmxSettings.channel + "@" + dmxSettings.universe + " - " + FIRMWARE_VERSION);
+    if (!settings.disableArtnet) {
+        artnet = new ArtnetWiFiReceiver();
+        artnet->begin();
+        artnet->subscribeArtDmx(onDmxFrame);
+        artnet->setArtPollReplyConfigShortName("NetPins");
+        artnet->setArtPollReplyConfigLongName(String(WiFi.getHostname()) + " - " + dmxSettings.channel + "@" + dmxSettings.universe + " - " + FIRMWARE_VERSION);
+    } else {
+        Log.noticeln("Artnet is disabled.");
+    }
 
     if (_ENABLE_WEBSERVER) {
         Log.noticeln("Starting web server ...");
