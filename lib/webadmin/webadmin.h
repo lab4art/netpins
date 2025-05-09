@@ -69,6 +69,11 @@ class WebAdmin {
                 doc["ip"] = WiFi.localIP().toString();
                 doc["hostname"] = this->settingsManager->getSettings().hostname;
                 doc["uptime"] = std::to_string(millis());
+                if (FACTORY_REST_PIN == -1) {
+                    doc["factoryReset"] = "power cycle";
+                } else {
+                    doc["factoryReset"] = String("pin ") + String(FACTORY_REST_PIN);
+                }
 
                 // if query parameter mode equas "details" add more details
                 if (request->hasParam("show")) {

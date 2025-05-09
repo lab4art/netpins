@@ -35,6 +35,7 @@ class MqttUtils {
                 clientId(clientId) {
             if (mqttHost == nullptr || mqttHost.isEmpty()) {
                 Serial.println("MQTT DISABLED, host is not defined.");
+                mqttClient = nullptr;
             } else {
                 serialPrintln("Creating MQTT client with host: %s, port: %d, user: %s, topic: %s, clientId: %s", mqttHost.c_str(), mqttPort, user.c_str(), subscribeTopic.c_str(), clientId.c_str());
                 mqttClient = new PubSubClient(espClient);

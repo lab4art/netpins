@@ -130,12 +130,13 @@ class DigitalReadSensor : public SensorBase<boolean> {
         }
 };
 
-class AnalogReadSensor : public SensorBase<int> {
+class AnalogReadSensor : public SensorBase<uint16_t> {
 
     public:
         AnalogReadSensor(uint8_t pin, unsigned long pullMillis):
                 SensorBase(pin, pullMillis) {
             pinMode(pin, INPUT);
+            analogReadResolution(13);
         }
 
         boolean doRead() {

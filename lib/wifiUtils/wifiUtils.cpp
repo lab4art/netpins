@@ -84,7 +84,7 @@ class WifiUtils {
                         // prevent factory reset by WiFi failure, reset the counter
                         FactoryReset::getInstance().resetCounter(true);
                         if (beforeWiFiReboot != nullptr) {
-                          beforeWiFiReboot();
+                            beforeWiFiReboot();
                         }
                         Log.errorln("Too many failed attempts to connect to WiFi. Restarting ...");
                         ESP.restart();

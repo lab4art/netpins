@@ -436,7 +436,7 @@ DigitalReadSensor* getDigitalReadSensor(int pin) {
         Log.noticeln("Found digital sensor at pin %d.", pin);
         return dReadSensor;
     } else {
-        Log.errorln("Digital sensor at pin %d not found.", pin);
+        Log.traceln("Digital sensor at pin %d not found.", pin);
         return nullptr;
     }
 }
@@ -447,7 +447,7 @@ AnalogReadSensor* getAnalogReadSensor(int pin) {
         Log.noticeln("Found analog sensor at pin %d.", pin);
         return aReadSensor;
     } else {
-        Log.errorln("Analog sensor at pin %d not found.", pin);
+        Log.traceln("Analog sensor at pin %d not found.", pin);
         return nullptr;
     }
 }
@@ -553,11 +553,13 @@ void setup() {
     Log.noticeln("Creating analog read sensors ...");
     for (auto& areadCfg : settings.analogReadSensors) {
         auto analogReadSensor = new AnalogReadSensor(areadCfg.pin, areadCfg.readMs);
-        analogReadSensor->addOnChangeListener([areadCfg](int value) {
+        // TODO add optional filters to the listener: trashold, move average, etc.
+        analogReadSensor->addOnChangeListener([areadCfg](uint16_t value) {
+            // Log.traceln("Analog read sensor mqtt listener %d value: %d", areadCfg.pin, value);
             String topic = mqttSensorTopicPreffix + areadCfg.pin;
             mqtt->publish(topic.c_str(), String(value).c_str());
         });
-        Log.traceln("Analog read sensor %d created.", areadCfg.pin);
+        Log.traceln("Analog read sensor created. Pin: %d, readMs: %d", areadCfg.pin, areadCfg.readMs);
         analogReadSensors[areadCfg.pin] = analogReadSensor;
     }
 
@@ -565,7 +567,7 @@ void setup() {
     for (auto& control : settings.thingControls) {
         auto thingName = control.name.c_str();
         Log.traceln("Searching for thing %s ...", thingName);
-        auto thing1stDmxCh = dmxListener->getThingChannel(thingName);
+        auto thing1stDmxCh = dmxListener->getThingChannelIndex(thingName);
         if (thing1stDmxCh == -1) {
             Log.errorln("Missing dmx mapping for thing %s.", thingName);
             continue;
@@ -583,8 +585,9 @@ void setup() {
         
         auto aReadSensor = getAnalogReadSensor(control.sensorPin);
         if (aReadSensor != nullptr) {
-            aReadSensor->addOnChangeListener([dmxChannel](int value) {
-                uint8_t normalizedValue = map(value, 0, 4096, 0, 255); // default analogReadResolution is 12bit = 4096
+            aReadSensor->addOnChangeListener([dmxChannel](uint16_t value) {
+                // Log.traceln("Analog read sensor dmxMapping %d value: %d", dmxChannel, value);
+                uint8_t normalizedValue = map(value, 0, 8191, 0, 255); // analogReadResolution = 13bit = 8192 values
                 dmxData[dmxChannel] = normalizedValue;
             });
         }
