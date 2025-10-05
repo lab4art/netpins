@@ -54,18 +54,21 @@ class Animation {
             frameRate(frameRate),
             task(frameRate, aScheduler) {
         task.setOnFrame([this]() {
+            // Log.traceln("Animation frame: %d, remaining frames: %d, progress: %s", frames, remainingFrames, String(getProgress(), 4));
             if (remainingFrames == frames) {
                 onStart();
             }
             if (remainingFrames > 0) {
                 // Log.traceln("Remaining frames: %d, progress: %s", remainingFrames, String(getProgress(), 4));
                 this->animate();
+                // Log.traceln("Animated.");
                 this->remainingFrames--;
             }
             if (remainingFrames == 0) {
                 onEnd();
                 if (this->repeat) {
                     restart();
+                    Log.traceln("Animation restarted.");
                 }
             }
         });
@@ -106,6 +109,11 @@ class Animation {
 
     void setDuration(unsigned int duration) {
         frames = duration * frameRate / 1000; // store total iterations, function is returning remaining iterations
+        // restart(getProgress());
+    }
+
+    unsigned int getDuration() {
+        return frames * 1000 / frameRate; // return duration in ms
     }
 
     bool isRunning() {
@@ -227,10 +235,12 @@ class TailAnimation: public Animation {
     RgbThing* line;
     RgbColor color1;
     RgbColor color2;
+    uint8_t dimm = 255;
     int tailLength;
+    int headLength = 0;
     Direction direction;
 
-    int previousHeadPosition = 0;
+    int previousHeadPosition;
     bool reachedEndCalled = false;
 
     // callback function called when head Reached End
@@ -243,77 +253,58 @@ class TailAnimation: public Animation {
             Direction direction = RIGHT,
             bool repeat = false):
         line(line),
-        tailLength(tailLength),
         direction(direction),
         Animation(aScheduler, repeat) {
+            if (direction == RIGHT) {
+                previousHeadPosition = 0;
+            } else {
+                previousHeadPosition = line->size() - 1;
+            }
     }
 
   private:
-    void moveRight() { 
-        // define a head based on the progress of the animation
-        int headPosition = getProgress() * (line->size() + tailLength);
-        if (!reachedEndCalled && headPosition >= line->size()) {
+    void moveRight() {
+        int headPosition = (int)(getProgress() * line->size());
+        if (!reachedEndCalled && getProgress() >= 1.0f) {
             if (onHeadReachedEnd) {
                 onHeadReachedEnd();
                 reachedEndCalled = true;
             }
         }
-        // Serial.println(String("[") + name + "] New head position: " + headPosition + ", progress: " + getProgress());
-        // Serial.println(String("[") + name + "] New head position: " + headPosition);
 
-        // draw tail as fade of color1 to color2
-        // at hight speeds the head can jump over multiple pixels, calculate the effective tail length, not to leave behind color1 pixels
-        int headJump = headPosition - previousHeadPosition;
-        u_int32_t effectivetail = tailLength + headJump;
-        // for (int i = 0; i <= effectivetail; i++) {
-        for (int i = 0; i < effectivetail; i++) {
-            if (headPosition - i < 0 || headPosition - i >= line->size()) {
-                continue;
-            }
-            RgbColor color;
-            if (i > tailLength) {
-                color = color2;
-            } else {
-                // blend factor normalized to 0-1
-                float blendFactor = (float)i / (float)effectivetail;
-                color = RgbColor::LinearBlend(color1, color2, blendFactor);
-            }
-            line->setColor(headPosition - i, color);
-            // Serial.println(String("Setting color ") + color.R + "-" + color.G + "-" + color.B + ", i: " + i + ", blendFactor: " + blendFactor + ", position: " + (headPosition - i));
+        for (int i = 0; i < line->size(); i++) {
+            line->setColor(i, color2, dimm);
         }
-        previousHeadPosition = headPosition;
+
+        for (int i = 0; i <= tailLength; i++) {
+            float blendFactor = (float)i / (float)tailLength;
+            RgbColor color = RgbColor::LinearBlend(color1, color2, blendFactor);
+            
+            int pixelPos = (headPosition - i + line->size()) % line->size(); // Handle circular wrap
+            line->setColor(pixelPos, color, dimm);
+        }
     }
 
-    void moveLeft() { 
-        // define a head based on the progress of the animation
-        int headPosition = (1 - getProgress()) * (line->size() + tailLength);
-        if (!reachedEndCalled && headPosition <= 0) {
+    void moveLeft() {
+        int headPosition = (1 - getProgress()) * line->size();
+        if (!reachedEndCalled && getProgress() >= 1.0f) {
             if (onHeadReachedEnd) {
                 onHeadReachedEnd();
                 reachedEndCalled = true;
             }
         }
-        // Serial.println(String("[") + name + "] New head position: " + headPosition + ", progress: " + getProgress());
 
-        // draw tail as fade of color1 to color2
-        // at hight speeds the head can jump over multiple pixels, calculate the effective tail length, not to leave behind color1 pixels
-        int headJump = headPosition - previousHeadPosition;
-        u_int32_t effectivetail = tailLength + headJump;
-        for (int i = 0; i < effectivetail; i++) {
-            if (headPosition + i < 0 || headPosition + i >= line->size()) {
-                continue;
-            }
-            RgbColor color;
-            if (i > tailLength) {
-                color = color2;
-            } else {
-                // blend factor normalized to 0-1
-                float blendFactor = (float)i / (float)effectivetail;
-                color = RgbColor::LinearBlend(color1, color2, blendFactor);
-            }
-            line->setColor(headPosition + i, color);
+        for (int i = 0; i < line->size(); i++) {
+            line->setColor(i, color2, dimm);
         }
-        previousHeadPosition = headPosition;
+
+        for (int i = 0; i <= tailLength; i++) {
+            float blendFactor = (float)i / (float)tailLength;
+            RgbColor color = RgbColor::LinearBlend(color1, color2, blendFactor);
+            
+            int pixelPos = (headPosition + i + line->size()) % line->size(); // Handle circular wrap
+            line->setColor(pixelPos, color, dimm);
+        }
     }
 
     void fadeRight() { 
@@ -361,7 +352,7 @@ class TailAnimation: public Animation {
                 color = RgbColor::LinearBlend(color1, color2, blendFactor);
                 // Serial.println(String("[") + name + "] Setting color " + color.R + "-" + color.G + "-" + color.B + ", i: " + i + ", blendFactor: " + blendFactor + ", position: " + (headPosition - i));
             }
-            line->setColor(headPosition - i, color);
+            line->setColor(headPosition - i, color, dimm);
         }
         previousHeadPosition = headPosition;
     }
@@ -395,7 +386,17 @@ class TailAnimation: public Animation {
     }
 
     void setTailLength(int tailLength) {
+        // TODO validate tailLength
         this->tailLength = tailLength;
+    }
+
+    void setHeadLength(int headLength) {
+        // TODO validate headLength
+        this->headLength = headLength;
+    }
+
+    void setDimm(uint8_t dimm) {
+        this->dimm = dimm;
     }
 };
 

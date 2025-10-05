@@ -234,6 +234,18 @@ void initNeoStipTask() {
         0);                          /* pin task to core core_id */
 }
 
+
+DigitalReadSensor* getDigitalReadSensor(int pin) {
+    if (digitalReadSensors.find(pin) != digitalReadSensors.end()) { // if map is accesssed with missing key, it causes a crash at some later point. No idea why?.
+        auto dReadSensor = digitalReadSensors[pin];
+        Log.noticeln("Found digital sensor at pin %d.", pin);
+        return dReadSensor;
+    } else {
+        Log.traceln("Digital sensor at pin %d not found.", pin);
+        return nullptr;
+    }
+}
+
 TailAnimation* tailAnimation1; // TODO make this configurable or pluggable
 TailAnimation* tailAnimation2;
 
@@ -328,38 +340,6 @@ std::vector<Switchabe*> createThings(Settings& settings) {
         dmxListener->removeThing(led);
         dmxListener->addThing(pwmFade);
     }
-  // ANIMATIONS
-  // auto rgbThing = rgbThings[0]; //TODO make this configurable
-  // tailAnimation1 = new TailAnimation(
-  //   &scheduler, 
-  //   rgbThing, 
-  //   TailAnimation::Direction::RIGHT,
-  //   false,
-  //   "Ani-1");
-  // tailAnimation1->setColor1(RgbColor(100, 0, 0));
-  // tailAnimation1->setColor2(RgbColor(0, 0, 70));
-  // tailAnimation1->setTailLength(10);
-  // tailAnimation1->setDuration(4000);
-
-  // tailAnimation2 = new TailAnimation(
-  //   &scheduler, 
-  //   rgbThing, 
-  //   TailAnimation::Direction::RIGHT,
-  //   false, 
-  //   "Ani-2");
-  // tailAnimation2->setColor1(RgbColor(0, 0, 70));
-  // tailAnimation2->setColor2(RgbColor(100, 0, 0));
-  // tailAnimation2->setTailLength(10);
-  // tailAnimation2->setDuration(4000);
-  
-  // Log.noticeln("Led strips created.");
-  // tailAnimation1->setOnHeadReachedEnd([](){
-  //     tailAnimation2->restart();
-  // });
-  // tailAnimation2->setOnHeadReachedEnd([](){
-  //   tailAnimation1->restart();
-  // });
-  // tailAnimation1->restart();
 
   //wave1 = new Wave(&scheduler, rgbThings, 4000);
   // loop over settings waves and create animations
@@ -384,6 +364,75 @@ std::vector<Switchabe*> createThings(Settings& settings) {
         Serial.println(String("Wave created with ") + waveLines.size() + " lines.");
         dmxListener->addThing(wave);
     }
+
+    // ANIMATIONS
+    // Log.noticeln("Creating tail animations ...");
+    // // TODO create tail animations from settings
+    // if (settings.tailAnimations.size() > 0 && allRgbThings.size() > 0) {
+    //     TailAnimationCfg& taCfg1 = settings.tailAnimations[0];
+    //     auto rgbThing1 = allRgbThings[0];
+    //     // dmxListener->removeThing(rgbThing1);
+    //     dmxListener->removeThing(rgbThingsGroupsIndex[0]); // TODO fix this
+    //     tailAnimation1 = new TailAnimation(
+    //         &scheduler, 
+    //         rgbThing1, 
+    //         taCfg1.direction,
+    //         true);
+    //     tailAnimation1->setColor1(taCfg1.color1);
+    //     tailAnimation1->setColor2(taCfg1.color2);
+    //     tailAnimation1->setDimm(taCfg1.dimm);
+    //     tailAnimation1->setTailLength(taCfg1.tailLength);
+    //     tailAnimation1->setHeadLength(taCfg1.headLength);
+    //     tailAnimation1->setDuration(taCfg1.duration);
+    //     tailAnimation1Duration = taCfg1.duration;
+    //     Log.noticeln("Tail animation 1 created with color1: %s, color2: %s, dimm: %d, tail length: %d, head length: %d, duration: %d ms.",
+    //         toHexColor(taCfg1.color1).c_str(),
+    //         toHexColor(taCfg1.color2).c_str(),
+    //         taCfg1.dimm,
+    //         taCfg1.tailLength,
+    //         taCfg1.headLength,
+    //         taCfg1.duration);
+    //     // tailAnimation1->setRepeat(false); // TODO powerOff
+
+    //     if (allRgbThings.size() > 1) {
+    //         rgbSlice2 = allRgbThings[1];
+    //         dmxListener->removeThing(rgbThingsGroupsIndex[1]); // TODO fix this
+    //         animationColors = taCfg1.colors;
+    //         if (animationColors.size() < 1) {
+    //             animationColors.push_back(taCfg1.color1);
+    //             animationColors.push_back(taCfg1.color2);
+    //         }
+    //     }
+    // } else {
+    //     Log.warningln("No tail animations or RGB things available, skipping tail animation setup.");
+    // }
+    // if (settings.tailAnimations.size() > 1 && allRgbThings.size() > 1) {
+    //     TailAnimationCfg& taCfg2 = settings.tailAnimations[1];
+    //     auto rgbThing2 = allRgbThings[1];
+    //     dmxListener->removeThing(rgbThingsGroupsIndex[1]); // TODO fix this
+    //     tailAnimation2 = new TailAnimation(
+    //         &scheduler,
+    //         rgbThing2,
+    //         taCfg2.direction,
+    //         true);
+    //     tailAnimation2->setColor1(taCfg2.color1);
+    //     tailAnimation2->setColor2(taCfg2.color2);
+    //     tailAnimation2->setDimm(taCfg2.dimm);
+    //     tailAnimation2->setTailLength(taCfg2.tailLength);
+    //     tailAnimation2->setHeadLength(taCfg2.headLength);
+    //     tailAnimation2->setDuration(taCfg2.duration);
+    //     tailAnimation2Duration = taCfg2.duration;
+    //     Log.noticeln("Tail animation 2 created with color1: %s, color2: %s, dimm: %d, tail length: %d, head length: %d, duration: %d ms.",
+    //         toHexColor(taCfg2.color1).c_str(),
+    //         toHexColor(taCfg2.color2).c_str(),
+    //         taCfg2.dimm,
+    //         taCfg2.tailLength,
+    //         taCfg2.headLength,
+    //         taCfg2.duration);
+    // } else {
+    //     Log.noticeln("No tail animation 2 or RGB thing 2 available, skipping tail animation setup.");
+    // }
+
     return switchables;
 };
 
@@ -429,17 +478,6 @@ void beforeWiFiReboot() {
     preferences.putULong("reboot-wifi", millis() + uptimeOffset);
     preferences.end();
 };
-
-DigitalReadSensor* getDigitalReadSensor(int pin) {
-    if (digitalReadSensors.find(pin) != digitalReadSensors.end()) { // if map is accesssed with missing key, it causes a crash at some later point. No idea why?.
-        auto dReadSensor = digitalReadSensors[pin];
-        Log.noticeln("Found digital sensor at pin %d.", pin);
-        return dReadSensor;
-    } else {
-        Log.traceln("Digital sensor at pin %d not found.", pin);
-        return nullptr;
-    }
-}
 
 AnalogReadSensor* getAnalogReadSensor(int pin) {
     if (analogReadSensors.find(pin) != analogReadSensors.end()) { // if map is accesssed with missing key, it causes a crash at some later point. No idea why?.
@@ -546,7 +584,17 @@ void setup() {
             String topic = mqttSensorTopicPreffix + dreadCfg.pin;
             mqtt->publish(topic.c_str(), value ? "1" : "0");
         });
-        Log.traceln("Digital read sensor %d created.", dreadCfg.pin);
+
+        digitalReadSensor->addOnChangeListener([](bool value) {
+            if (value) {
+                Log.noticeln("Movement detected.");
+                // isMovementDetected = true; TODO
+            } else {
+                Log.noticeln("Movement stopped.");
+                // isMovementDetected = false;
+            }
+        });
+        Log.noticeln("Digital read sensor %d created.", dreadCfg.pin);
         digitalReadSensors[dreadCfg.pin] = digitalReadSensor;
     }
 

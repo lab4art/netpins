@@ -5,6 +5,27 @@
 #include <ArduinoJson.h>
 #include <Preferences.h>
 
+static RgbColor parseHexColor(const std::string& hex) {
+    // if string starts with # remove it
+    std::string hexColor = hex;
+    if (hexColor[0] == '#') {
+        hexColor = hexColor.substr(1);
+    }
+    if (hexColor.length() != 6) {
+        throw std::invalid_argument("Hex color must be 6 characters long");
+    }
+    uint8_t r = std::stoi(hexColor.substr(0, 2), nullptr, 16);
+    uint8_t g = std::stoi(hexColor.substr(2, 2), nullptr, 16);
+    uint8_t b = std::stoi(hexColor.substr(4, 2), nullptr, 16);
+    return RgbColor(r, g, b);
+};
+
+static std::string toHexColor(const RgbColor& color) {
+    char buffer[8];
+    snprintf(buffer, sizeof(buffer), "#%02X%02X%02X", color.R, color.G, color.B);
+    return std::string(buffer);
+};
+
 enum DimmerMode {
     none,
     single,
@@ -108,6 +129,90 @@ struct WaveCfg {
         JsonArray sliceIndexes = jsonWave["slice_indexes"].to<JsonArray>();
         for (auto sliceIndex : w.sliceIndexes) {
             sliceIndexes.add(sliceIndex);
+        }
+    }
+};
+
+struct TailAnimationCfg {
+    RgbColor color1;
+    RgbColor color2;
+    std::uint8_t dimm = 255;
+    std::uint16_t duration = 10000; // ms, duration of the animation
+    std::uint16_t headLength;
+    std::uint16_t tailLength;
+    TailAnimation::Direction direction;
+    std::uint16_t speedUpStep = 100; // ms, how much to speed up the animation when moving
+    std::uint16_t speedDownStep = 500; // ms, how much to slow down the animation when not moving
+    std::uint16_t minDuration = 1000; // ms, minimum duration of the animation
+    std::vector<RgbColor> colors;
+
+    bool operator==(const TailAnimationCfg& other) const {
+        return color1 == other.color1 &&
+            color2 == other.color2 &&
+            dimm == other.dimm &&
+            duration == other.duration &&
+            headLength == other.headLength &&
+            tailLength == other.tailLength &&
+            direction == other.direction &&
+            speedUpStep == other.speedUpStep &&
+            speedDownStep == other.speedDownStep &&
+            minDuration == other.minDuration &&
+            colors == other.colors;
+    }
+
+    bool operator!=(const TailAnimationCfg& other) const {
+        return !(*this == other);
+    }
+
+    static TailAnimationCfg deserialize(JsonObject& json) {
+        TailAnimationCfg t;
+        t.color1 = parseHexColor(json["color1"].as<std::string>());
+        t.color2 = parseHexColor(json["color2"].as<std::string>());
+        t.dimm = json["dimm"].as<std::uint8_t>();
+        t.duration = json["duration"].as<std::uint16_t>();
+        t.headLength = json["head_length"].as<std::uint16_t>();
+        t.tailLength = json["tail_length"].as<std::uint16_t>();
+        if (json.containsKey("direction")) {
+            std::string directionStr = json["direction"].as<std::string>();
+            if (directionStr == "left") {
+                t.direction = TailAnimation::LEFT;
+            } else {
+                t.direction = TailAnimation::RIGHT;
+            }
+        }
+        if (json.containsKey("speed_up_step")) {
+            t.speedUpStep = json["speed_up_step"].as<std::uint16_t>();
+        }
+        if (json.containsKey("speed_down_step")) {
+            t.speedDownStep = json["speed_down_step"].as<std::uint16_t>();
+        }
+        if (json.containsKey("min_duration")) {
+            t.minDuration = json["min_duration"].as<std::uint16_t>();
+        }
+        if (json.containsKey("colors")) {
+            JsonArray colorsArray = json["colors"].as<JsonArray>();
+            for (JsonVariant v : colorsArray) {
+                auto colorStr = v.as<std::string>();
+                t.colors.push_back(parseHexColor(colorStr));
+            }
+        }
+        return t;
+    }
+
+    static void serialize(JsonObject& jsonTail, const TailAnimationCfg& t) {
+        jsonTail["color1"] = toHexColor(t.color1);
+        jsonTail["color2"] = toHexColor(t.color2);
+        jsonTail["dimm"] = t.dimm;
+        jsonTail["duration"] = t.duration;
+        jsonTail["head_length"] = t.headLength;
+        jsonTail["tail_length"] = t.tailLength;
+        jsonTail["direction"] = (t.direction == TailAnimation::RIGHT) ? "right" : "left";
+        jsonTail["speed_up_step"] = t.speedUpStep;
+        jsonTail["speed_down_step"] = t.speedDownStep;
+        jsonTail["min_duration"] = t.minDuration;
+        JsonArray colors = jsonTail["colors"].to<JsonArray>();
+        for (const auto& color : t.colors) {
+            colors.add(toHexColor(color));
         }
     }
 };
@@ -382,9 +487,9 @@ struct Settings {
     // stripes that are part of the animation must be excluded from the dmx listener
     std::vector<WaveCfg> waves;
     std::vector<PwmFadeCfg> pwmFades;
-    
-    std::vector<ThingControlCfg> thingControls;
+    std::vector<TailAnimationCfg> tailAnimations;
 
+    std::vector<ThingControlCfg> thingControls;
 
     bool lightsTest;
     std::uint16_t maxIdle; // max idle time in min, 0 means no sleep
@@ -419,6 +524,7 @@ struct Settings {
     
             waves == other.waves &&
             pwmFades == other.pwmFades &&
+            tailAnimations == other.tailAnimations &&
             
             thingControls == other.thingControls;
     }
@@ -516,6 +622,11 @@ struct Settings {
         for (JsonVariant v : pwmFadesArray) {
             JsonObject jsonPwmFade = v.as<JsonObject>();
             s.pwmFades.push_back(PwmFadeCfg::deserialize(jsonPwmFade));
+        }
+        JsonArray tailAnimationsArray = json["tail_animations"].as<JsonArray>();
+        for (JsonVariant v : tailAnimationsArray) {
+            JsonObject jsonTail = v.as<JsonObject>();
+            s.tailAnimations.push_back(TailAnimationCfg::deserialize(jsonTail));
         }
 
         // controls
@@ -625,6 +736,14 @@ struct Settings {
             for (auto pwmFade : this->pwmFades) {
                 JsonObject jsonPwmFade = pwmFades.add<JsonObject>();
                 PwmFadeCfg::serialize(jsonPwmFade, pwmFade);
+            }
+        }
+
+        if (tailAnimations.size() > 0) {
+            JsonArray tailAnimations = json["tail_animations"].to<JsonArray>();
+            for (auto tailAnimation : this->tailAnimations) {
+                JsonObject jsonTail = tailAnimations.add<JsonObject>();
+                TailAnimationCfg::serialize(jsonTail, tailAnimation);
             }
         }
 
