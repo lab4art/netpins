@@ -7,6 +7,7 @@
 #include <ArduinoLog.h>
 #include <NeoPixelBus.h>
 #include <Things.h>
+#include <settings.h>
 
 class AnimationTask: private Task {
     private:
@@ -134,7 +135,7 @@ class Animation {
 
 class PWMFadeAnimation: public Animation {
     private:
-        LedThing* led;
+        PwmThing* led;
         uint8_t value1; // value to fade from (off)
         uint8_t value2; // value to fade to (on)
         boolean fadeInMode = false; // if false, fadeOut
@@ -154,7 +155,7 @@ class PWMFadeAnimation: public Animation {
     public:
         PWMFadeAnimation(
             Scheduler* aScheduler, 
-            LedThing* led):
+            PwmThing* led):
             Animation(aScheduler, false),
             led(led) {
         }
@@ -225,11 +226,6 @@ class PWMFadeAnimation: public Animation {
  * Animation that moves a single pixel along a line, a tail is left behind.
  */
 class TailAnimation: public Animation {
-  public:
-    enum Direction {
-        RIGHT,
-        LEFT
-    };
 
   private:
     RgbThing* line;

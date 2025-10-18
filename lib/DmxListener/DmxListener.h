@@ -6,6 +6,58 @@
 #include <Things.h>
 #include <Preferences.h>
 #include <ArduinoLog.h>
+#include <settings.h>
+
+/**
+ * Mapping between things and dmx universe / channel.
+ */
+class DmxMapping {
+    public:
+        Thing* thing;
+        DmxCfg dmxCfg;
+
+        DmxMapping(Thing* thing, DmxCfg dmxCfg):
+            thing(thing),
+            dmxCfg(dmxCfg) {
+        }
+};
+
+class UniverseStorage {
+    private:
+        Preferences prefs;
+
+    public:
+        void begin(bool readOnly = false) {
+            prefs.begin("dmx-state", readOnly);
+        }
+
+        void end() {
+            prefs.end();
+        }
+
+        void storeUniverse(uint16_t universe, const uint8_t data[512]) {
+            String key = "u" + String(universe);
+            prefs.putBytes(key.c_str(), data, 512);
+        }
+
+        bool loadUniverse(uint16_t universe, uint8_t data[512]) {
+            String key = "u" + String(universe);
+            size_t len = prefs.getBytesLength(key.c_str());
+            
+            if (len == 512) {
+                prefs.getBytes(key.c_str(), data, 512);
+                return true;
+            }
+            
+            // Initialize with zeros if not found
+            memset(data, 0, 512);
+            return false;
+        }
+
+        void clear() {
+            prefs.clear();
+        }
+};
 
 /**
  * Each controller has one DmxListener instance to handle DMX data.
@@ -15,99 +67,123 @@
  */
 class DmxListener {
     private:
-        int firstDmxChannel;
-        std::vector<Thing*> thingList;
+        int dmxOffset; // dmx offset where this listener starts listening, 1 based (1-512)
+        std::vector<DmxMapping*> dmxMappings;
         Preferences preferences;
         uint8_t lastStoreFlag = 0;
+        std::set<uint16_t> dmxUniverses; // set of universes we listen to
 
     public:
-        DmxListener(int firstDmxChannel):
-            firstDmxChannel(firstDmxChannel) {
+        DmxListener(int dmxOffset):
+            dmxOffset(dmxOffset) {
         }
 
         ~DmxListener() {
-            clearThings();
+            clearMappings();
         }
 
-        void addThing(Thing* thing) {
-            thingList.push_back(thing);
+        void addMapping(Thing* thing, DmxCfg dmxCfg) {
+            Log.noticeln("Adding mapping for thing %s on universe %d channel %d", thing->getName().c_str(), dmxCfg.universe, dmxCfg.channel);
+            dmxMappings.push_back(new DmxMapping(thing, dmxCfg));
+            dmxUniverses.insert(dmxCfg.universe);
         }
 
-        void removeThing(Thing* thing) {
-            auto it = std::remove(thingList.begin(), thingList.end(), thing);
-            if (it != thingList.end()) {
-                thingList.erase(it);
+        void removeMappingForThing(String thingName) {
+            auto it = std::remove_if(dmxMappings.begin(), dmxMappings.end(),
+                [&thingName](DmxMapping* mapping) {
+                    return mapping->thing->getName().equals(thingName);
+                });
+            if (it != dmxMappings.end()) {
+                dmxMappings.erase(it, dmxMappings.end());
             }
         }
 
-        void clearThings() {
-            for (auto& thing : thingList) {
-                delete thing;
+        void clearMappings() {
+            for (auto& mapping : dmxMappings) {
+                delete mapping;
             }
-            thingList.clear();
+            dmxMappings.clear();
         }
 
-        void processDmxData(uint16_t length, uint8_t data[512]) {
-            int currentDmxIndex = firstDmxChannel - 1; // 1st channel is 1 (means 0 in the art-net data array)
-            for (auto& thing : thingList) {
-                // get the data for the thing based on the number of channels it needs
-                if (currentDmxIndex + thing->numChannels() > length) {
-                    Log.warningln("Missing DMX data for thing. 1st dmx ch %d, num ch: %d. Data length: %d.", currentDmxIndex, thing->numChannels(), length);
-                    break;
-                } else {
-                    // Log.traceln("Setting data for thing with %d channels. Data: %d %d %d %d %d", thing->numChannels(), data[currentDmxIndex], data[currentDmxIndex + 1], data[currentDmxIndex + 2], data[currentDmxIndex + 3], data[currentDmxIndex + 4]);
-                    // data is a pointer to the first element of the array
-                    thing->setData(data + currentDmxIndex);                                
-                    currentDmxIndex += thing->numChannels();
+        void processDmxData(u_int16_t universe, std::array<uint8_t, 512>& data) {
+            for (auto& mapping : dmxMappings) {
+                // Log.traceln("Checking mapping for thing %s on universe %d channel %d", mapping->thing->getName().c_str(), mapping->dmxCfg.universe, mapping->dmxCfg.channel);
+                if (mapping->dmxCfg.universe == universe) {
+                    int channel = mapping->dmxCfg.get0BasedChannel();
+                    // Log.traceln("Setting data for thing %s on universe %d channel %d", mapping->thing->getName().c_str(), universe, channel + 1);
+                    mapping->thing->setData(&data[channel]);
                 }
             }
         }
 
-        boolean storeDmxData(uint8_t data[512]) {
-            // check if the data is the same as the last stored data
-            uint8_t storedData[512] = {0};
-            preferences.begin("dmx-state", true);
-            preferences.getBytes("data", storedData, 512);
-            preferences.end();
-            bool sameData = true;
-            for (int i = 0; i < 512; i++) {
-                if (data[i] != storedData[i]) {
-                    sameData = false;
-                    break;
+        /** 
+         * Store map of dmx universes with channel data if data has changed.
+         */
+        boolean storeDmxData(const std::map<uint16_t /*universe*/, std::array<uint8_t, 512> /*data*/>& dmxData) {
+            UniverseStorage storage;
+            storage.begin(false);
+            bool changed = false;
+            for (const auto& pair : dmxData) {
+                uint8_t storedData[512];
+                storage.loadUniverse(pair.first, storedData);
+                // Compare with new data
+                if (memcmp(storedData, pair.second.data(), 512) != 0) {
+                    changed = true;
                 }
             }
-            if (sameData) {
-                Log.noticeln("DMX data is the same as the last stored data.");
-                return false;
+            if (changed) {
+                Log.traceln("Storing changed DMX data");
+                storage.clear(); // clear old data
+                for (const auto& pair : dmxData) {
+                    storage.storeUniverse(pair.first, pair.second.data());
+                }
             }
-
-            preferences.begin("dmx-state", false);
-            preferences.putBytes("data", data, 512);
-            preferences.end();
-            Log.infoln("DMX data stored.");
-            return true;
+            storage.end();
+            return changed;
         }
 
-        void restoreDmxData(uint8_t dmxData[512]) {
-            preferences.begin("dmx-state", true);
-            preferences.getBytes("data", dmxData, 512);
-            preferences.end();
+        void restoreDmxData(const std::map<uint16_t /*universe*/, std::array<uint8_t, 512> /*data*/>& dmxData) {
+            UniverseStorage storage;
+            storage.begin(true);
+            for (const auto& pair : dmxData) {
+                uint16_t universe = pair.first;
+                uint8_t data[512];
+                storage.loadUniverse(universe, data);
+                memcpy((void*)pair.second.data(), data, 512);
+            }
+            storage.end();
+        }
+
+        /**
+         * Clear stored DMX data.
+         */
+        void clearDmxData() {
+            UniverseStorage storage;
+            storage.begin(false);
+            storage.clear();
+            storage.end();
         }
 
         /**
          * Get the index of the first channel of the thing with the given name.
          * The index is 0 based, so the first channel is 0.
          */
-        int getThingChannelIndex(String name) {
-            int channel = 0; // channel variable contains the last channel of the last thing compared in the loop
-            for (auto& thing : thingList) {
-                if (thing->getName().equals(name)) {
-                    return channel;
-                }
-                channel += thing->numChannels();
-            }
-            return -1; // not found
+        // int getThingChannelIndex(String name) {
+        //     int channel = 0; // channel variable contains the last channel of the last thing compared in the loop
+        //     for (auto& thing : dmxMappings) {
+        //         if (thing->getName().equals(name)) {
+        //             return channel;
+        //         }
+        //         channel += thing->numChannels();
+        //     }
+        //     return -1; // not found
+        // }
+
+        bool isListeningToUniverse(uint16_t universe) {
+            return dmxUniverses.find(universe) != dmxUniverses.end();
         }
 
+        std::set<uint16_t> getListeningUniverses() {
+            return dmxUniverses;
+        }
 };
-

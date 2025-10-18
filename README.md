@@ -120,8 +120,39 @@ servos:
 
 ### Experimental
 ```yaml
+pwms:
+  - pin: 13
+    name: pwm-13
+    dmx: 1@1 # channel@universe
+  - pin: 14
+    name: pwm-14
+    dmx: 2@1
+
+rgb_strips:
+  - pin: 13
+    name: rgb-strip-1
+    dmx: 3@1
+    size: 60
+    dimmer: none # add dimmer channel. Options: none, single, per-slice
+    slices:
+      - 0
+      - 15
+sensor_publish: # enable/disable sensor publishing over: mqtt, artnet, local
+  - mqtt
+  - artnet
+  - local
+
+artnet_mapping:
+  - sensor: dr-4
+    dmx: 0@100 # dmx channel@universe
+
+local_mapping:
+  - sensor: dr-4
+    dmx: 4@1 # controll blue (assuming rgb strip is mapped to 2@1) collor of the rgb strip
+
 digital_reads:
   - pin: 4
+    name: dr-4
     read_ms: 100
 hum_temps:
   - pin: 4
@@ -142,7 +173,7 @@ waves: # Works only with rgb strip
 
 pwm_fades:
   - name: fade-13
-    led: 13 # led identified by pin number
+    pwm: pwm-13 # identified by name
 
 # animation_control:
 thing_controls:

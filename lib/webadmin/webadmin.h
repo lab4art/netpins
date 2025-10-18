@@ -30,7 +30,6 @@ class WebAdmin {
         std::function<void()> onReceivedCallback = [](){};
         
         SettingsManager<Settings>* settingsManager;
-        SettingsManager<DmxSettings>* dmxSettingsManager;
         std::function<CommandResult(JsonVariant&)> onSystemCommand = [](JsonVariant&){ return CommandResult{OK, "Success."}; };
         std::function<std::map<String, String>()> propertiesSupplier = [](){ return std::map<String, String>(); };
 
@@ -47,10 +46,8 @@ class WebAdmin {
     public:
         WebAdmin(
                 SettingsManager<Settings>* settingsManager,
-                SettingsManager<DmxSettings>* dmxSettingsManager,
                 std::function<CommandResult(JsonVariant&)> onSystemCommand):
                 settingsManager(settingsManager),
-                dmxSettingsManager(dmxSettingsManager),
                 onSystemCommand(onSystemCommand) {
 
             listFiles();
@@ -101,11 +98,6 @@ class WebAdmin {
             webServer->on("/conf/sys", HTTP_GET, [this](AsyncWebServerRequest *request){
                 this->onReceivedCallback();
                 request->send(200, "application/json", this->settingsManager->getSettings().asJson().c_str());
-            });
-
-            webServer->on("/conf/dmx", HTTP_GET, [this](AsyncWebServerRequest *request){
-                this->onReceivedCallback();
-                request->send(200, "application/json", this->dmxSettingsManager->getSettings().asJson().c_str());
             });
 
             AsyncCallbackJsonWebHandler* systemHandler = new AsyncCallbackJsonWebHandler("/system", [this](AsyncWebServerRequest *request, JsonVariant &json) {

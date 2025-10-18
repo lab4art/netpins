@@ -1,6 +1,6 @@
 #pragma once
 
-#define FIRMWARE_VERSION "netpins-1.2.0-snapshot"
+#define FIRMWARE_VERSION "netpins-2.0.0-snapshot"
 
 #define WIFI_SSID ""
 #define WIFI_PASS ""
@@ -17,7 +17,7 @@
 
 // Uncomment line below to fully disable logging, and reduce project size
 //#define DISABLE_LOGGING
-// #define LOG_LEVEL LOG_LEVEL_TRACE
-#define LOG_LEVEL LOG_LEVEL_NOTICE
+#define LOG_LEVEL LOG_LEVEL_TRACE
+// #define LOG_LEVEL LOG_LEVEL_NOTICE
 
 #define PRINT_EXECUTION_STAT false

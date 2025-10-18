@@ -2,6 +2,7 @@
 
 #include <Things.h>
 #include <animations.h>
+#include <settings.h>
 
 class TailAnimationThing: public Thing {
     private:
@@ -14,7 +15,7 @@ class TailAnimationThing: public Thing {
                 RgbThing* line, 
                 int tailLength = 5,
                 int maxDuration = 30000, 
-                TailAnimation::Direction direction = TailAnimation::Direction::RIGHT,
+                Direction direction = Direction::RIGHT,
                 bool repeat = false) {
             tailAnimation = new TailAnimation(
                 aScheduler, 
@@ -61,7 +62,7 @@ class PWMFadeAnimationThing: public Thing {
     public:
         PWMFadeAnimationThing(
                 Scheduler* aScheduler, 
-                LedThing* led, 
+                PwmThing* led, 
                 String name) {
             fadeAnimation = new PWMFadeAnimation(
                 aScheduler, 

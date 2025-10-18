@@ -6,7 +6,7 @@
 #include <ESP32Servo.h>
 
 class Thing {
-    private:
+    protected:
         String name;
     public:
         virtual int numChannels() = 0;
@@ -82,7 +82,7 @@ class SliceThingBase : public SwitchableThing {
         }
 };
 
-class LedThing : public SwitchableThing {
+class PwmThing : public SwitchableThing {
     private:
         int pin;
         int currentValue = 0;
@@ -107,9 +107,10 @@ class LedThing : public SwitchableThing {
     public:
         static uint16_t gammaTable[256];
         
-        LedThing(int pin) {
-            this->pin = pin;
+        PwmThing(int pin, String name):
+            pin(pin) {
             pinMode(pin, OUTPUT);
+            this->name = name;
         }
 
         int numChannels() {
@@ -175,9 +176,10 @@ class RgbThing : public SliceThingBase<RgbColor> {
     }
 
   public:
-        RgbThing(NeoPixelBus<NeoGrbFeature, NeoEsp32RmtNWs2812xMethod>* strip, int pxFrom, int pxTo, bool dimmable):
+        RgbThing(NeoPixelBus<NeoGrbFeature, NeoEsp32RmtNWs2812xMethod>* strip, int pxFrom, int pxTo, bool dimmable, String name):
                 strip(strip),
                 SliceThingBase<RgbColor>(pxFrom, pxTo, dimmable) {
+            this->name = name;
             Log.traceln("RgbThing created. FromPx: %d, ToPx: %d. Dimmable: %d", pxFrom, pxTo, dimmable);
         }
 
@@ -213,9 +215,10 @@ class RgbwThing : public SliceThingBase<RgbwColor> {
         }
 
     public:
-        RgbwThing(NeoPixelBus<NeoGrbwFeature, NeoEsp32RmtNSk6812Method>* strip, int pxFrom, int pxTo, bool dimmable):
+        RgbwThing(NeoPixelBus<NeoGrbwFeature, NeoEsp32RmtNSk6812Method>* strip, int pxFrom, int pxTo, bool dimmable, String name):
                 strip(strip),
                 SliceThingBase<RgbwColor>(pxFrom, pxTo, dimmable) {
+            this->name = name;
             Log.traceln("RgbwThing created. FromPx: %d, ToPx: %d. Dimmable: %d", pxFrom, pxTo, dimmable);
         }
 
@@ -379,4 +382,4 @@ class RgbwThingGroup : public ThingGroup {
         }
 };
 
-LedThing* findLedThing(std::vector<LedThing*> leds, int pin);
+PwmThing* findPwmThing(std::vector<PwmThing*> leds, String name);

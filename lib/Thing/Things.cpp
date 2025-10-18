@@ -1,11 +1,11 @@
 #include "Things.h"
 
-uint16_t LedThing::gammaTable[256];
+uint16_t PwmThing::gammaTable[256];
 
-LedThing* findLedThing(std::vector<LedThing*> leds, int pin) {
-    for (auto led : leds) {
-        if (led->getPin() == pin) {
-            return led;
+PwmThing* findPwmThing(std::vector<PwmThing*> pwms, String name) {
+    for (auto pwm : pwms) {
+        if (pwm->getName().equals(name)) {
+            return pwm;
         }
     }
     return nullptr;

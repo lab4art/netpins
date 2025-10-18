@@ -52,18 +52,103 @@ static std::string dimmerModeToString(DimmerMode dimmer) {
     }
 };
 
+/**
+ * dmx: 0@1 # channel@universe
+ */
+struct DmxCfg {
+    uint16_t universe;
+    uint16_t channel; // 1 based
+
+    bool operator==(const DmxCfg& other) const {
+        return universe == other.universe &&
+            channel == other.channel;
+    }
+
+    bool operator!=(const DmxCfg& other) const {
+        return !(*this == other);
+    }
+
+    static DmxCfg deserialize(const std::string& dmx) {
+        DmxCfg d;
+        auto atPos = dmx.find('@');
+        if (atPos != std::string::npos) {
+            d.channel = std::stoi(dmx.substr(0, atPos));
+            d.universe = std::stoi(dmx.substr(atPos + 1));
+        } else {
+            d.channel = 0;
+            d.universe = 0;
+        }
+        return d;
+    }
+
+    static std::string serialize(const DmxCfg& d) {
+        return std::to_string(d.channel) + "@" + std::to_string(d.universe);
+    }
+
+    uint8_t get0BasedChannel() {
+        // cast uint_16_t to uint_8_t, if channel is > 255 throw error
+        if (channel > 255) {
+            throw std::invalid_argument("DMX channel must be between 1 and 255");
+        }
+        return static_cast<uint8_t>(channel > 0 ? channel - 1 : 0);
+    }
+};
+
+
+/**
+ * - pin: 13
+ * name: pwm-13
+ * dmx: 0@1 # channel@universe
+ */
+
+struct PwmCfg {
+    std::uint8_t pin;
+    std::string name;
+    DmxCfg dmxCfg = {0, 0}; // dmx universe and 1 based channel, 0 means not set
+
+    bool operator==(const PwmCfg& other) const {
+        return pin == other.pin &&
+            name == other.name &&
+            dmxCfg == other.dmxCfg;
+    }
+
+    bool operator!=(const PwmCfg& other) const {
+        return !(*this == other);
+    }
+
+    static PwmCfg deserialize(JsonObject& json) {
+        PwmCfg p;
+        p.pin = json["pin"].as<std::uint8_t>();
+        p.name = json["name"].as<std::string>();
+        if (json.containsKey("dmx")) {
+            p.dmxCfg = DmxCfg::deserialize(json["dmx"].as<std::string>());
+        }
+        return p;
+    }
+
+    static void serialize(JsonObject& jsonPwm, const PwmCfg& p) {
+        jsonPwm["pin"] = p.pin;
+        jsonPwm["name"] = p.name;
+        jsonPwm["dmx"] = DmxCfg::serialize(p.dmxCfg);
+    }
+};
+
 struct StripeCfg {
     std::uint8_t pin;
+    std::string name;
     std::uint16_t size;
     DimmerMode dimmer;
     // first pixel of each slice
     std::vector<std::uint16_t> slices;
+    DmxCfg dmxCfg = {0, 0};
 
     bool operator==(const StripeCfg& other) const {
         return pin == other.pin &&
+            name == other.name &&
             size == other.size &&
             dimmer == other.dimmer &&
-            slices == other.slices;
+            slices == other.slices &&
+            dmxCfg == other.dmxCfg;
     }
 
     bool operator!=(const StripeCfg& other) const {
@@ -73,6 +158,7 @@ struct StripeCfg {
     static StripeCfg deserialize(JsonObject& json) {
         StripeCfg s;
         s.pin = json["pin"].as<std::uint8_t>();
+        s.name = json["name"].as<std::string>();
         s.size = json["size"].as<std::uint16_t>();
         if (json.containsKey("dimmer")) { // backward compatibility
             s.dimmer = dimmerModeFromString(json["dimmer"].as<std::string>());
@@ -84,17 +170,22 @@ struct StripeCfg {
             auto slice = v.as<std::uint16_t>();
             s.slices.push_back(slice);
         }
+        if (json.containsKey("dmx")) {
+            s.dmxCfg = DmxCfg::deserialize(json["dmx"].as<std::string>());
+        }
         return s;
     }
 
     static void serialize(JsonObject& jsonStripe, const StripeCfg& s) {
         jsonStripe["pin"] = s.pin;
+        jsonStripe["name"] = s.name;
         jsonStripe["size"] = s.size;
         jsonStripe["dimmer"] = dimmerModeToString(s.dimmer);
         JsonArray slices = jsonStripe["slices"].to<JsonArray>();
         for (auto slice : s.slices) {
             slices.add(slice);
         }
+        jsonStripe["dmx"] = DmxCfg::serialize(s.dmxCfg);
     }
 };
 
@@ -133,6 +224,11 @@ struct WaveCfg {
     }
 };
 
+enum Direction {
+    RIGHT,
+    LEFT
+};
+
 struct TailAnimationCfg {
     RgbColor color1;
     RgbColor color2;
@@ -140,7 +236,7 @@ struct TailAnimationCfg {
     std::uint16_t duration = 10000; // ms, duration of the animation
     std::uint16_t headLength;
     std::uint16_t tailLength;
-    TailAnimation::Direction direction;
+    Direction direction;
     std::uint16_t speedUpStep = 100; // ms, how much to speed up the animation when moving
     std::uint16_t speedDownStep = 500; // ms, how much to slow down the animation when not moving
     std::uint16_t minDuration = 1000; // ms, minimum duration of the animation
@@ -175,9 +271,9 @@ struct TailAnimationCfg {
         if (json.containsKey("direction")) {
             std::string directionStr = json["direction"].as<std::string>();
             if (directionStr == "left") {
-                t.direction = TailAnimation::LEFT;
+                t.direction = LEFT;
             } else {
-                t.direction = TailAnimation::RIGHT;
+                t.direction = RIGHT;
             }
         }
         if (json.containsKey("speed_up_step")) {
@@ -206,7 +302,7 @@ struct TailAnimationCfg {
         jsonTail["duration"] = t.duration;
         jsonTail["head_length"] = t.headLength;
         jsonTail["tail_length"] = t.tailLength;
-        jsonTail["direction"] = (t.direction == TailAnimation::RIGHT) ? "right" : "left";
+        jsonTail["direction"] = (t.direction == RIGHT) ? "right" : "left";
         jsonTail["speed_up_step"] = t.speedUpStep;
         jsonTail["speed_down_step"] = t.speedDownStep;
         jsonTail["min_duration"] = t.minDuration;
@@ -222,12 +318,14 @@ struct ServoCfg {
     std::uint8_t maxAngle;
     std::uint16_t minPulseWidth = 0;
     std::uint16_t maxPulseWidth = 0;
+    DmxCfg dmxCfg = {0, 0};
 
     bool operator==(const ServoCfg& other) const {
         return pin == other.pin &&
             maxAngle == other.maxAngle &&
             minPulseWidth == other.minPulseWidth &&
-            maxPulseWidth == other.maxPulseWidth;
+            maxPulseWidth == other.maxPulseWidth &&
+            dmxCfg == other.dmxCfg;
     }
 
     bool operator!=(const ServoCfg& other) const {
@@ -244,6 +342,9 @@ struct ServoCfg {
         if (json.containsKey("max_pulse_width")) {
             s.maxPulseWidth = json["max_pulse_width"].as<std::uint16_t>();
         }
+        if (json.containsKey("dmx")) {
+            s.dmxCfg = DmxCfg::deserialize(json["dmx"].as<std::string>());
+        }
         return s;
     }
 
@@ -256,6 +357,7 @@ struct ServoCfg {
         if (s.maxPulseWidth != 0) {
             jsonServo["max_pulse_width"] = s.maxPulseWidth;
         }
+        jsonServo["dmx"] = DmxCfg::serialize(s.dmxCfg);
     }
 };
 
@@ -366,11 +468,13 @@ struct TouchSensorCfg {
 
 struct PwmFadeCfg {
     std::string name;
-    std::uint8_t led;
+    std::string pwmName;
+    DmxCfg dmxCfg;
 
     bool operator==(const PwmFadeCfg& other) const {
         return name == other.name &&
-            led == other.led;
+            pwmName == other.pwmName &&
+            dmxCfg == other.dmxCfg;
     };
 
     bool operator!=(const PwmFadeCfg& other) const {
@@ -380,13 +484,17 @@ struct PwmFadeCfg {
     static PwmFadeCfg deserialize(JsonObject& json) {
         PwmFadeCfg p;
         p.name = json["name"].as<std::string>();
-        p.led = json["led"].as<std::uint8_t>();
+        p.pwmName = json["pwm_name"].as<std::string>();
+        if (json.containsKey("dmx")) {
+            p.dmxCfg = DmxCfg::deserialize(json["dmx"].as<std::string>());
+        }
         return p;
     };
 
     static void serialize(JsonObject& json, const PwmFadeCfg& p) {
         json["name"] = p.name;
-        json["led"] = p.led;
+        json["pwm_name"] = p.pwmName;
+        json["dmx"] = DmxCfg::serialize(p.dmxCfg);
     };
 };
 
@@ -467,13 +575,14 @@ struct MqttCfg {
 };
 
 struct Settings {
+    u_int8_t dmxChOffset;
     std::string wifiSsid;
     std::string wifiPass;
     std::string hostname;
     std::uint32_t hbInt;
     std::uint16_t udpPort;
 
-    std::vector<std::uint8_t> leds;
+    std::vector<PwmCfg> pwms;
     std::vector<StripeCfg> rgbwStrips;
     std::vector<StripeCfg> rgbStrips;
     std::vector<ServoCfg> servos;
@@ -500,7 +609,9 @@ struct Settings {
     MqttCfg mqtt;
 
     bool operator==(const Settings& other) const {
-        return wifiSsid == other.wifiSsid &&
+        return
+            dmxChOffset == other.dmxChOffset &&
+            wifiSsid == other.wifiSsid &&
             wifiPass == other.wifiPass &&
             hostname == other.hostname &&
             hbInt == other.hbInt &&
@@ -512,7 +623,7 @@ struct Settings {
             disableArtnet == other.disableArtnet &&
             mqtt == other.mqtt &&
 
-            leds == other.leds &&
+            pwms == other.pwms &&
             rgbwStrips == other.rgbwStrips &&
             rgbStrips == other.rgbStrips &&
             servos == other.servos &&
@@ -534,6 +645,7 @@ struct Settings {
     }
 
     static void deserialize(Settings& s, JsonDocument& json) {
+        s.dmxChOffset = json["dmx_offset"].as<u_int8_t>();
         s.wifiSsid = json["wifi_ssid"].as<std::string>();
         s.wifiPass = json["wifi_pass"].as<std::string>();
         s.hostname = json["hostname"].as<std::string>();
@@ -559,11 +671,11 @@ struct Settings {
             s.mqtt = MqttCfg();
         }
 
-        
         // actuators
-        JsonArray ledsArray = json["leds"].as<JsonArray>();
-        for (JsonVariant v : ledsArray) {
-            s.leds.push_back(v.as<std::uint8_t>());
+        JsonArray pwmsArray = json["pwms"].as<JsonArray>();
+        for (JsonVariant v : pwmsArray) {
+            JsonObject jsonPwm = v.as<JsonObject>();
+            s.pwms.push_back(PwmCfg::deserialize(jsonPwm));
         }
 
         JsonArray rgbwStripsArray = json["rgbw_strips"].as<JsonArray>();
@@ -639,6 +751,7 @@ struct Settings {
     };
 
     void serialize(JsonDocument& json) {
+        json["dmx_offset"] = dmxChOffset;
         json["wifi_ssid"] = wifiSsid;
         json["wifi_pass"] = wifiPass;
         json["hostname"] = hostname;
@@ -656,10 +769,12 @@ struct Settings {
         }
 
         // actuators
-        if (leds.size() > 0) {
-            JsonArray jsonLeds = json["leds"].to<JsonArray>();
-            for (auto led : this->leds) {
-                jsonLeds.add(led);
+        
+        if (pwms.size() > 0) {
+            JsonArray jsonPwms = json["pwms"].to<JsonArray>();
+            for (auto pwm : this->pwms) {
+                JsonObject jsonPwmItem = jsonPwms.add<JsonObject>();
+                PwmCfg::serialize(jsonPwmItem, pwm);
             }
         }
 
@@ -766,6 +881,7 @@ struct Settings {
     };
 
     void setDefaults() {
+        this->dmxChOffset = 0;
         this->wifiSsid = WIFI_SSID;
         this->wifiPass = WIFI_PASS;
         this->hostname = "";
@@ -773,43 +889,6 @@ struct Settings {
         this->udpPort = 5824;
         this->lightsTest = true;
         this->maxIdle = 0;
-    };
-};
-
-struct DmxSettings {
-    std::uint16_t universe;
-    std::uint16_t channel;
-
-    bool operator==(const DmxSettings& other) const {
-        return universe == other.universe &&
-            channel == other.channel;
-    }
-
-    bool operator!=(const DmxSettings& other) const {
-        return !(*this == other);
-    }
-
-    static void deserialize(DmxSettings& s, JsonDocument& json) {
-        s.universe = json["universe"].as<std::uint16_t>();
-        s.channel = json["channel"].as<std::uint16_t>();
-    };
-
-    void serialize(JsonDocument& json) {
-        json["universe"] = universe;
-        json["channel"] = channel;
-    };
-
-    String asJson() {
-        JsonDocument jsonDoc;
-        serialize(jsonDoc);
-        String output;
-        serializeJson(jsonDoc, output);
-        return output;
-    };
-
-    void setDefaults() {
-        this->universe = 0;
-        this->channel = 1;
     };
 };
 

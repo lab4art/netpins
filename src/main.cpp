@@ -34,6 +34,7 @@
 #include <Things.h>
 #include <sensors.h>
 #include <mqttUtils.h>
+#include <sensorEvents.h>
 #include <animatedThings.h>
 
 
@@ -42,7 +43,7 @@
 // https://github.com/Makuna/NeoPixelBus/wiki/ESP32-NeoMethods
 std::map<int /* pin */, NeoPixelBus<NeoGrbwFeature, NeoEsp32RmtNSk6812Method>*> rgbwStrips;
 std::map<int /* pin */, NeoPixelBus<NeoGrbFeature, NeoEsp32RmtNWs2812xMethod>*> rgbStrips;
-std::vector<LedThing*> leds;
+std::vector<PwmThing*> pwms;
 std::vector<ServoThing*> servos;
 std::vector<HumTempSensor*> humTempSensors;
 std::vector<TouchSensor*> touchSensors;
@@ -56,7 +57,6 @@ unsigned long maxIdleMillis = 0;
 WiFiUDP* udp;
 WifiUtils* wifi;
 
-SettingsManager<DmxSettings>* dmxSettingsManager;
 SettingsManager<Settings>* settingsManager;
 
 DmxListener* dmxListener;
@@ -64,6 +64,7 @@ DmxListener* dmxListener;
 Scheduler scheduler;
 ArtnetWiFiReceiver* artnet;
 MqttUtils* mqtt;
+SensorEvents* sensorEvents;
 WebAdmin* webAdmin;
 
 std::vector<Switchabe*> switchables;
@@ -71,9 +72,8 @@ std::vector<Switchabe*> switchables;
 // uptime set by system reboot like WiFi connection failure
 ulong uptimeOffset = 0;
 
-uint16_t dmxUniverse;
-uint8_t lastDmxSequence = 0;
-uint8_t dmxData[512] = {0}; // 1st byte is sequence number
+std::map<uint16_t /*universe*/, uint8_t /*lastSequence*/> lastDmxSequences;
+std::map<uint16_t /*universe*/, std::array<uint8_t, 512> /*data*/> dmxData; // 1st byte in data array is a sequence number
 
 int numOfCreatedStrips = 0;
 template<typename Feature, typename Method>
@@ -119,15 +119,6 @@ WebAdmin::CommandResult onSystemCommand(JsonVariant &jsonVariant) {
         } else {
             return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, "No updates.", -1};
         }
-    } else if (command == "dmx-config") {
-        Log.noticeln("DMX config command received.");
-        dmxSettingsManager->fromJson(jsonVariant["data"].as<String>());
-        if (dmxSettingsManager->isDirty()) {
-            dmxSettingsManager->save();
-            return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK_REBOOT, "Saved, rebooting ...", 3000};
-        } else {
-            return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, "No updates.", -1};
-        }
     } else if (command == "firmware-update" || command == "spiffs-update") {
         FirmwareUpdateParams* params;
 
@@ -167,9 +158,8 @@ WebAdmin::CommandResult onSystemCommand(JsonVariant &jsonVariant) {
         auto updated = dmxListener->storeDmxData(dmxData);
         return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, updated ? "Saved." : "No updates.", -1};
     } else if (command == "reset-dmx") {
-        uint8_t zerroData[512] = {0};
-        auto updated = dmxListener->storeDmxData(zerroData);
-        return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, updated ? "Saved." : "No updates. All the values were 0 already. ", -1};
+        dmxListener->clearDmxData();
+        return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, "DMX data cleared.", -1};
     }
     return WebAdmin::CommandResult{WebAdmin::CommandStatus::ERROR, "Unknown command.", -1};
 }
@@ -181,7 +171,7 @@ TaskHandle_t commitNeoStipTask;
 
 void doCommitThings() {
 
-    for (auto led : leds) {
+    for (auto led : pwms) {
         led->commit();
     }
 
@@ -249,8 +239,19 @@ DigitalReadSensor* getDigitalReadSensor(int pin) {
 TailAnimation* tailAnimation1; // TODO make this configurable or pluggable
 TailAnimation* tailAnimation2;
 
+
+template<class ThingGroupType>
+class InitializedThingGroup {
+    public:
+        ThingGroupType* group;
+        DmxCfg dmxCfg;
+        
+        InitializedThingGroup(ThingGroupType* group, DmxCfg dmxCfg) 
+            : group(group), dmxCfg(dmxCfg) {}
+};
+
 template<typename Feature, typename Method, class ThingType, class ThingGroupType>
-std::vector<ThingGroupType*> createStripThings(
+std::vector<InitializedThingGroup<ThingGroupType>> createStripThings(    
         std::map<int, NeoPixelBus<Feature, Method> *>& strips,
         std::vector<StripeCfg> stripeCfgs
     ) {
@@ -262,7 +263,7 @@ std::vector<ThingGroupType*> createStripThings(
     }
     strips.clear();
 
-    std::vector<ThingGroupType*> groups;
+    std::vector<InitializedThingGroup<ThingGroupType>> groups;
     for (auto& stripeCfg : stripeCfgs) {
         createStrip<Feature, Method>(stripeCfg.pin, stripeCfg.size, strips);
         auto strip = strips[stripeCfg.pin];
@@ -279,11 +280,11 @@ std::vector<ThingGroupType*> createStripThings(
             int firstPx = stripSlices[i];
             int lastPx = i < stripSlices.size() - 1 ? stripSlices[i + 1] - 1 : strip->PixelCount() - 1;
             Log.noticeln("Creating led strip slice: %d-%d, dimmer mode %s.", firstPx, lastPx, dimmerModeToString(stripeCfg.dimmer).c_str());
-            auto thing = new ThingType(strip, firstPx, lastPx, stripeCfg.dimmer == DimmerMode::perSlice ? true : false);
+            auto thing = new ThingType(strip, firstPx, lastPx, stripeCfg.dimmer == DimmerMode::perSlice ? true : false, String(stripeCfg.name.c_str()) + "-" + String(i));
             sliceThings.push_back(thing);
         }
         ThingGroupType* group = new ThingGroupType(sliceThings, stripeCfg.dimmer == DimmerMode::single ? true : false);
-        groups.push_back(group);
+        groups.push_back(InitializedThingGroup<ThingGroupType>(group, stripeCfg.dmxCfg));
     }
     return groups;
 };
@@ -291,33 +292,32 @@ std::vector<ThingGroupType*> createStripThings(
 std::vector<Switchabe*> createThings(Settings& settings) {
     std::vector<Switchabe*> switchables;
 
-    // LEDS
-    if (settings.leds.size() > 0) {
+    // PWMS
+    if (settings.pwms.size() > 0) {
         analogWriteResolution(14);
-        LedThing::set8bitTo14BitMapping();
-        for (auto& ledPin : settings.leds) {
-            // initialize led Things
-            auto ledThing = new LedThing(ledPin);
-            ledThing->setName(String("led-") + String(ledPin));
-            dmxListener->addThing(ledThing);
-            switchables.push_back(ledThing);
-            leds.push_back(ledThing);
+        PwmThing::set8bitTo14BitMapping();
+        for (auto& pwmCfg : settings.pwms) {
+            // initialize pwm Things
+            auto pwmThing = new PwmThing(pwmCfg.pin, String(pwmCfg.name.c_str()));
+            dmxListener->addMapping(pwmThing, pwmCfg.dmxCfg);
+            switchables.push_back(pwmThing);
+            pwms.push_back(pwmThing);
         }
-        Log.noticeln("LEDs created.");
+        Log.noticeln("PWMs created.");
     }
 
     Log.noticeln("Creating RGBW strips ...");
-    std::vector<RgbwThingGroup*> rgbwThings = createStripThings<NeoGrbwFeature, NeoEsp32RmtNSk6812Method, RgbwThing, RgbwThingGroup>(rgbwStrips, settings.rgbwStrips);
-    for (auto& rgbwThing : rgbwThings) {
-        dmxListener->addThing(rgbwThing);
-        switchables.push_back(rgbwThing);
+    std::vector<InitializedThingGroup<RgbwThingGroup>> rgbwThingGroups = createStripThings<NeoGrbwFeature, NeoEsp32RmtNSk6812Method, RgbwThing, RgbwThingGroup>(rgbwStrips, settings.rgbwStrips);
+    for (auto& rgbwThingGroup : rgbwThingGroups) {
+        dmxListener->addMapping(rgbwThingGroup.group, rgbwThingGroup.dmxCfg);
+        switchables.push_back(rgbwThingGroup.group);
     }
 
     Log.noticeln("Creating RGB strips ...");
-    std::vector<RgbThingGroup*> rgbThingsGroups = createStripThings<NeoGrbFeature, NeoEsp32RmtNWs2812xMethod, RgbThing, RgbThingGroup>(rgbStrips, settings.rgbStrips);
-    for (auto& rgbThing : rgbThingsGroups) {
-        dmxListener->addThing(rgbThing);
-        switchables.push_back(rgbThing);
+    std::vector<InitializedThingGroup<RgbThingGroup>> rgbThingsGroups = createStripThings<NeoGrbFeature, NeoEsp32RmtNWs2812xMethod, RgbThing, RgbThingGroup>(rgbStrips, settings.rgbStrips);
+    for (auto& rgbThingGroup : rgbThingsGroups) {
+        dmxListener->addMapping(rgbThingGroup.group, rgbThingGroup.dmxCfg);
+        switchables.push_back(rgbThingGroup.group);
     }
 
     Log.noticeln("Creating servos ...");
@@ -325,45 +325,46 @@ std::vector<Switchabe*> createThings(Settings& settings) {
         auto minPulseWidth = servoCfg.minPulseWidth == 0 ? 500 : servoCfg.minPulseWidth;
         auto maxPulseWidth = servoCfg.maxPulseWidth == 0 ? 2500 : servoCfg.maxPulseWidth;
         auto thing = new ServoThing(servoCfg.pin, servoCfg.maxAngle, minPulseWidth, maxPulseWidth);
-        dmxListener->addThing(thing);
+        dmxListener->addMapping(thing, servoCfg.dmxCfg);
         servos.push_back(thing);
     }
 
     Log.noticeln("Creating PWM fades ...");
     for (auto& pwmFadeCfg : settings.pwmFades) {
-        auto led = findLedThing(leds, pwmFadeCfg.led);
+        auto pwmthingName = String(pwmFadeCfg.pwmName.c_str());
+        auto pwm = findPwmThing(pwms, pwmthingName);
         auto pwmFade = new PWMFadeAnimationThing(
             &scheduler, 
-            led,
+            pwm,
             String(pwmFadeCfg.name.c_str()));
         pwmFades.push_back(pwmFade);
-        dmxListener->removeThing(led);
-        dmxListener->addThing(pwmFade);
+        dmxListener->removeMappingForThing(pwmthingName);
+        dmxListener->addMapping(pwmFade, pwmFadeCfg.dmxCfg);
     }
 
   //wave1 = new Wave(&scheduler, rgbThings, 4000);
   // loop over settings waves and create animations
 
-    std::vector<RgbThing*> allRgbThings;
-    std::map<uint8_t, RgbThing*> rgbThingsGroupsIndex;
-    for (auto& rgbThingsGroup : rgbThingsGroups) {
-        for (auto& rgbThing : rgbThingsGroup->things()) {
-            allRgbThings.push_back(rgbThing);
-            rgbThingsGroupsIndex[allRgbThings.size() - 1] = rgbThing;
-        }
-    }
+    // std::vector<RgbThing*> allRgbThings;
+    // std::map<uint8_t, RgbThing*> rgbThingsGroupsIndex;
+    // for (auto& rgbThingsGroup : rgbThingsGroups) {
+    //     for (auto& rgbThing : rgbThingsGroup.group->things()) {
+    //         allRgbThings.push_back(rgbThing);
+    //         rgbThingsGroupsIndex[allRgbThings.size() - 1] = rgbThing;
+    //     }
+    // }
 
-    for (auto& waveDef : settings.waves) {
-        std::vector<RgbThing*> waveLines;
-        for (auto& sliceIndex : waveDef.sliceIndexes) {
-            waveLines.push_back(allRgbThings[sliceIndex]);
-            // remove the group if at least one of the lines is in the wave
-            dmxListener->removeThing(rgbThingsGroupsIndex[sliceIndex]);
-        }
-        auto wave = new Wave(&scheduler, waveLines, waveDef.maxFadeTime);
-        Serial.println(String("Wave created with ") + waveLines.size() + " lines.");
-        dmxListener->addThing(wave);
-    }
+    // for (auto& waveDef : settings.waves) {
+    //     std::vector<RgbThing*> waveLines;
+    //     for (auto& sliceIndex : waveDef.sliceIndexes) {
+    //         waveLines.push_back(allRgbThings[sliceIndex]);
+    //         // remove the group if at least one of the lines is in the wave
+    //         dmxListener->removeMapping(rgbThingsGroupsIndex[sliceIndex]);
+    //     }
+    //     auto wave = new Wave(&scheduler, waveLines, waveDef.maxFadeTime);
+    //     Serial.println(String("Wave created with ") + waveLines.size() + " lines.");
+    //     dmxListener->addThing(wave);
+    // }
 
     // ANIMATIONS
     // Log.noticeln("Creating tail animations ...");
@@ -371,8 +372,8 @@ std::vector<Switchabe*> createThings(Settings& settings) {
     // if (settings.tailAnimations.size() > 0 && allRgbThings.size() > 0) {
     //     TailAnimationCfg& taCfg1 = settings.tailAnimations[0];
     //     auto rgbThing1 = allRgbThings[0];
-    //     // dmxListener->removeThing(rgbThing1);
-    //     dmxListener->removeThing(rgbThingsGroupsIndex[0]); // TODO fix this
+    //     // dmxListener->removeMapping(rgbThing1);
+    //     dmxListener->removeMapping(rgbThingsGroupsIndex[0]); // TODO fix this
     //     tailAnimation1 = new TailAnimation(
     //         &scheduler, 
     //         rgbThing1, 
@@ -396,7 +397,7 @@ std::vector<Switchabe*> createThings(Settings& settings) {
 
     //     if (allRgbThings.size() > 1) {
     //         rgbSlice2 = allRgbThings[1];
-    //         dmxListener->removeThing(rgbThingsGroupsIndex[1]); // TODO fix this
+    //         dmxListener->removeMapping(rgbThingsGroupsIndex[1]); // TODO fix this
     //         animationColors = taCfg1.colors;
     //         if (animationColors.size() < 1) {
     //             animationColors.push_back(taCfg1.color1);
@@ -409,7 +410,7 @@ std::vector<Switchabe*> createThings(Settings& settings) {
     // if (settings.tailAnimations.size() > 1 && allRgbThings.size() > 1) {
     //     TailAnimationCfg& taCfg2 = settings.tailAnimations[1];
     //     auto rgbThing2 = allRgbThings[1];
-    //     dmxListener->removeThing(rgbThingsGroupsIndex[1]); // TODO fix this
+    //     dmxListener->removeMapping(rgbThingsGroupsIndex[1]); // TODO fix this
     //     tailAnimation2 = new TailAnimation(
     //         &scheduler,
     //         rgbThing2,
@@ -437,19 +438,22 @@ std::vector<Switchabe*> createThings(Settings& settings) {
 };
 
 void onDmxFrame(const uint8_t *data, uint16_t size, const ArtDmxMetadata &metadata, const ArtNetRemoteInfo &remote) {
-    if (metadata.universe != dmxUniverse) {
+    // process only if we listen to this universe
+    if (dmxListener->isListeningToUniverse(metadata.universe) == false) {
         return;
     }
     lastCommandReceivedAt = millis();
-    // ignore old sequencees unless counter flipped
-    if (metadata.sequence < lastDmxSequence && lastDmxSequence - metadata.sequence < 10) {
-        Log.traceln("Ignoring old sequence %d, last sequence: %d", metadata.sequence, lastDmxSequence);
+    
+    // ignore old sequences unless counter flipped (per-universe tracking)
+    uint8_t lastSequence = lastDmxSequences[metadata.universe];
+    if (metadata.sequence < lastSequence && lastSequence - metadata.sequence < 10) {
+        Log.traceln("Ignoring old sequence %d for universe %d, last sequence: %d", metadata.sequence, metadata.universe, lastSequence);
         return;
     }
+    lastDmxSequences[metadata.universe] = metadata.sequence;
 
-    for (int i = 0; i < 512; i++) {
-        dmxData[i] = data[i];
-    }
+    memcpy(dmxData[metadata.universe].data(), data, std::min(size, (uint16_t)512));
+    
     // do not process the data here, leave IO callback as soon as possible
 };
 
@@ -520,7 +524,6 @@ void setup() {
     }
     preferences.end();
 
-    dmxSettingsManager = new SettingsManager<DmxSettings>("dmx");
     settingsManager = new SettingsManager<Settings>("settings");
 
     FactoryReset::getInstance().evaluate(FACTORY_REST_PIN);
@@ -529,12 +532,9 @@ void setup() {
         eraseAllPreferences();
         settingsManager->setDefaults();
         settingsManager->save();
-        dmxSettingsManager->setDefaults();
-        dmxSettingsManager->save();
     } else {
         // load settings
         settingsManager->load();
-        dmxSettingsManager->load();
     }
 
     // TODO validate input configs
@@ -542,15 +542,11 @@ void setup() {
         Log.noticeln("Empty settings, setting defaults ...");
         settingsManager->setDefaults();
         settingsManager->save();
-        dmxSettingsManager->setDefaults();
-        dmxSettingsManager->save();
     }
     Settings settings = settingsManager->getSettings();
     Serial.println(String("Loaded settings: ") + settings.asJson().c_str());
     
-    auto dmxSettings = dmxSettingsManager->getSettings();
-    dmxUniverse = dmxSettings.universe;
-    dmxListener = new DmxListener(dmxSettings.channel);
+    dmxListener = new DmxListener(settings.dmxChOffset);
 
     try {
         switchables = createThings(settings);
@@ -570,9 +566,8 @@ void setup() {
     for (auto& touch : settings.touchSensors) {
         auto touchSensor = new TouchSensor(touch.pin, 200, touch.threshold);
         uint8_t pin = touch.pin;
-        touchSensor->addOnChangeListener([pin](bool touched) {
-            String topic = mqttSensorTopicPreffix + pin;
-            mqtt->publish(topic.c_str(), touched ? "1" : "0");
+        touchSensor->addOnChangeListener([pin](boolean touched) {
+            sensorEvents->publish(String(pin), touched ? 1 : 0, false); // TODO reference by name not pin
         });
         touchSensors.push_back(touchSensor);
     }
@@ -581,8 +576,7 @@ void setup() {
     for (auto& dreadCfg : settings.digitalReadSensors) {
         auto digitalReadSensor = new DigitalReadSensor(dreadCfg.pin, dreadCfg.readMs, INPUT_PULLUP);
         digitalReadSensor->addOnChangeListener([dreadCfg](bool value) {
-            String topic = mqttSensorTopicPreffix + dreadCfg.pin;
-            mqtt->publish(topic.c_str(), value ? "1" : "0");
+            sensorEvents->publish(String(dreadCfg.pin), value ? 1 : 0, false); // TODO reference by name not pin
         });
 
         digitalReadSensor->addOnChangeListener([](bool value) {
@@ -604,42 +598,41 @@ void setup() {
         // TODO add optional filters to the listener: trashold, move average, etc.
         analogReadSensor->addOnChangeListener([areadCfg](uint16_t value) {
             // Log.traceln("Analog read sensor mqtt listener %d value: %d", areadCfg.pin, value);
-            String topic = mqttSensorTopicPreffix + areadCfg.pin;
-            mqtt->publish(topic.c_str(), String(value).c_str());
+            sensorEvents->publish(String(areadCfg.pin), value, false); // TODO reference by name not pin
         });
         Log.traceln("Analog read sensor created. Pin: %d, readMs: %d", areadCfg.pin, areadCfg.readMs);
         analogReadSensors[areadCfg.pin] = analogReadSensor;
     }
 
-    Log.noticeln("Mapping thing controls ...");
-    for (auto& control : settings.thingControls) {
-        auto thingName = control.name.c_str();
-        Log.traceln("Searching for thing %s ...", thingName);
-        auto thing1stDmxCh = dmxListener->getThingChannelIndex(thingName);
-        if (thing1stDmxCh == -1) {
-            Log.errorln("Missing dmx mapping for thing %s.", thingName);
-            continue;
-        }
-        Log.noticeln("Found 1st DMX channel %d for thing %s.", thing1stDmxCh, thingName);
+    // Log.noticeln("Mapping thing controls ...");
+    // for (auto& control : settings.thingControls) {
+    //     auto thingName = control.name.c_str();
+    //     Log.traceln("Searching for thing %s ...", thingName);
+    //     auto thing1stDmxCh = dmxListener->getThingChannelIndex(thingName);
+    //     if (thing1stDmxCh == -1) {
+    //         Log.errorln("Missing dmx mapping for thing %s.", thingName);
+    //         continue;
+    //     }
+    //     Log.noticeln("Found 1st DMX channel %d for thing %s.", thing1stDmxCh, thingName);
 
-        auto dmxChannel = thing1stDmxCh + control.dmxChOffset;
+    //     auto dmxChannel = thing1stDmxCh + control.dmxChOffset;
 
-        auto dReadSensor = getDigitalReadSensor(control.sensorPin);
-        if (dReadSensor != nullptr) {
-            dReadSensor->addOnChangeListener([dmxChannel](bool value) {
-                dmxData[dmxChannel] = (value ? 255 : 0);
-            });
-        }
+    //     auto dReadSensor = getDigitalReadSensor(control.sensorPin);
+    //     if (dReadSensor != nullptr) {
+    //         dReadSensor->addOnChangeListener([dmxChannel](bool value) {
+    //             dmxData[dmxChannel] = (value ? 255 : 0);
+    //         });
+    //     }
         
-        auto aReadSensor = getAnalogReadSensor(control.sensorPin);
-        if (aReadSensor != nullptr) {
-            aReadSensor->addOnChangeListener([dmxChannel](uint16_t value) {
-                // Log.traceln("Analog read sensor dmxMapping %d value: %d", dmxChannel, value);
-                uint8_t normalizedValue = map(value, 0, 8191, 0, 255); // analogReadResolution = 13bit = 8192 values
-                dmxData[dmxChannel] = normalizedValue;
-            });
-        }
-    }
+    //     auto aReadSensor = getAnalogReadSensor(control.sensorPin);
+    //     if (aReadSensor != nullptr) {
+    //         aReadSensor->addOnChangeListener([dmxChannel](uint16_t value) {
+    //             // Log.traceln("Analog read sensor dmxMapping %d value: %d", dmxChannel, value);
+    //             uint8_t normalizedValue = map(value, 0, 8191, 0, 255); // analogReadResolution = 13bit = 8192 values
+    //             dmxData[dmxChannel] = normalizedValue;
+    //         });
+    //     }
+    // }
 
     Serial.println("Mounting LittleFS ...");
     if (!LittleFS.begin()) {
@@ -688,7 +681,19 @@ void setup() {
         artnet->begin();
         artnet->subscribeArtDmx(onDmxFrame);
         artnet->setArtPollReplyConfigShortName("NetPins");
-        artnet->setArtPollReplyConfigLongName(String(WiFi.getHostname()) + " - " + dmxSettings.channel + "@" + dmxSettings.universe + " - " + FIRMWARE_VERSION);
+        auto universes = dmxListener->getListeningUniverses();
+        // convert to array of uint8_t to string
+        String universeStr = "";
+        bool first = true;
+        for (auto universe : universes) {
+            if (!first) {
+                universeStr += ",";
+            }
+            universeStr += String(universe);
+            first = false;
+        }
+
+        artnet->setArtPollReplyConfigLongName(String(WiFi.getHostname()) + " - " + settings.dmxChOffset + "@" + universeStr + " - " + FIRMWARE_VERSION);
     } else {
         Log.noticeln("Artnet is disabled.");
     }
@@ -697,7 +702,6 @@ void setup() {
         Log.noticeln("Starting web server ...");
         webAdmin = new WebAdmin(
             settingsManager,
-            dmxSettingsManager,
             onSystemCommand
         );
         webAdmin->setOnReceivedCallback([](){
@@ -713,28 +717,41 @@ void setup() {
             props[String("hum-") + humTempSensor->getPin()] = String(humTempSensor->getValue().temperature, 2);
         }
 
-        uint8_t dmxData[512];
-        dmxListener->restoreDmxData(dmxData);
+        const std::map<uint16_t /*universe*/, std::array<uint8_t, 512>> storedDmx;
+        dmxListener->restoreDmxData(storedDmx);
         // convert dmxData to string
-        String dmxDataStr = ""; // TODO json sub-array
-        for (int i = 0; i < 512; i++) {
-            dmxDataStr += String(i+1) + ":" + String(dmxData[i]) + ",";
+        String dmxDataStr = "";
+        for (auto& universeData : storedDmx) {
+            dmxDataStr += "U" + String(universeData.first) + ":";
+            for (int i = 0; i < 512; i++) {
+                dmxDataStr += String(universeData.second[i]);
+                if (i < 511) {
+                    dmxDataStr += ",";
+                }
+            }
+            dmxDataStr += ";";
         }
         props["stored-dmx"] = dmxDataStr;
-
         return props;
     });
 
     String hostName = WifiUtils::getHostname(settings.hostname.c_str());
-    mqttSensorTopicPreffix = String("netpins/") + hostName + "/sensor/";
+    mqttSensorTopicPreffix = String("np/") + hostName + "/s/";
     mqtt = new MqttUtils(
         settings.mqtt.server.c_str(),
         settings.mqtt.port,
         settings.mqtt.user.c_str(),
         settings.mqtt.password.c_str(),
-        (String("netpins/") + hostName + "/command/#").c_str(),
+        (String("np/") + hostName + "/c/#").c_str(),
         hostName,
         onMqttMessage
+    );
+    sensorEvents = new SensorEvents(
+        mqtt,
+        mqttSensorTopicPreffix.c_str()
+        //,
+        // settings.localMappings,
+        // &dmxData
     );
 
     Log.noticeln("Running ...");
@@ -745,7 +762,7 @@ void onWifiExecutionCallback(String ip) {
     if (settingsManager->getSettings().disableWifiPowerSave) {
         esp_wifi_set_ps(WIFI_PS_NONE); // Disable power-saving mode
     }
-
+    
     auto settigns = settingsManager->getSettings();
     if (_ENABLE_UDP_BROADCAST) {
         if (settigns.udpPort > 0) {
@@ -794,7 +811,9 @@ void loop() {
     13ms = 75fps
     */
     if (millis() - lastDmxCommit > 20) {
-        dmxListener->processDmxData(512, dmxData);
+        for (auto& universeData : dmxData) {
+            dmxListener->processDmxData(universeData.first, universeData.second);
+        }
         commitNeoStip();
         lastDmxCommit = millis();
     }
