@@ -283,7 +283,7 @@ class ThingGroup : public SwitchableThing {
         boolean dimmable;
 
     public:
-        ThingGroup(std::vector<SwitchableThing*> things, boolean dimmable):
+        ThingGroup(std::vector<SwitchableThing*> things, boolean dimmable, String name):
             things(things),
             dimmable(dimmable) {
                 int sumChannels = 0;
@@ -295,6 +295,7 @@ class ThingGroup : public SwitchableThing {
                 } else {
                     numOfChannels = sumChannels;
                 }
+                this->name = name;
         }
 
         int numChannels() {
@@ -322,8 +323,8 @@ class RgbThingGroup : public ThingGroup {
         std::vector<RgbThing*> rgbThings;
 
     public:
-        RgbThingGroup(std::vector<RgbThing*> rgbThings, boolean dimmable):
-            ThingGroup(std::vector<SwitchableThing*>(rgbThings.begin(), rgbThings.end()), dimmable),
+        RgbThingGroup(std::vector<RgbThing*> rgbThings, boolean dimmable, String name):
+            ThingGroup(std::vector<SwitchableThing*>(rgbThings.begin(), rgbThings.end()), dimmable, name),
             rgbThings(rgbThings) {
         }
 
@@ -354,8 +355,8 @@ class RgbwThingGroup : public ThingGroup {
         std::vector<RgbwThing*> rgbwThings;
 
     public:
-        RgbwThingGroup(std::vector<RgbwThing*> rgbwThings, boolean dimmable):
-            ThingGroup(std::vector<SwitchableThing*>(rgbwThings.begin(), rgbwThings.end()), dimmable),
+        RgbwThingGroup(std::vector<RgbwThing*> rgbwThings, boolean dimmable, String name):
+            ThingGroup(std::vector<SwitchableThing*>(rgbwThings.begin(), rgbwThings.end()), dimmable, name),
             rgbwThings(rgbwThings) {
         }
 

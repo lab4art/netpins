@@ -283,7 +283,7 @@ std::vector<InitializedThingGroup<ThingGroupType>> createStripThings(
             auto thing = new ThingType(strip, firstPx, lastPx, stripeCfg.dimmer == DimmerMode::perSlice ? true : false, String(stripeCfg.name.c_str()) + "-" + String(i));
             sliceThings.push_back(thing);
         }
-        ThingGroupType* group = new ThingGroupType(sliceThings, stripeCfg.dimmer == DimmerMode::single ? true : false);
+        ThingGroupType* group = new ThingGroupType(sliceThings, stripeCfg.dimmer == DimmerMode::single ? true : false, String(stripeCfg.name.c_str()));
         groups.push_back(InitializedThingGroup<ThingGroupType>(group, stripeCfg.dmxCfg));
     }
     return groups;
@@ -494,8 +494,6 @@ AnalogReadSensor* getAnalogReadSensor(int pin) {
     }
 }
 
-String mqttSensorTopicPreffix = "";
-
 void setup() {
     Serial.begin(115200);
     delay(500);
@@ -565,9 +563,9 @@ void setup() {
     Log.noticeln("Creating touch sensors ...");
     for (auto& touch : settings.touchSensors) {
         auto touchSensor = new TouchSensor(touch.pin, 200, touch.threshold);
-        uint8_t pin = touch.pin;
-        touchSensor->addOnChangeListener([pin](boolean touched) {
-            sensorEvents->publish(String(pin), touched ? 1 : 0, false); // TODO reference by name not pin
+        std::string sensorName = touch.sensorName;
+        touchSensor->addOnChangeListener([sensorName](boolean touched) {
+            sensorEvents->publish(sensorName, touched ? 1 : 0, false); // TODO reference by name not pin
         });
         touchSensors.push_back(touchSensor);
     }
@@ -576,15 +574,14 @@ void setup() {
     for (auto& dreadCfg : settings.digitalReadSensors) {
         auto digitalReadSensor = new DigitalReadSensor(dreadCfg.pin, dreadCfg.readMs, INPUT_PULLUP);
         digitalReadSensor->addOnChangeListener([dreadCfg](bool value) {
-            sensorEvents->publish(String(dreadCfg.pin), value ? 1 : 0, false); // TODO reference by name not pin
+            sensorEvents->publish(dreadCfg.sensorName, value ? 1 : 0, true); // TODO read from cfg local/remote
         });
 
         digitalReadSensor->addOnChangeListener([](bool value) {
+            Log.infoln("Digital read sensor value changed to: %d", value);
             if (value) {
-                Log.noticeln("Movement detected.");
                 // isMovementDetected = true; TODO
             } else {
-                Log.noticeln("Movement stopped.");
                 // isMovementDetected = false;
             }
         });
@@ -598,41 +595,11 @@ void setup() {
         // TODO add optional filters to the listener: trashold, move average, etc.
         analogReadSensor->addOnChangeListener([areadCfg](uint16_t value) {
             // Log.traceln("Analog read sensor mqtt listener %d value: %d", areadCfg.pin, value);
-            sensorEvents->publish(String(areadCfg.pin), value, false); // TODO reference by name not pin
+            sensorEvents->publish(areadCfg.sensorName, value, false); // TODO reference by name not pin
         });
         Log.traceln("Analog read sensor created. Pin: %d, readMs: %d", areadCfg.pin, areadCfg.readMs);
         analogReadSensors[areadCfg.pin] = analogReadSensor;
     }
-
-    // Log.noticeln("Mapping thing controls ...");
-    // for (auto& control : settings.thingControls) {
-    //     auto thingName = control.name.c_str();
-    //     Log.traceln("Searching for thing %s ...", thingName);
-    //     auto thing1stDmxCh = dmxListener->getThingChannelIndex(thingName);
-    //     if (thing1stDmxCh == -1) {
-    //         Log.errorln("Missing dmx mapping for thing %s.", thingName);
-    //         continue;
-    //     }
-    //     Log.noticeln("Found 1st DMX channel %d for thing %s.", thing1stDmxCh, thingName);
-
-    //     auto dmxChannel = thing1stDmxCh + control.dmxChOffset;
-
-    //     auto dReadSensor = getDigitalReadSensor(control.sensorPin);
-    //     if (dReadSensor != nullptr) {
-    //         dReadSensor->addOnChangeListener([dmxChannel](bool value) {
-    //             dmxData[dmxChannel] = (value ? 255 : 0);
-    //         });
-    //     }
-        
-    //     auto aReadSensor = getAnalogReadSensor(control.sensorPin);
-    //     if (aReadSensor != nullptr) {
-    //         aReadSensor->addOnChangeListener([dmxChannel](uint16_t value) {
-    //             // Log.traceln("Analog read sensor dmxMapping %d value: %d", dmxChannel, value);
-    //             uint8_t normalizedValue = map(value, 0, 8191, 0, 255); // analogReadResolution = 13bit = 8192 values
-    //             dmxData[dmxChannel] = normalizedValue;
-    //         });
-    //     }
-    // }
 
     Serial.println("Mounting LittleFS ...");
     if (!LittleFS.begin()) {
@@ -736,7 +703,6 @@ void setup() {
     });
 
     String hostName = WifiUtils::getHostname(settings.hostname.c_str());
-    mqttSensorTopicPreffix = String("np/") + hostName + "/s/";
     mqtt = new MqttUtils(
         settings.mqtt.server.c_str(),
         settings.mqtt.port,
@@ -748,10 +714,9 @@ void setup() {
     );
     sensorEvents = new SensorEvents(
         mqtt,
-        mqttSensorTopicPreffix.c_str()
-        //,
-        // settings.localMappings,
-        // &dmxData
+        std::string("np/") + std::string(hostName.c_str()) + "/s/",
+        settings.sensorMappings,
+        dmxData
     );
 
     Log.noticeln("Running ...");

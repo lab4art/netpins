@@ -142,13 +142,12 @@ sensor_publish: # enable/disable sensor publishing over: mqtt, artnet, local
   - artnet
   - local
 
-artnet_mapping:
-  - sensor: dr-4
-    dmx: 0@100 # dmx channel@universe
-
-local_mapping:
+sensor_mappings:
   - sensor: dr-4
     dmx: 4@1 # controll blue (assuming rgb strip is mapped to 2@1) collor of the rgb strip
+    value_range: # map read value range to dmx value 0-255
+      from: 0
+      to: 1023
 
 digital_reads:
   - pin: 4
@@ -175,11 +174,6 @@ pwm_fades:
   - name: fade-13
     pwm: pwm-13 # identified by name
 
-# animation_control:
-thing_controls:
-  - name: fade-13
-    sensor:
-      pin: 4
 
 ```
 

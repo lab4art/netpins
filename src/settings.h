@@ -94,6 +94,37 @@ struct DmxCfg {
     }
 };
 
+/**
+ * value_range: # map read value range to dmx value 0-255
+ *   from: 0
+ *   to: 1023
+ */
+struct ValueRange {
+    int from;
+    int to;
+
+    bool operator==(const ValueRange& other) const {
+        return from == other.from &&
+            to == other.to;
+    }
+
+    bool operator!=(const ValueRange& other) const {
+        return !(*this == other);
+    }
+
+    static ValueRange deserialize(JsonObject& json) {
+        ValueRange vr;
+        vr.from = json["from"].as<int>();
+        vr.to = json["to"].as<int>();
+        return vr;
+    }
+
+    static void serialize(JsonObject& jsonVr, const ValueRange& vr) {
+        jsonVr["from"] = vr.from;
+        jsonVr["to"] = vr.to;
+    }
+};
+
 
 /**
  * - pin: 13
@@ -363,10 +394,12 @@ struct ServoCfg {
 
 struct DigitalReadSensorCfg {
     std::uint8_t pin;
+    std::string sensorName;
     int readMs;
 
     bool operator==(const DigitalReadSensorCfg& other) const {
         return pin == other.pin &&
+            sensorName == other.sensorName &&
             readMs == other.readMs;
     };
 
@@ -377,12 +410,14 @@ struct DigitalReadSensorCfg {
     static DigitalReadSensorCfg deserialize(JsonObject& json) {
         DigitalReadSensorCfg s;
         s.pin = json["pin"].as<std::uint8_t>();
+        s.sensorName = json["name"].as<std::string>();
         s.readMs = json["read_ms"].as<int>();
         return s;
     };
 
     static void serialize(JsonObject& json, const DigitalReadSensorCfg& h) {
         json["pin"] = h.pin;
+        json["name"] = h.sensorName;
         json["read_ms"] = h.readMs;
     };
 
@@ -390,10 +425,12 @@ struct DigitalReadSensorCfg {
 
 struct AnalogReadSensorCfg {
     std::uint8_t pin;
+    std::string sensorName;
     int readMs;
 
     bool operator==(const AnalogReadSensorCfg& other) const {
         return pin == other.pin &&
+            sensorName == other.sensorName &&
             readMs == other.readMs;
     };
 
@@ -404,12 +441,14 @@ struct AnalogReadSensorCfg {
     static AnalogReadSensorCfg deserialize(JsonObject& json) {
         AnalogReadSensorCfg s;
         s.pin = json["pin"].as<std::uint8_t>();
+        s.sensorName = json["name"].as<std::string>();
         s.readMs = json["read_ms"].as<int>();
         return s;
     };
 
     static void serialize(JsonObject& json, const AnalogReadSensorCfg& h) {
         json["pin"] = h.pin;
+        json["name"] = h.sensorName;
         json["read_ms"] = h.readMs;
     };
 };
@@ -442,10 +481,12 @@ struct HumTempSensorCfg {
 
 struct TouchSensorCfg {
     std::uint8_t pin;
+    std::string sensorName;
     int threshold;
 
     bool operator==(const TouchSensorCfg& other) const {
         return pin == other.pin &&
+            sensorName == other.sensorName &&
             threshold == other.threshold;
     };
 
@@ -456,12 +497,14 @@ struct TouchSensorCfg {
     static TouchSensorCfg deserialize(JsonObject& json) {
         TouchSensorCfg t;
         t.pin = json["pin"].as<std::uint8_t>();
+        t.sensorName = json["name"].as<std::string>();
         t.threshold = json["threshold"].as<int>();
         return t;
     };
 
     static void serialize(JsonObject& jsonTouchSensor, const TouchSensorCfg& t) {
         jsonTouchSensor["pin"] = t.pin;
+        jsonTouchSensor["name"] = t.sensorName;
         jsonTouchSensor["threshold"] = t.threshold;
     };
 };
@@ -498,46 +541,39 @@ struct PwmFadeCfg {
     };
 };
 
-struct ThingControlCfg {
-    std::string name; // name of the thing (aminationThing)
-    /**
-     * The channel that is controoled by the sensor. Offset 0 means the first channel of the thing.
-     * Eg. if 4th channel of the thing if intensity offset of 3 have to be used to control intensity.
-     */
-    std::uint8_t dmxChOffset;
-    std::uint8_t sensorPin;
+struct SensorMappingCfg {
+    std::string sensorName;
+    DmxCfg dmxCfg;
+    ValueRange valueRange;
 
-    bool operator==(const ThingControlCfg& other) const {
-        return name == other.name &&
-            dmxChOffset == other.dmxChOffset &&
-            sensorPin == other.sensorPin;
+    bool operator==(const SensorMappingCfg& other) const {
+        return sensorName == other.sensorName &&
+            dmxCfg == other.dmxCfg &&
+            valueRange == other.valueRange;
     };
 
-    bool operator!=(const ThingControlCfg& other) const {
+    bool operator!=(const SensorMappingCfg& other) const {
         return !(*this == other);
     };
 
-    static ThingControlCfg deserialize(JsonObject& json) {
-        ThingControlCfg o;
-        o.name = json["name"].as<std::string>();
-        o.dmxChOffset = json["dmx_ch_offset"].as<std::uint8_t>();
-        if (json.containsKey("sensor")) {
-            if (json["sensor"].containsKey("pin")) {
-                o.sensorPin = json["sensor"]["pin"].as<std::uint8_t>();        
-            }
+    static SensorMappingCfg deserialize(JsonObject& json) {
+        SensorMappingCfg l;
+        l.sensorName = json["sensor"].as<std::string>();
+        if (json.containsKey("dmx")) {
+            l.dmxCfg = DmxCfg::deserialize(json["dmx"].as<std::string>());
         }
-        return o;
-    }
+        if (json.containsKey("value_range")) {
+            JsonObject jsonVr = json["value_range"].as<JsonObject>();
+            l.valueRange = ValueRange::deserialize(jsonVr);
+        }
+        return l;
+    };
 
-    static void serialize(JsonObject& json, const ThingControlCfg& o) {
-        json["name"] = o.name;
-        json["dmx_ch_offset"] = o.dmxChOffset;
-        if (o.sensorPin != 0) {
-            JsonObject sensor = json["sensor"].to<JsonObject>();
-            sensor["pin"] = o.sensorPin;
-        }
-        JsonObject sensor = json["sensor"].to<JsonObject>();
-        sensor["pin"] = o.sensorPin;
+    static void serialize(JsonObject& json, const SensorMappingCfg& l) {
+        json["sensor"] = l.sensorName;
+        json["dmx"] = DmxCfg::serialize(l.dmxCfg);
+        JsonObject jsonVr = json["value_range"].to<JsonObject>();
+        ValueRange::serialize(jsonVr, l.valueRange);
     };
 };
 
@@ -592,13 +628,14 @@ struct Settings {
     std::vector<DigitalReadSensorCfg> digitalReadSensors;
     std::vector<AnalogReadSensorCfg> analogReadSensors;
     
+    std::vector<SensorMappingCfg> sensorMappings; // sensor to dmx local mappings
+
     // waves
     // stripes that are part of the animation must be excluded from the dmx listener
     std::vector<WaveCfg> waves;
     std::vector<PwmFadeCfg> pwmFades;
     std::vector<TailAnimationCfg> tailAnimations;
 
-    std::vector<ThingControlCfg> thingControls;
 
     bool lightsTest;
     std::uint16_t maxIdle; // max idle time in min, 0 means no sleep
@@ -632,12 +669,13 @@ struct Settings {
             touchSensors == other.touchSensors &&
             digitalReadSensors == other.digitalReadSensors &&
             analogReadSensors == other.analogReadSensors &&
-    
+
+            sensorMappings == other.sensorMappings &&
+
             waves == other.waves &&
             pwmFades == other.pwmFades &&
-            tailAnimations == other.tailAnimations &&
+            tailAnimations == other.tailAnimations;
             
-            thingControls == other.thingControls;
     }
 
     bool operator!=(const Settings& other) const {
@@ -722,6 +760,12 @@ struct Settings {
             s.touchSensors.push_back(TouchSensorCfg::deserialize(jsonTouchSensor));
         }
 
+        // sensor mappings
+        JsonArray sensorMappingsArray = json["sensor_mappings"].as<JsonArray>();
+        for (JsonVariant v : sensorMappingsArray) {
+            JsonObject jsonSensorMapping = v.as<JsonObject>();
+            s.sensorMappings.push_back(SensorMappingCfg::deserialize(jsonSensorMapping));
+        }
 
         // aminations
         JsonArray wavesArray = json["waves"].as<JsonArray>();
@@ -741,12 +785,6 @@ struct Settings {
             s.tailAnimations.push_back(TailAnimationCfg::deserialize(jsonTail));
         }
 
-        // controls
-        JsonArray thingControlsArray = json["thing_controls"].as<JsonArray>();
-        for (JsonVariant v : thingControlsArray) {
-            JsonObject jsonThingControl = v.as<JsonObject>();
-            s.thingControls.push_back(ThingControlCfg::deserialize(jsonThingControl));
-        }
 
     };
 
@@ -836,6 +874,14 @@ struct Settings {
             }
         }
 
+        // sensor mappings
+        if (sensorMappings.size() > 0) {
+            JsonArray sensorMappings = json["sensor_mappings"].to<JsonArray>();
+            for (auto sensorMapping : this->sensorMappings) {
+                JsonObject jsonSensorMapping = sensorMappings.add<JsonObject>();
+                SensorMappingCfg::serialize(jsonSensorMapping, sensorMapping);
+            }
+        }
 
         // aminations
         if (waves.size() > 0) {
@@ -862,14 +908,6 @@ struct Settings {
             }
         }
 
-        // controls
-        if (thingControls.size() > 0) {
-            JsonArray thingControls = json["thing_controls"].to<JsonArray>();
-            for (auto thingControl : this->thingControls) {
-                JsonObject jsonThingControl = thingControls.add<JsonObject>();
-                ThingControlCfg::serialize(jsonThingControl, thingControl);
-            }
-        }
     };
 
     String asJson() {
