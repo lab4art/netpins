@@ -525,7 +525,7 @@ void setup() {
     settingsManager = new SettingsManager<Settings>("settings");
 
     FactoryReset::getInstance().evaluate(FACTORY_REST_PIN);
-    if (FactoryReset::getInstance().shouldReset()) {
+    if (FORCE_RESET || FactoryReset::getInstance().shouldReset()) {
         Log.noticeln("Factory reset requested, setting defaults ...");
         eraseAllPreferences();
         settingsManager->setDefaults();

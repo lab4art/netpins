@@ -11,13 +11,14 @@
 #define DNS            IPAddress(0, 0, 0, 0)
 
 #define FACTORY_REST_PIN -1 // -1 to use power cycle factory reset
+#define FORCE_RESET false
 
 // debug settings ////////////
 #define WAIT_FOR_SERIAL false
 
 // Uncomment line below to fully disable logging, and reduce project size
 //#define DISABLE_LOGGING
-#define LOG_LEVEL LOG_LEVEL_TRACE
-// #define LOG_LEVEL LOG_LEVEL_NOTICE
+// #define LOG_LEVEL LOG_LEVEL_TRACE
+#define LOG_LEVEL LOG_LEVEL_NOTICE
 
 #define PRINT_EXECUTION_STAT false
