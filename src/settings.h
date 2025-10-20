@@ -85,12 +85,11 @@ struct DmxCfg {
         return std::to_string(d.channel) + "@" + std::to_string(d.universe);
     }
 
-    uint8_t get0BasedChannel() {
-        // cast uint_16_t to uint_8_t, if channel is > 255 throw error
-        if (channel > 255) {
-            throw std::invalid_argument("DMX channel must be between 1 and 255");
+    uint16_t get0BasedChannel() {
+        if (channel > 512) {
+            throw std::invalid_argument("DMX channel must be between 1 and 512");
         }
-        return static_cast<uint8_t>(channel > 0 ? channel - 1 : 0);
+        return channel - 1;
     }
 };
 
