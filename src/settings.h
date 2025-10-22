@@ -345,6 +345,7 @@ struct TailAnimationCfg {
 
 struct ServoCfg {
     std::uint8_t pin;
+    std::string name;
     std::uint8_t maxAngle;
     std::uint16_t minPulseWidth = 0;
     std::uint16_t maxPulseWidth = 0;
@@ -352,6 +353,7 @@ struct ServoCfg {
 
     bool operator==(const ServoCfg& other) const {
         return pin == other.pin &&
+            name == other.name &&
             maxAngle == other.maxAngle &&
             minPulseWidth == other.minPulseWidth &&
             maxPulseWidth == other.maxPulseWidth &&
@@ -365,6 +367,7 @@ struct ServoCfg {
     static ServoCfg deserialize(JsonObject& json) {
         ServoCfg s;
         s.pin = json["pin"].as<std::uint8_t>();
+        s.name = json["name"].as<std::string>();
         s.maxAngle = json["max_angle"].as<std::uint8_t>();
         if (json.containsKey("min_pulse_width")) {
             s.minPulseWidth = json["min_pulse_width"].as<std::uint16_t>();
@@ -380,6 +383,7 @@ struct ServoCfg {
 
     static void serialize(JsonObject& jsonServo, const ServoCfg& s) {
         jsonServo["pin"] = s.pin;
+        jsonServo["name"] = s.name;
         jsonServo["max_angle"] = s.maxAngle;
         if (s.minPulseWidth != 0) {
             jsonServo["min_pulse_width"] = s.minPulseWidth;

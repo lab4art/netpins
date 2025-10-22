@@ -245,11 +245,12 @@ class ServoThing : public Thing {
         int maxAngle;
 
     public:
-        ServoThing(int pin, int maxAngle, int minPulseWidth = 500, int maxPulseWidth = 2500) {
+        ServoThing(int pin, int maxAngle, int minPulseWidth = 500, int maxPulseWidth = 2500, String name = "") {
             this->maxAngle = maxAngle;
             pinMode(pin, OUTPUT);
             servo.setPeriodHertz(50);
             servo.attach(pin, minPulseWidth, maxPulseWidth);
+            this->name = name;
         }
 
         int numChannels() {

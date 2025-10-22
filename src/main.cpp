@@ -684,7 +684,7 @@ void setup() {
             props[String("hum-") + humTempSensor->getPin()] = String(humTempSensor->getValue().temperature, 2);
         }
 
-        const std::map<uint16_t /*universe*/, std::array<uint8_t, 512>> storedDmx;
+        std::map<uint16_t /*universe*/, std::array<uint8_t, 512>> storedDmx;
         dmxListener->restoreDmxData(storedDmx);
         // convert dmxData to string
         String dmxDataStr = "";

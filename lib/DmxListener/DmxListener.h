@@ -142,14 +142,16 @@ class DmxListener {
             return changed;
         }
 
-        void restoreDmxData(const std::map<uint16_t /*universe*/, std::array<uint8_t, 512> /*data*/>& dmxData) {
+        void restoreDmxData(std::map<uint16_t /*universe*/, std::array<uint8_t, 512> /*data*/>& dmxData) {
             UniverseStorage storage;
             storage.begin(true);
-            for (const auto& pair : dmxData) {
-                uint16_t universe = pair.first;
+            for (const auto& mapping : dmxMappings) {
+                uint16_t universe = mapping->dmxCfg.universe;
                 uint8_t data[512];
                 storage.loadUniverse(universe, data);
-                memcpy((void*)pair.second.data(), data, 512);
+                std::array<uint8_t, 512> dataArray;
+                memcpy((void*)dataArray.data(), data, 512);
+                dmxData[universe] = dataArray;
             }
             storage.end();
         }
