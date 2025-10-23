@@ -142,16 +142,26 @@ class DmxListener {
             return changed;
         }
 
+        /**
+         * Creates empty DMX data for all listening universes.
+         */
+        void initializeDmxData(std::map<uint16_t /*universe*/, std::array<uint8_t, 512> /*data*/>& dmxData) {
+            for (const auto& universe : dmxUniverses) {
+                dmxData[universe] = std::array<uint8_t, 512>{};
+            }
+        }
+
         void restoreDmxData(std::map<uint16_t /*universe*/, std::array<uint8_t, 512> /*data*/>& dmxData) {
             UniverseStorage storage;
             storage.begin(true);
             for (const auto& mapping : dmxMappings) {
                 uint16_t universe = mapping->dmxCfg.universe;
-                uint8_t data[512];
-                storage.loadUniverse(universe, data);
-                std::array<uint8_t, 512> dataArray;
-                memcpy((void*)dataArray.data(), data, 512);
-                dmxData[universe] = dataArray;
+                // Only restore if the universe already exists in the map
+                if (dmxData.find(universe) != dmxData.end()) {
+                    uint8_t data[512];
+                    storage.loadUniverse(universe, data);
+                    memcpy((void*)dmxData[universe].data(), data, 512);
+                }
             }
             storage.end();
         }

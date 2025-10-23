@@ -625,6 +625,7 @@ void setup() {
     initNeoStipTask();
     firmwareUpdateResultQueue = xQueueCreate(1, sizeof(int));
 
+    dmxListener->initializeDmxData(dmxData);
     dmxListener->restoreDmxData(dmxData);
 
     if (settings.maxIdle > 0) {
@@ -685,6 +686,7 @@ void setup() {
         }
 
         std::map<uint16_t /*universe*/, std::array<uint8_t, 512>> storedDmx;
+        dmxListener->initializeDmxData(storedDmx);
         dmxListener->restoreDmxData(storedDmx);
         // convert dmxData to string
         String dmxDataStr = "";
