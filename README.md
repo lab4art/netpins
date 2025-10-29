@@ -174,6 +174,27 @@ pwm_fades:
   - name: fade-13
     pwm: pwm-13 # identified by name
 
+plugins:
+  - name: tail-animation-1
+    type: tail-animation
+    config:
+      rgb_strip_name: rgb-strip-1
+      color1: '#BB9900'
+      color2: '#DD3300'
+      dimm: 255
+      duration: 10000
+      head_length: 0
+      tail_length: 15
+      direction: right
+      speed_up_step: 100
+      speed_down_step: 500
+      min_duration: 1000
+      colors:
+        - '#552200'
+        - '#445500'
+        - '#220022'
+        - '#002222'
+        - '#002222'
 
 ```
 

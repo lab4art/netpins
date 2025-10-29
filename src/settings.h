@@ -259,90 +259,6 @@ enum Direction {
     LEFT
 };
 
-struct TailAnimationCfg {
-    RgbColor color1;
-    RgbColor color2;
-    std::uint8_t dimm = 255;
-    std::uint16_t duration = 10000; // ms, duration of the animation
-    std::uint16_t headLength;
-    std::uint16_t tailLength;
-    Direction direction;
-    std::uint16_t speedUpStep = 100; // ms, how much to speed up the animation when moving
-    std::uint16_t speedDownStep = 500; // ms, how much to slow down the animation when not moving
-    std::uint16_t minDuration = 1000; // ms, minimum duration of the animation
-    std::vector<RgbColor> colors;
-
-    bool operator==(const TailAnimationCfg& other) const {
-        return color1 == other.color1 &&
-            color2 == other.color2 &&
-            dimm == other.dimm &&
-            duration == other.duration &&
-            headLength == other.headLength &&
-            tailLength == other.tailLength &&
-            direction == other.direction &&
-            speedUpStep == other.speedUpStep &&
-            speedDownStep == other.speedDownStep &&
-            minDuration == other.minDuration &&
-            colors == other.colors;
-    }
-
-    bool operator!=(const TailAnimationCfg& other) const {
-        return !(*this == other);
-    }
-
-    static TailAnimationCfg deserialize(JsonObject& json) {
-        TailAnimationCfg t;
-        t.color1 = parseHexColor(json["color1"].as<std::string>());
-        t.color2 = parseHexColor(json["color2"].as<std::string>());
-        t.dimm = json["dimm"].as<std::uint8_t>();
-        t.duration = json["duration"].as<std::uint16_t>();
-        t.headLength = json["head_length"].as<std::uint16_t>();
-        t.tailLength = json["tail_length"].as<std::uint16_t>();
-        if (json.containsKey("direction")) {
-            std::string directionStr = json["direction"].as<std::string>();
-            if (directionStr == "left") {
-                t.direction = LEFT;
-            } else {
-                t.direction = RIGHT;
-            }
-        }
-        if (json.containsKey("speed_up_step")) {
-            t.speedUpStep = json["speed_up_step"].as<std::uint16_t>();
-        }
-        if (json.containsKey("speed_down_step")) {
-            t.speedDownStep = json["speed_down_step"].as<std::uint16_t>();
-        }
-        if (json.containsKey("min_duration")) {
-            t.minDuration = json["min_duration"].as<std::uint16_t>();
-        }
-        if (json.containsKey("colors")) {
-            JsonArray colorsArray = json["colors"].as<JsonArray>();
-            for (JsonVariant v : colorsArray) {
-                auto colorStr = v.as<std::string>();
-                t.colors.push_back(parseHexColor(colorStr));
-            }
-        }
-        return t;
-    }
-
-    static void serialize(JsonObject& jsonTail, const TailAnimationCfg& t) {
-        jsonTail["color1"] = toHexColor(t.color1);
-        jsonTail["color2"] = toHexColor(t.color2);
-        jsonTail["dimm"] = t.dimm;
-        jsonTail["duration"] = t.duration;
-        jsonTail["head_length"] = t.headLength;
-        jsonTail["tail_length"] = t.tailLength;
-        jsonTail["direction"] = (t.direction == RIGHT) ? "right" : "left";
-        jsonTail["speed_up_step"] = t.speedUpStep;
-        jsonTail["speed_down_step"] = t.speedDownStep;
-        jsonTail["min_duration"] = t.minDuration;
-        JsonArray colors = jsonTail["colors"].to<JsonArray>();
-        for (const auto& color : t.colors) {
-            colors.add(toHexColor(color));
-        }
-    }
-};
-
 struct ServoCfg {
     std::uint8_t pin;
     std::string name;
@@ -613,6 +529,82 @@ struct MqttCfg {
     };
 };
 
+
+struct PluginCfg {
+    std::string name;
+    std::string type;
+    std::string config; // Store as JSON string to avoid reference issues
+
+    bool operator==(const PluginCfg& other) const {
+        return name == other.name &&
+        type == other.type &&
+        config == other.config;
+    };
+
+    bool operator!=(const PluginCfg& other) const {
+        return !(*this == other);
+    };
+
+    static PluginCfg deserialize(JsonObject& json) {
+        PluginCfg p;
+        
+        try {
+            p.name = json["name"].as<std::string>();
+            p.type = json["type"].as<std::string>();
+            
+            // Serialize the config object to a string for safe storage
+            if (json.containsKey("config")) {
+                String configStr;
+                size_t result = serializeJson(json["config"], configStr);
+                if (result > 0) {
+                    p.config = configStr.c_str();
+                } else {
+                    p.config = "{}";
+                }
+            } else {
+                p.config = "{}";
+            }
+            
+        } catch (...) {
+            // If anything fails, set safe defaults
+            p.name = "error";
+            p.type = "error";
+            p.config = "{}";
+        }
+        
+        return p;
+    };
+
+    static void serialize(JsonObject& jsonPlugin, const PluginCfg& p) {
+        try {
+            // Set name and type
+            jsonPlugin["name"] = p.name;
+            jsonPlugin["type"] = p.type;
+            
+            // Handle config: parse JSON string back to object
+            if (!p.config.empty() && p.config != "{}") {
+                JsonDocument configDoc;
+                DeserializationError error = deserializeJson(configDoc, p.config);
+                if (!error) {
+                    jsonPlugin["config"] = configDoc.as<JsonObject>();
+                } else {
+                    // Parse failed, use empty object
+                    jsonPlugin["config"].to<JsonObject>();
+                }
+            } else {
+                // Empty or default config
+                jsonPlugin["config"].to<JsonObject>();
+            }
+            
+        } catch (...) {
+            // If anything fails, set safe defaults
+            jsonPlugin["name"] = "error";
+            jsonPlugin["type"] = "error";
+            jsonPlugin["config"].to<JsonObject>();
+        }
+    };
+};
+
 struct Settings {
     u_int8_t dmxChOffset;
     std::string wifiSsid;
@@ -637,8 +629,8 @@ struct Settings {
     // stripes that are part of the animation must be excluded from the dmx listener
     std::vector<WaveCfg> waves;
     std::vector<PwmFadeCfg> pwmFades;
-    std::vector<TailAnimationCfg> tailAnimations;
 
+    std::vector<PluginCfg> plugins;
 
     bool lightsTest;
     std::uint16_t maxIdle; // max idle time in min, 0 means no sleep
@@ -677,7 +669,7 @@ struct Settings {
 
             waves == other.waves &&
             pwmFades == other.pwmFades &&
-            tailAnimations == other.tailAnimations;
+            plugins == other.plugins;
             
     }
 
@@ -782,13 +774,12 @@ struct Settings {
             JsonObject jsonPwmFade = v.as<JsonObject>();
             s.pwmFades.push_back(PwmFadeCfg::deserialize(jsonPwmFade));
         }
-        JsonArray tailAnimationsArray = json["tail_animations"].as<JsonArray>();
-        for (JsonVariant v : tailAnimationsArray) {
-            JsonObject jsonTail = v.as<JsonObject>();
-            s.tailAnimations.push_back(TailAnimationCfg::deserialize(jsonTail));
+
+        JsonArray pluginsArray = json["plugins"].as<JsonArray>();
+        for (JsonVariant v : pluginsArray) {
+            JsonObject jsonPlugin = v.as<JsonObject>();
+            s.plugins.push_back(PluginCfg::deserialize(jsonPlugin));
         }
-
-
     };
 
     void serialize(JsonDocument& json) {
@@ -903,11 +894,23 @@ struct Settings {
             }
         }
 
-        if (tailAnimations.size() > 0) {
-            JsonArray tailAnimations = json["tail_animations"].to<JsonArray>();
-            for (auto tailAnimation : this->tailAnimations) {
-                JsonObject jsonTail = tailAnimations.add<JsonObject>();
-                TailAnimationCfg::serialize(jsonTail, tailAnimation);
+        Serial.println("Serializing plugins, count: " + String(plugins.size()));
+        if (plugins.size() > 0) {
+            JsonArray plugins = json["plugins"].to<JsonArray>();
+            for (size_t i = 0; i < this->plugins.size(); i++) {
+                try {
+                    JsonObject jsonPlugin = plugins.add<JsonObject>();
+                    if (jsonPlugin.isNull()) {
+                        Serial.println("ERROR: Failed to create JsonObject for plugin ");
+                        continue;
+                    }
+                    PluginCfg::serialize(jsonPlugin, this->plugins[i]);
+                    Serial.println("Successfully serialized plugin ");
+                } catch (const std::exception& e) {
+                    Serial.println("ERROR: Exception while serializing plugin ");
+                } catch (...) {
+                    Serial.println("ERROR: Unknown exception while serializing plugin ");
+                }
             }
         }
 
@@ -917,7 +920,11 @@ struct Settings {
         JsonDocument jsonDoc;
         serialize(jsonDoc);
         String output;
-        serializeJson(jsonDoc, output);
+        size_t result = serializeJson(jsonDoc, output);
+        if (result == 0) {
+            Serial.println("ERROR: JSON serialization failed.");
+            return "{}"; // Return empty JSON on failure
+        }
         return output;
     };
 
@@ -975,7 +982,6 @@ class SettingsManager {
             dirty = false;
 
             Serial.println("Deserialized settings: ");
-            // Serial.println(this->settings.toString());
         }
 
         void save() {
@@ -987,11 +993,16 @@ class SettingsManager {
                 return;
             }
 
-            Serial.println("Saving settings: ");
+            Serial.println("Saving settings ...");
             JsonDocument jsonDoc;
             this->settings.serialize(jsonDoc);
             String output;
-            serializeJson(jsonDoc, output);
+            size_t result = serializeJson(jsonDoc, output);
+            if (result == 0) {
+                onError("JSON serialization failed.");
+                return;
+            }
+            // Serial.println("Serialized settings (length: " + String(output.length()) + " bytes)");
 
             size_t bytesWritten = preferences.putString("json", output);
             if (bytesWritten != output.length()) {
@@ -999,13 +1010,17 @@ class SettingsManager {
             }
             preferences.end();
             dirty = false;
-            Serial.println("Settings saved: " + output);
+            // Serial.println("Settings saved successfully (" + String(output.length()) + " bytes)");
         }
 
         void fromJson(String jsonString) {
             // parse jsonString to jsonDoc
             JsonDocument jsonDoc;
-            deserializeJson(jsonDoc, jsonString);
+            DeserializationError error = deserializeJson(jsonDoc, jsonString);
+            if (error) {
+                onError(std::string("JSON deserialization failed: ") + error.c_str());
+                return;
+            }
             fromJsonDoc(jsonDoc);
         }
 
@@ -1015,7 +1030,11 @@ class SettingsManager {
          */
         void mergeJson(String jsonString) {
             JsonDocument newJsonDoc;
-            deserializeJson(newJsonDoc, jsonString);
+            DeserializationError error = deserializeJson(newJsonDoc, jsonString);
+            if (error) {
+                onError(std::string("JSON merge deserialization failed: ") + error.c_str());
+                return;
+            }
 
             JsonDocument currentJsonDoc;
             this->settings.serialize(currentJsonDoc);            

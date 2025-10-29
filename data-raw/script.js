@@ -34,15 +34,6 @@ function hideNotificationPanel() {
     panel.style.display = 'none';
 }
 
-function fetchAndUpdateDMX() {
-    fetch('/conf/dmx')
-    .then(response => response.json())
-    .then(data => {
-        document.getElementById('universe').value = data.universe;
-        document.getElementById('channel').value = data.channel;
-    });
-}
-
 function fetchAndUpdateSysInfo() {
     fetch('/sys-info')
     .then(response => response.json())
@@ -68,7 +59,6 @@ function fetchAndUpdateSettings() {
 
 document.addEventListener("DOMContentLoaded", function() {
     fetchAndUpdateSysInfo();
-    fetchAndUpdateDMX();
     fetchAndUpdateSettings();
 });
 
@@ -82,7 +72,6 @@ function processResponse(data) {
             showNotificationPanel(data.message, NotificationType.SUCCESS);
         } else {
             fetchAndUpdateSysInfo();
-            fetchAndUpdateDMX();
             fetchAndUpdateSettings();
             hideLoader();
             showNotificationPanel(data.message, NotificationType.SUCCESS, 3000);

@@ -36,6 +36,7 @@
 #include <mqttUtils.h>
 #include <sensorEvents.h>
 #include <animatedThings.h>
+#include <tailAnimation.h>
 
 
 #define ON_WIFI_EXECUTION_CALLBACK_SIGNATURE std::function<void(String)> wifiExecutionCallback
@@ -235,9 +236,7 @@ DigitalReadSensor* getDigitalReadSensor(int pin) {
         return nullptr;
     }
 }
-
-TailAnimation* tailAnimation1; // TODO make this configurable or pluggable
-TailAnimation* tailAnimation2;
+std::vector<TailAnimation*> tailAnimations; // TODO make this pluggable
 
 
 template<class ThingGroupType>
@@ -288,6 +287,15 @@ std::vector<InitializedThingGroup<ThingGroupType>> createStripThings(
     }
     return groups;
 };
+
+RgbThingGroup* findRgbThingByName(const std::vector<InitializedThingGroup<RgbThingGroup>>& rgbThingGroups, const String name) {
+    for (auto& rgbThingGroup : rgbThingGroups) {
+        if (rgbThingGroup.group->getName() == name) {
+            return rgbThingGroup.group;
+        }
+    }
+    return nullptr;
+}
 
 std::vector<Switchabe*> createThings(Settings& settings) {
     std::vector<Switchabe*> switchables;
@@ -342,6 +350,51 @@ std::vector<Switchabe*> createThings(Settings& settings) {
         dmxListener->addMapping(pwmFade, pwmFadeCfg.dmxCfg);
     }
 
+    // Plugins
+    try {
+        // TODO make this pluggable
+        for (auto& plugin : settings.plugins) {
+            if (plugin.type == "tail-animation") {
+                TailAnimationCfg taCfg = TailAnimationCfg::deserialize(plugin.config);
+                Log.noticeln("Configuring tail animation plugin with color1: %s, color2: %s, dimm: %d, tail length: %d, head length: %d, duration: %d ms.",
+                    toHexColor(taCfg.color1).c_str(),
+                    toHexColor(taCfg.color2).c_str(),
+                    taCfg.dimm,
+                    taCfg.tailLength,
+                    taCfg.headLength,
+                    taCfg.duration);
+                Log.noticeln("Creating tail animation for RGB strip: %s", taCfg.rgbStripName.c_str());
+                RgbThingGroup* rgbThing = findRgbThingByName(rgbThingsGroups, String(taCfg.rgbStripName.c_str()));
+                // get the first line in the group
+                Log.traceln("Finding first line in RGB thing group: %s", taCfg.rgbStripName.c_str());
+                RgbThing* line = rgbThing->things().front();
+                Log.traceln("Creating TailAnimation ...");
+                TailAnimation* tailAnimation = new TailAnimation(
+                        &scheduler, 
+                        line,
+                        taCfg.direction,
+                        true);
+                tailAnimation->setColor1(taCfg.color1);
+                tailAnimation->setColor2(taCfg.color2);
+                tailAnimation->setDimm(taCfg.dimm);
+                tailAnimation->setTailLength(taCfg.tailLength);
+                tailAnimation->setHeadLength(taCfg.headLength);
+                tailAnimation->setDuration(taCfg.duration);
+                tailAnimations.push_back(tailAnimation);
+
+                Log.traceln("Removing DMX mapping for RGB thing: %s", rgbThing->getName().c_str());
+                dmxListener->removeMappingForThing(rgbThing->getName());
+                // TODO dmx mapping
+                // TailAnimationThing* tailAnimationThing = new TailAnimationThing(tailAnimation, String(taCfg.rgbThingName.c_str()) + "-ta");
+                // dmxListener->addMapping(tailAnimationThing, taCfg.dmxCfg);
+
+                } else if (plugin.type == "wave") {
+                // configure wave plugin
+            }
+        }
+    } catch (const std::exception& e) {
+        Serial.println(String("ERR: configuring plugins. ") + e.what());
+    }
   //wave1 = new Wave(&scheduler, rgbThings, 4000);
   // loop over settings waves and create animations
 
@@ -407,32 +460,7 @@ std::vector<Switchabe*> createThings(Settings& settings) {
     // } else {
     //     Log.warningln("No tail animations or RGB things available, skipping tail animation setup.");
     // }
-    // if (settings.tailAnimations.size() > 1 && allRgbThings.size() > 1) {
-    //     TailAnimationCfg& taCfg2 = settings.tailAnimations[1];
-    //     auto rgbThing2 = allRgbThings[1];
-    //     dmxListener->removeMapping(rgbThingsGroupsIndex[1]); // TODO fix this
-    //     tailAnimation2 = new TailAnimation(
-    //         &scheduler,
-    //         rgbThing2,
-    //         taCfg2.direction,
-    //         true);
-    //     tailAnimation2->setColor1(taCfg2.color1);
-    //     tailAnimation2->setColor2(taCfg2.color2);
-    //     tailAnimation2->setDimm(taCfg2.dimm);
-    //     tailAnimation2->setTailLength(taCfg2.tailLength);
-    //     tailAnimation2->setHeadLength(taCfg2.headLength);
-    //     tailAnimation2->setDuration(taCfg2.duration);
-    //     tailAnimation2Duration = taCfg2.duration;
-    //     Log.noticeln("Tail animation 2 created with color1: %s, color2: %s, dimm: %d, tail length: %d, head length: %d, duration: %d ms.",
-    //         toHexColor(taCfg2.color1).c_str(),
-    //         toHexColor(taCfg2.color2).c_str(),
-    //         taCfg2.dimm,
-    //         taCfg2.tailLength,
-    //         taCfg2.headLength,
-    //         taCfg2.duration);
-    // } else {
-    //     Log.noticeln("No tail animation 2 or RGB thing 2 available, skipping tail animation setup.");
-    // }
+
 
     return switchables;
 };
