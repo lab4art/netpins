@@ -45,19 +45,13 @@
 
 struct WaveAnimationCfg {
     std::string rgbStripName;
-    RgbColor color1;
-    RgbColor color2;
-    std::uint8_t dimm = 255;
-    std::uint16_t duration = 1000; // ms, duration of each wave step
+    DmxCfg dmxCfg;
     std::uint16_t maxFadeTime = 10000; // ms, maximum fade time
     bool dimmable = false;
 
     bool operator==(const WaveAnimationCfg& other) const {
         return rgbStripName == other.rgbStripName &&
-            color1 == other.color1 &&
-            color2 == other.color2 &&
-            dimm == other.dimm &&
-            duration == other.duration &&
+            dmxCfg == other.dmxCfg &&
             maxFadeTime == other.maxFadeTime &&
             dimmable == other.dimmable;
     }
@@ -76,10 +70,12 @@ struct WaveAnimationCfg {
         }
         JsonObject json = doc.as<JsonObject>();
         w.rgbStripName = json["rgb_strip_name"].as<std::string>();
-        w.color1 = ColorUtils::parseHexColor(json["color1"].as<std::string>());
-        w.color2 = ColorUtils::parseHexColor(json["color2"].as<std::string>());
-        w.dimm = json["dimm"].as<std::uint8_t>();
-        w.duration = json["duration"].as<std::uint16_t>();
+        if (json.containsKey("max_fade_time")) {
+            w.maxFadeTime = json["max_fade_time"].as<std::uint16_t>();
+        }
+        if (json.containsKey("dmx")) {
+            w.dmxCfg = DmxCfg::deserialize(json["dmx"].as<std::string>());
+        }
         if (json.containsKey("max_fade_time")) {
             w.maxFadeTime = json["max_fade_time"].as<std::uint16_t>();
         }
@@ -91,10 +87,7 @@ struct WaveAnimationCfg {
 
     static void serialize(JsonObject& jsonWave, const WaveAnimationCfg& w) {
         jsonWave["rgb_strip_name"] = w.rgbStripName;
-        jsonWave["color1"] = ColorUtils::toHexColor(w.color1);
-        jsonWave["color2"] = ColorUtils::toHexColor(w.color2);
-        jsonWave["dimm"] = w.dimm;
-        jsonWave["duration"] = w.duration;
+        jsonWave["dmx"] = DmxCfg::serialize(w.dmxCfg);
         jsonWave["max_fade_time"] = w.maxFadeTime;
         jsonWave["dimmable"] = w.dimmable;
     }
@@ -107,17 +100,20 @@ class WaveAnimation : public Thing {
 
     private:
         std::vector<FadeAnimation*> fades;
-        int current = 0;
-        unsigned int maxFadeTimeMillis;
+        uint16_t current = 0;
+        uint16_t maxFadeTimeMillis;
         bool firstColor = true;
         bool dimmable = false;
 
     public:
         WaveAnimation(
-            Scheduler* aScheduler,
-            std::vector<RgbThing*> lines,
-            unsigned int maxFadeTimeMillis):
-            maxFadeTimeMillis(maxFadeTimeMillis) {
+                Scheduler* aScheduler,
+                std::vector<RgbThing*> lines,
+                uint16_t maxFadeTimeMillis,
+                uint16_t maxStepDuration = 1000,
+                bool dimmable = false):
+            maxFadeTimeMillis(maxFadeTimeMillis),
+            dimmable(dimmable) {
 
             for (auto& line : lines) {
                 FadeAnimation* fadeAnimation = new FadeAnimation(aScheduler, line, 100); //TODO hold

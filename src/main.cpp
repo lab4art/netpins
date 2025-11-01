@@ -331,29 +331,6 @@ std::vector<Switchabe*> createThings(Settings& settings) {
     } catch (const std::exception& e) {
         Serial.println(String("ERR: configuring plugins. ") + e.what());
     }
-  //wave1 = new Wave(&scheduler, rgbThings, 4000);
-  // loop over settings waves and create animations
-
-    // std::vector<RgbThing*> allRgbThings;
-    // std::map<uint8_t, RgbThing*> rgbThingsGroupsIndex;
-    // for (auto& rgbThingsGroup : rgbThingsGroups) {
-    //     for (auto& rgbThing : rgbThingsGroup.group->things()) {
-    //         allRgbThings.push_back(rgbThing);
-    //         rgbThingsGroupsIndex[allRgbThings.size() - 1] = rgbThing;
-    //     }
-    // }
-
-    // for (auto& waveDef : settings.waves) {
-    //     std::vector<RgbThing*> waveLines;
-    //     for (auto& sliceIndex : waveDef.sliceIndexes) {
-    //         waveLines.push_back(allRgbThings[sliceIndex]);
-    //         // remove the group if at least one of the lines is in the wave
-    //         dmxListener->removeMapping(rgbThingsGroupsIndex[sliceIndex]);
-    //     }
-    //     auto wave = new Wave(&scheduler, waveLines, waveDef.maxFadeTime);
-    //     Serial.println(String("Wave created with ") + waveLines.size() + " lines.");
-    //     dmxListener->addThing(wave);
-    // }
 
     // ANIMATIONS
     // Log.noticeln("Creating tail animations ...");

@@ -17,29 +17,32 @@ public:
         try {
             WaveAnimationCfg cfg = WaveAnimationCfg::deserialize(config);
             
-            RgbThingGroup* rgbThing = dynamic_cast<RgbThingGroup*>(
+            RgbThingGroup* rgbThingGroup = dynamic_cast<RgbThingGroup*>(
                 dmxListener->getThing(String(cfg.rgbStripName.c_str()))
             );
             
-            if (rgbThing == nullptr || rgbThing->things().empty()) {
+            if (rgbThingGroup == nullptr || rgbThingGroup->things().empty()) {
                 Log.errorln("RGB thing '%s' not found or empty", cfg.rgbStripName.c_str());
                 return false;
             }
             
             // Get all lines from the thing group for wave animation
-            std::vector<RgbThing*> lines = rgbThing->things();
+            std::vector<RgbThing*> lines = rgbThingGroup->things();
             
-            WaveAnimation* animation = new WaveAnimation(scheduler, lines, cfg.maxFadeTime);
-            animation->setColor1(cfg.color1);
-            animation->setColor2(cfg.color2);
-            animation->setDimm(cfg.dimm);
-            animation->setDuration(cfg.duration);
+            WaveAnimation* animation = new WaveAnimation(
+                scheduler, 
+                lines, 
+                cfg.maxFadeTime,
+                cfg.dimmable
+            );
             animation->setMaxFadeTime(cfg.maxFadeTime);
             
-            dmxListener->removeMappingForThing(rgbThing->getName());
+            dmxListener->removeMappingForThing(rgbThingGroup->getName());
+            dmxListener->addMapping(animation, cfg.dmxCfg);
+
             waveAnimations.push_back(animation);
             animation->restart();
-            
+
             Log.noticeln("Created wave animation for RGB thing '%s' with %d lines", 
                         cfg.rgbStripName.c_str(), lines.size());
             

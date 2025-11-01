@@ -101,14 +101,15 @@ leds:
 rgbw_strips: []
 rgb_strips:
   - pin: 13
-    size: 60
+    name: rgb-strip-1
+    dmx: 1@0
+    size: 20
     dimmer: none # add dimmer channel. Options: none, single, per-slice
     slices:
       - 0
+      - 5
+      - 10
       - 15
-      - 33
-      - 49
-      - 57
 servos:
   - pin: 4
     max_angle: 180
@@ -128,15 +129,6 @@ pwms:
     name: pwm-14
     dmx: 2@1
 
-rgb_strips:
-  - pin: 13
-    name: rgb-strip-1
-    dmx: 3@1
-    size: 60
-    dimmer: none # add dimmer channel. Options: none, single, per-slice
-    slices:
-      - 0
-      - 15
 sensor_publish: # enable/disable sensor publishing over: mqtt, artnet, local
   - mqtt
   - artnet
@@ -159,16 +151,6 @@ hum_temps:
 touch_sensors:
   - pin: 4
     threshold: 250 # works ok with a wire on a s2_mini pin
-
-waves: # Works only with rgb strip
-  - max_fade_time: 10000
-    # RGB slice sequential number in order they are defined, ignoring "pin groups" (supports cross pin slices)
-    slice_indexes:
-      - 0
-      - 1
-      - 2
-      - 3
-      - 4
 
 pwm_fades:
   - name: fade-13
@@ -196,6 +178,13 @@ plugins:
         - '#002222'
         - '#002222'
 
+  - name: wave-animation-1
+    type: wave-animation
+    config:
+      rgb_strip_name: rgb-strip-1
+      dmx: 1@0
+      max_fade_time: 5000
+      dimmable: false
 ```
 
 ## Testing
