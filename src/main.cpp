@@ -35,6 +35,7 @@
 #include <sensorEvents.h>
 #include <pluginFactory.h>
 #include <colorUtils.h>
+#include <scheduler.h>
 
 
 #define ON_WIFI_EXECUTION_CALLBACK_SIGNATURE std::function<void(String)> wifiExecutionCallback
@@ -59,7 +60,6 @@ SettingsManager<Settings>* settingsManager;
 
 DmxListener* dmxListener;
 
-Scheduler scheduler;
 ArtnetWiFiReceiver* artnet;
 MqttUtils* mqtt;
 SensorEvents* sensorEvents;
@@ -72,6 +72,8 @@ ulong uptimeOffset = 0;
 
 std::map<uint16_t /*universe*/, uint8_t /*lastSequence*/> lastDmxSequences;
 std::map<uint16_t /*universe*/, std::array<uint8_t, 512> /*data*/> dmxData; // 1st byte in data array is a sequence number
+
+Scheduler* scheduler = new Scheduler();
 
 int numOfCreatedStrips = 0;
 template<typename Feature, typename Method>
@@ -326,7 +328,7 @@ std::vector<Switchabe*> createThings(Settings& settings) {
     // Plugins
     try {
         int createdAnimations = PluginFactory::getInstance().createAnimationsFromPlugins(
-            &scheduler, settings.plugins, dmxListener);
+            scheduler, settings.plugins, dmxListener);
         Log.infoln("Created %d animations from plugins", createdAnimations);
     } catch (const std::exception& e) {
         Serial.println(String("ERR: configuring plugins. ") + e.what());
@@ -680,13 +682,7 @@ void onWifiExecutionCallback(String ip) {
     auto settigns = settingsManager->getSettings();
     if (_ENABLE_UDP_BROADCAST) {
         if (settigns.udpPort > 0) {
-            if (heartbeatBroadcast != nullptr) {
-                Log.noticeln("Stopping UDP heartbeat ...");
-                delete heartbeatBroadcast;
-                heartbeatBroadcast = nullptr;
-            }
-
-            if (settigns.hbInt > 0) {
+            if (heartbeatBroadcast == nullptr && settigns.hbInt > 0) {
                 auto ip = WiFi.localIP();
                 IPAddress broadcastIp = IPAddress(ip[0], ip[1], ip[2], 255);
                 Log.noticeln("Starting UDP heartbeat on %d.%d.%d.255 ...", ip[0], ip[1], ip[2]);
@@ -695,10 +691,10 @@ void onWifiExecutionCallback(String ip) {
                 udp, 
                 broadcastIp, 
                 settigns.udpPort, 
-                &scheduler, 
                 FIRMWARE_VERSION, 
                 settigns.hostname,
                 settigns.hbInt);
+                scheduler->addTask(heartbeatBroadcast);
             }
         }
     }
@@ -715,9 +711,9 @@ unsigned long lastDmxCommit = 0;
 void loop() {
     unsigned long loopStartTime = micros();
 
-    scheduler.execute(); // scheduler should be before commitNeoStip because tasks usually prepare the data
-
     FactoryReset::getInstance().resetCounter();
+
+    scheduler->loop();
 
     /*
     30ms = 30fps

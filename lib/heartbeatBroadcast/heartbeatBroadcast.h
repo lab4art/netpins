@@ -1,50 +1,53 @@
 #pragma once
 
-#include <TaskScheduler.h>
+#include <scheduler.h>
 
-class HeartbeatBroadcast: public Task {
+class HeartbeatBroadcast: public ScheduledTask {
 
-  private:
-    WiFiUDP* udp;
-    IPAddress broadcastIp;
-    u_int16_t port;
-    const char* firmwareVersion;
-    std::string hostName;
+    private:
+        WiFiUDP* udp;
+        IPAddress broadcastIp;
+        u_int16_t port;
+        const char* firmwareVersion;
+        std::string hostName;
+        unsigned long interval;
+        unsigned long lastExecution = 0;
 
-  public:
-    HeartbeatBroadcast(
-        WiFiUDP* udp,
-        IPAddress broadcastIp,
-        u_int16_t port,
-        Scheduler* aScheduler,
-        const char* firmwareVersion,
-        std::string hostName,
-        unsigned long interval = 10000):
-      udp(udp),
-      broadcastIp(broadcastIp),
-      port(port),
-      firmwareVersion(firmwareVersion),
-      hostName(hostName),
-      Task(interval, TASK_FOREVER, aScheduler, false) {
-        if (interval > 0) {
-          this->enable();
+        void send() {
+            String output;
+            JsonDocument doc;
+            doc["uptime"] = millis();
+            doc["firmwareVersion"] = firmwareVersion;
+            doc["mac"] = WifiUtils::macAddress;
+            doc["ip"] = WiFi.localIP().toString();
+            doc["hostname"] = this->hostName;
+            serializeJson(doc, output);
+
+            udp->beginPacket(broadcastIp, port);
+            udp->print(output.c_str());
+            udp->endPacket();
+            // Log.noticeln("Broadcast message sent %s.", output.c_str());
         }
-    }
 
-    bool Callback() {
-      String output;
-      JsonDocument doc;
-      doc["uptime"] = millis();
-      doc["firmwareVersion"] = firmwareVersion;
-      doc["mac"] = WifiUtils::macAddress;
-      doc["ip"] = WiFi.localIP().toString();
-      doc["hostname"] = this->hostName;
-      serializeJson(doc, output);
+    public:
+        HeartbeatBroadcast(
+                WiFiUDP* udp,
+                IPAddress broadcastIp,
+                u_int16_t port,
+                const char* firmwareVersion,
+                std::string hostName,
+                long interval = 10000):
+            udp(udp),
+            broadcastIp(broadcastIp),
+            port(port),
+            firmwareVersion(firmwareVersion),
+            hostName(hostName),
+            interval(interval),
+            ScheduledTask(interval) {
+        }
 
-      udp->beginPacket(broadcastIp, port);
-      udp->print(output.c_str());
-      udp->endPacket();
-      // Log.noticeln("Broadcast message sent %s.", output.c_str());
-      return true;
-    }
+        void callback() override {
+            this->send();
+        }
+
 };

@@ -2,32 +2,28 @@
 
 #include "config.h"
 #include <Arduino.h>
-#include <TaskScheduler.h>
 #include <ArduinoLog.h>
 #include <NeoPixelBus.h>
 #include <Things.h>
 #include <settings.h>
+#include <scheduler.h>
 
-class AnimationTask: private Task {
+class AnimationTask: public ScheduledTask {
     private:
         std::function<void()> onFrame = []() {};
 
     public:
-        AnimationTask(
-            unsigned int framerate,
-            Scheduler* scheduler):
-            Task(1000 / framerate, -1, scheduler, true) {
+        AnimationTask(unsigned int framerate):
+            ScheduledTask(1000 / framerate) {
         }
 
-        bool Callback() {
+        void callback() override {
             onFrame();
-            return true;
         }
 
         void setOnFrame(std::function<void()> onFrame) {
             this->onFrame = onFrame;
         }
-
 };
 
 class Animation {
@@ -49,11 +45,16 @@ class Animation {
   protected:
 
   public:
-    Animation(Scheduler* aScheduler, bool repeat = true, unsigned int frameRate = 50/*Hz*/):
+    Animation(bool repeat = true, unsigned int frameRate = 50/*Hz*/):
             repeat(repeat),
-            frameRate(frameRate),
-            task(frameRate, aScheduler) {
-        task.setOnFrame([this]() {
+            frameRate(frameRate) {
+    }
+
+    virtual void animate() {}
+
+    void schedule(Scheduler* scheduler) {
+        AnimationTask* task = new AnimationTask(1000 / frameRate);
+        task->setOnFrame([this]() {
             // Log.traceln("Animation frame: %d, remaining frames: %d, progress: %s", frames, remainingFrames, String(getProgress(), 4));
             if (remainingFrames == frames) {
                 onStart();
@@ -72,10 +73,9 @@ class Animation {
                 }
             }
         });
+        scheduler->addTask(task);
     }
 
-    virtual void animate() {}
-    
     void restart(float progress = 0.0f) {
         // frames = nextDuration * frameRate / 1000; // store total iterations, function is returning remaining iterations
         remainingFrames = frames * (1 - progress);
