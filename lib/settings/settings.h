@@ -5,27 +5,6 @@
 #include <ArduinoJson.h>
 #include <Preferences.h>
 
-static RgbColor parseHexColor(const std::string& hex) {
-    // if string starts with # remove it
-    std::string hexColor = hex;
-    if (hexColor[0] == '#') {
-        hexColor = hexColor.substr(1);
-    }
-    if (hexColor.length() != 6) {
-        throw std::invalid_argument("Hex color must be 6 characters long");
-    }
-    uint8_t r = std::stoi(hexColor.substr(0, 2), nullptr, 16);
-    uint8_t g = std::stoi(hexColor.substr(2, 2), nullptr, 16);
-    uint8_t b = std::stoi(hexColor.substr(4, 2), nullptr, 16);
-    return RgbColor(r, g, b);
-};
-
-static std::string toHexColor(const RgbColor& color) {
-    char buffer[8];
-    snprintf(buffer, sizeof(buffer), "#%02X%02X%02X", color.R, color.G, color.B);
-    return std::string(buffer);
-};
-
 enum DimmerMode {
     none,
     single,
@@ -216,41 +195,6 @@ struct StripeCfg {
             slices.add(slice);
         }
         jsonStripe["dmx"] = DmxCfg::serialize(s.dmxCfg);
-    }
-};
-
-struct WaveCfg {
-    // used to calculate fade time from 8bit input
-    std::uint32_t maxFadeTime = 10000;
-    // index number of the rgb slices that are part of the wave. Fist slice defined in the config has index 0
-    std::vector<uint8_t> sliceIndexes;
-
-    bool operator==(const WaveCfg& other) const {
-        return maxFadeTime == other.maxFadeTime &&
-            sliceIndexes == other.sliceIndexes;
-    }
-
-    bool operator!=(const WaveCfg& other) const {
-        return !(*this == other);
-    }
-
-    static WaveCfg deserialize(JsonObject& json) {
-        WaveCfg w;
-        w.maxFadeTime = json["max_fade_time"].as<std::uint32_t>();
-        JsonArray sliceIndexesArray = json["slice_indexes"].as<JsonArray>();
-        for (JsonVariant v : sliceIndexesArray) {
-            auto sliceIndex = v.as<std::uint8_t>();
-            w.sliceIndexes.push_back(sliceIndex);
-        }
-        return w;
-    }
-
-    static void serialize(JsonObject& jsonWave, const WaveCfg& w) {
-        jsonWave["max_fade_time"] = w.maxFadeTime;
-        JsonArray sliceIndexes = jsonWave["slice_indexes"].to<JsonArray>();
-        for (auto sliceIndex : w.sliceIndexes) {
-            sliceIndexes.add(sliceIndex);
-        }
     }
 };
 
@@ -625,11 +569,6 @@ struct Settings {
     
     std::vector<SensorMappingCfg> sensorMappings; // sensor to dmx local mappings
 
-    // waves
-    // stripes that are part of the animation must be excluded from the dmx listener
-    std::vector<WaveCfg> waves;
-    std::vector<PwmFadeCfg> pwmFades;
-
     std::vector<PluginCfg> plugins;
 
     bool lightsTest;
@@ -667,8 +606,6 @@ struct Settings {
 
             sensorMappings == other.sensorMappings &&
 
-            waves == other.waves &&
-            pwmFades == other.pwmFades &&
             plugins == other.plugins;
             
     }
@@ -762,19 +699,7 @@ struct Settings {
             s.sensorMappings.push_back(SensorMappingCfg::deserialize(jsonSensorMapping));
         }
 
-        // aminations
-        JsonArray wavesArray = json["waves"].as<JsonArray>();
-        for (JsonVariant v : wavesArray) {
-            JsonObject jsonWave = v.as<JsonObject>();
-            s.waves.push_back(WaveCfg::deserialize(jsonWave));
-        }
-
-        JsonArray pwmFadesArray = json["pwm_fades"].as<JsonArray>();
-        for (JsonVariant v : pwmFadesArray) {
-            JsonObject jsonPwmFade = v.as<JsonObject>();
-            s.pwmFades.push_back(PwmFadeCfg::deserialize(jsonPwmFade));
-        }
-
+        // plugins
         JsonArray pluginsArray = json["plugins"].as<JsonArray>();
         for (JsonVariant v : pluginsArray) {
             JsonObject jsonPlugin = v.as<JsonObject>();
@@ -834,7 +759,6 @@ struct Settings {
             }
         }
 
-        
         // sensors
         if (digitalReadSensors.size() > 0) {
             JsonArray digitalReadSensors = json["digital_reads"].to<JsonArray>();
@@ -877,23 +801,6 @@ struct Settings {
             }
         }
 
-        // aminations
-        if (waves.size() > 0) {
-            JsonArray waves = json["waves"].to<JsonArray>();
-            for (auto wave : this->waves) {
-                JsonObject jsonWave = waves.add<JsonObject>();
-                WaveCfg::serialize(jsonWave, wave);
-            }
-        }
-
-        if (pwmFades.size() > 0) {
-            JsonArray pwmFades = json["pwm_fades"].to<JsonArray>();
-            for (auto pwmFade : this->pwmFades) {
-                JsonObject jsonPwmFade = pwmFades.add<JsonObject>();
-                PwmFadeCfg::serialize(jsonPwmFade, pwmFade);
-            }
-        }
-
         Serial.println("Serializing plugins, count: " + String(plugins.size()));
         if (plugins.size() > 0) {
             JsonArray plugins = json["plugins"].to<JsonArray>();
@@ -930,8 +837,8 @@ struct Settings {
 
     void setDefaults() {
         this->dmxChOffset = 0;
-        this->wifiSsid = WIFI_SSID;
-        this->wifiPass = WIFI_PASS;
+        this->wifiSsid = "";  // default set by main
+        this->wifiPass = "";  // default set by main
         this->hostname = "";
         this->hbInt = 5000;
         this->udpPort = 5824;

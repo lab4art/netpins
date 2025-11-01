@@ -3,6 +3,8 @@
 #include <Things.h>
 #include <animations.h>
 #include <settings.h>
+#include <colorUtils.h>
+
 
 struct TailAnimationCfg {
     std::string rgbStripName;
@@ -47,8 +49,8 @@ struct TailAnimationCfg {
         }
         JsonObject json = doc.as<JsonObject>();
         t.rgbStripName = json["rgb_strip_name"].as<std::string>();
-        t.color1 = parseHexColor(json["color1"].as<std::string>());
-        t.color2 = parseHexColor(json["color2"].as<std::string>());
+        t.color1 = ColorUtils::parseHexColor(json["color1"].as<std::string>());
+        t.color2 = ColorUtils::parseHexColor(json["color2"].as<std::string>());
         t.dimm = json["dimm"].as<std::uint8_t>();
         t.duration = json["duration"].as<std::uint16_t>();
         t.headLength = json["head_length"].as<std::uint16_t>();
@@ -74,7 +76,7 @@ struct TailAnimationCfg {
             JsonArray colorsArray = json["colors"].as<JsonArray>();
             for (JsonVariant v : colorsArray) {
                 auto colorStr = v.as<std::string>();
-                t.colors.push_back(parseHexColor(colorStr));
+                t.colors.push_back(ColorUtils::parseHexColor(colorStr));
             }
         }
         return t;
@@ -82,8 +84,8 @@ struct TailAnimationCfg {
 
     static void serialize(JsonObject& jsonTail, const TailAnimationCfg& t) {
         jsonTail["rgb_strip_name"] = t.rgbStripName;
-        jsonTail["color1"] = toHexColor(t.color1);
-        jsonTail["color2"] = toHexColor(t.color2);
+        jsonTail["color1"] = ColorUtils::toHexColor(t.color1);
+        jsonTail["color2"] = ColorUtils::toHexColor(t.color2);
         jsonTail["dimm"] = t.dimm;
         jsonTail["duration"] = t.duration;
         jsonTail["head_length"] = t.headLength;
@@ -94,7 +96,7 @@ struct TailAnimationCfg {
         jsonTail["min_duration"] = t.minDuration;
         JsonArray colors = jsonTail["colors"].to<JsonArray>();
         for (const auto& color : t.colors) {
-            colors.add(toHexColor(color));
+            colors.add(ColorUtils::toHexColor(color));
         }
     }
 };
@@ -311,3 +313,5 @@ class TailAnimationThing: public Thing {
         }
 
 };
+
+

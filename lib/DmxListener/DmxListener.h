@@ -98,6 +98,15 @@ class DmxListener {
             }
         }
 
+        Thing* getThing(String thingName) {
+            for (auto& mapping : dmxMappings) {
+                if (mapping->thing->getName().equals(thingName)) {
+                    return mapping->thing;
+                }
+            }
+            return nullptr;
+        }
+
         void clearMappings() {
             for (auto& mapping : dmxMappings) {
                 delete mapping;

@@ -1,7 +1,6 @@
 #pragma once
 
-#define _TASK_OO_CALLBACKS
-
+#include "config.h"
 #include <Arduino.h>
 #include <TaskScheduler.h>
 #include <ArduinoLog.h>
@@ -133,95 +132,6 @@ class Animation {
     }
 };
 
-class PWMFadeAnimation: public Animation {
-    private:
-        PwmThing* led;
-        uint8_t value1; // value to fade from (off)
-        uint8_t value2; // value to fade to (on)
-        boolean fadeInMode = false; // if false, fadeOut
-
-        uint8_t linearBlend(uint8_t left, uint8_t right, float progress) {
-            return left + (right - left) * progress;
-        }
-
-        uint8_t getCurrentValue() {
-            if (fadeInMode) {
-                return linearBlend(value1, value2, getProgress());
-            } else {
-                return linearBlend(value2, value1, getProgress());
-            }
-        }
-
-    public:
-        PWMFadeAnimation(
-            Scheduler* aScheduler, 
-            PwmThing* led):
-            Animation(aScheduler, false),
-            led(led) {
-        }
-
-        void animate() {
-            uint8_t data[1] = {getCurrentValue()};
-            // Log.traceln("Setting PWM fade animation data: %d", data[0]);
-            led->setData(data);
-        }
-
-        void setValue1(uint8_t value) {
-            value1 = value;
-            if (!fadeInMode && !isRunning()) {
-                uint8_t data[1] = {value};
-                led->setData(data);
-            }
-        }
-
-        void setValue2(uint8_t value) {
-            value2 = value;
-            if (fadeInMode && !isRunning()) {
-                uint8_t data[1] = {value};
-                led->setData(data);
-            }
-        }
-
-        void fadeIn(std::uint16_t fadeInDuration) {
-            if (!isRunning()) {
-                Log.traceln("Fresh Fade in to: %d, duration: %d, progress: %s.", this->value2, fadeInDuration, String(getProgress(), 4));
-                this->fadeInMode = true;
-                setDuration(fadeInDuration);
-                restart();
-            } else if (!fadeInMode) {
-                Log.traceln("Middle Fade in to: %d, duration: %d, progress: %s.", this->value2, fadeInDuration, String(getProgress(), 4));
-                float currentProgress = getProgress();
-                this->fadeInMode = true;
-                setDuration(fadeInDuration * getProgress());
-                restart(1 - currentProgress);
-            }
-        }
-        void fadeOut(std::uint16_t fadeOutDuration) {
-            if (!isRunning()) {
-                Log.traceln("Fresh Fade out to: %d, duration: %d, progress: %s.", this->value1, fadeOutDuration, String(getProgress(), 4));
-                this->fadeInMode = false;
-                setDuration(fadeOutDuration);
-                restart();
-            } else if (fadeInMode) {
-                Log.traceln("Middle Fade out to: %d, duration: %d, progress: %s.", this->value1, fadeOutDuration, String(getProgress(), 4));
-                float currentProgress = getProgress();
-                this->fadeInMode = false;
-                setDuration(fadeOutDuration);
-                restart(1 - currentProgress);
-            }
-        }
-
-        void togleFade(
-                std::uint16_t fadeInDuration,
-                std::uint16_t fadeOutDuration) {
-            if (fadeInMode) {
-                fadeOut(fadeOutDuration);
-            } else {
-                fadeIn(fadeInDuration);
-            }
-        }
-};
-
 class FadeAnimation: public Animation {
 
   private:
@@ -281,81 +191,4 @@ class FadeAnimation: public Animation {
     }
 };
 
-class Wave : public Thing {
 
-    private:
-        std::vector<FadeAnimation*> fades;
-        int current = 0;
-        unsigned int maxFadeTimeMillis;
-        bool firstColor = true;
-        bool dimmable = false;
-
-    public:
-        Wave(
-            Scheduler* aScheduler,
-            std::vector<RgbThing*> lines,
-            unsigned int maxFadeTimeMillis):
-            maxFadeTimeMillis(maxFadeTimeMillis) {
-
-            for (auto& line : lines) {
-                FadeAnimation* fadeAnimation = new FadeAnimation(aScheduler, line, 100); //TODO hold
-                if (line->isDimmable()) {
-                    dimmable = true;
-                }
-                fadeAnimation->setDuration(1000);
-                fadeAnimation->setFirstColor(true);
-                fadeAnimation->setOnEnd([this](){
-                    current++;
-                    if (current >= fades.size()) {
-                        current = 0;
-                        for (auto& fade : fades) {
-                            fade->setFirstColor(firstColor);
-                        }
-                        firstColor = !firstColor;
-                    }
-                    Log.traceln("Restarting wave fade: %d", current);
-                    fades[current]->restart();
-                });
-                // Log.noticeln("Adding fade animation: %d");
-                fades.push_back(fadeAnimation);
-            }
-            // start the first fade
-            fades[0]->restart();
-        }
-
-        int numChannels() {
-            // 3(RGB) x 2 + 1(dimmer) + 1 (fade time)
-            return dimmable ? 8 : 7;
-        }
-
-        void setData(uint8_t* data) {
-            auto color1 = RgbColor(data[0], data[1], data[2]);
-            auto color2 = RgbColor(data[3], data[4], data[5]);
-            for (auto& fade : fades) {
-                fade->setColor1(color1);
-                fade->setColor2(color2);
-                if (dimmable) {
-                    fade->setDimm(data[7]);
-                }
-                // set duration based on the 8bit input
-                auto fadeTime = (data[6] * maxFadeTimeMillis) / 255;
-                // Log.noticeln("Setting fade time: %d from input %d", fadeTime, data[6]);
-                if (fadeTime < 100) { // fade time 0 prevets the animation to start
-                    fadeTime = 100;
-                }
-                fade->setDuration(fadeTime);
-            }
-        }
-
-        void setColor1(RgbColor color1) {
-            for (auto& fade : fades) {
-                fade->setColor1(color1);
-            }
-        }
-
-        void setColor2(RgbColor color2) {
-            for (auto& fade : fades) {
-                fade->setColor2(color2);
-            }
-        }
-};

@@ -12,7 +12,6 @@
 #include <set>
 #include <list>
 #include <Arduino.h>
-#include <TaskScheduler.h>
 #include <ArduinoLog.h>
 #include <nvs.h>
 #include <nvs_flash.h>
@@ -22,21 +21,20 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <uri/UriBraces.h>
+#include <settings.h>
 #include "heartbeatBroadcast.h"
 #include <logUtils.h>
 #include <GeneralUtils.h>
 #include <LittleFS.h>
 #include <DmxListener.h>
-#include <animations.h>
 #include <webadmin.h>
-#include <settings.h>
 #include <factoryReset.h>
 #include <Things.h>
 #include <sensors.h>
 #include <mqttUtils.h>
 #include <sensorEvents.h>
-#include <animatedThings.h>
-#include <tailAnimation.h>
+#include <pluginFactory.h>
+#include <colorUtils.h>
 
 
 #define ON_WIFI_EXECUTION_CALLBACK_SIGNATURE std::function<void(String)> wifiExecutionCallback
@@ -50,7 +48,6 @@ std::vector<HumTempSensor*> humTempSensors;
 std::vector<TouchSensor*> touchSensors;
 std::map<uint8_t /* pin */, DigitalReadSensor*> digitalReadSensors;
 std::map<uint8_t /* pin */, AnalogReadSensor*> analogReadSensors;
-std::vector<PWMFadeAnimationThing*> pwmFades;
 
 unsigned long lastCommandReceivedAt = 0;
 unsigned long maxIdleMillis = 0;
@@ -236,8 +233,6 @@ DigitalReadSensor* getDigitalReadSensor(int pin) {
         return nullptr;
     }
 }
-std::vector<TailAnimation*> tailAnimations; // TODO make this pluggable
-
 
 template<class ThingGroupType>
 class InitializedThingGroup {
@@ -288,15 +283,6 @@ std::vector<InitializedThingGroup<ThingGroupType>> createStripThings(
     return groups;
 };
 
-RgbThingGroup* findRgbThingByName(const std::vector<InitializedThingGroup<RgbThingGroup>>& rgbThingGroups, const String name) {
-    for (auto& rgbThingGroup : rgbThingGroups) {
-        if (rgbThingGroup.group->getName() == name) {
-            return rgbThingGroup.group;
-        }
-    }
-    return nullptr;
-}
-
 std::vector<Switchabe*> createThings(Settings& settings) {
     std::vector<Switchabe*> switchables;
 
@@ -337,61 +323,11 @@ std::vector<Switchabe*> createThings(Settings& settings) {
         servos.push_back(thing);
     }
 
-    Log.noticeln("Creating PWM fades ...");
-    for (auto& pwmFadeCfg : settings.pwmFades) {
-        auto pwmthingName = String(pwmFadeCfg.pwmName.c_str());
-        auto pwm = findPwmThing(pwms, pwmthingName);
-        auto pwmFade = new PWMFadeAnimationThing(
-            &scheduler, 
-            pwm,
-            String(pwmFadeCfg.name.c_str()));
-        pwmFades.push_back(pwmFade);
-        dmxListener->removeMappingForThing(pwmthingName);
-        dmxListener->addMapping(pwmFade, pwmFadeCfg.dmxCfg);
-    }
-
     // Plugins
     try {
-        // TODO make this pluggable
-        for (auto& plugin : settings.plugins) {
-            if (plugin.type == "tail-animation") {
-                TailAnimationCfg taCfg = TailAnimationCfg::deserialize(plugin.config);
-                Log.noticeln("Configuring tail animation plugin with color1: %s, color2: %s, dimm: %d, tail length: %d, head length: %d, duration: %d ms.",
-                    toHexColor(taCfg.color1).c_str(),
-                    toHexColor(taCfg.color2).c_str(),
-                    taCfg.dimm,
-                    taCfg.tailLength,
-                    taCfg.headLength,
-                    taCfg.duration);
-                Log.noticeln("Creating tail animation for RGB strip: %s", taCfg.rgbStripName.c_str());
-                RgbThingGroup* rgbThing = findRgbThingByName(rgbThingsGroups, String(taCfg.rgbStripName.c_str()));
-                // get the first line in the group
-                Log.traceln("Finding first line in RGB thing group: %s", taCfg.rgbStripName.c_str());
-                RgbThing* line = rgbThing->things().front();
-                Log.traceln("Creating TailAnimation ...");
-                TailAnimation* tailAnimation = new TailAnimation(
-                        &scheduler, 
-                        line,
-                        taCfg.direction,
-                        true);
-                tailAnimation->setColor1(taCfg.color1);
-                tailAnimation->setColor2(taCfg.color2);
-                tailAnimation->setDimm(taCfg.dimm);
-                tailAnimation->setTailLength(taCfg.tailLength);
-                tailAnimation->setHeadLength(taCfg.headLength);
-                tailAnimation->setDuration(taCfg.duration);
-                tailAnimations.push_back(tailAnimation);
-
-                Log.traceln("Removing DMX mapping for RGB thing: %s", rgbThing->getName().c_str());
-                dmxListener->removeMappingForThing(rgbThing->getName());
-                // TODO dmx mapping
-                // TailAnimationThing* tailAnimationThing = new TailAnimationThing(tailAnimation, String(taCfg.rgbThingName.c_str()) + "-ta");
-                // dmxListener->addMapping(tailAnimationThing, taCfg.dmxCfg);
-
-                } else if (plugin.type == "wave") {
-                // configure wave plugin
-            }
-        }
+        int createdAnimations = PluginFactory::getInstance().createAnimationsFromPlugins(
+            &scheduler, settings.plugins, dmxListener);
+        Log.infoln("Created %d animations from plugins", createdAnimations);
     } catch (const std::exception& e) {
         Serial.println(String("ERR: configuring plugins. ") + e.what());
     }
@@ -557,6 +493,9 @@ void setup() {
         Log.noticeln("Factory reset requested, setting defaults ...");
         eraseAllPreferences();
         settingsManager->setDefaults();
+        // Set WiFi credentials from config
+        settingsManager->getSettings().wifiSsid = WIFI_SSID;
+        settingsManager->getSettings().wifiPass = WIFI_PASS;
         settingsManager->save();
     } else {
         // load settings
@@ -567,6 +506,9 @@ void setup() {
     if (settingsManager->getSettings().wifiSsid.empty() || settingsManager->getSettings().wifiSsid == "null") { // TODO make sure string literal "null" is not stored
         Log.noticeln("Empty settings, setting defaults ...");
         settingsManager->setDefaults();
+        // Set WiFi credentials from config
+        settingsManager->getSettings().wifiSsid = WIFI_SSID;
+        settingsManager->getSettings().wifiPass = WIFI_PASS;
         settingsManager->save();
     }
     Settings settings = settingsManager->getSettings();
