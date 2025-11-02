@@ -3,7 +3,7 @@
 #include <string>
 #include <NeoPixelBus.h>
 
-class ColorUtils {
+class NetpinsCommons {
 public:
     /**
      * Parse a hex color string (with or without #) to RgbColor
@@ -19,4 +19,6 @@ public:
      * @return Hex color string with # prefix (e.g., "#FF0000")
      */
     static std::string toHexColor(const RgbColor& color);
+
+    static uint8_t linearBlend(uint8_t left, uint8_t right, float progress);
 };

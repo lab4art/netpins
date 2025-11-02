@@ -3,94 +3,136 @@
 #include <Things.h>
 #include <vector>
 #include <animations.h>
+#include <string>
+#include <netpinsCommons.h>
 
-class Scheduler;
+struct PwmFadeCfg {
+    std::string pwmName;
+    DmxCfg dmxCfg;
+    std::uint16_t maxFadeDuration = 10000; // ms, maximum fade time
+
+    bool operator==(const PwmFadeCfg& other) const {
+        return pwmName == other.pwmName &&
+            dmxCfg == other.dmxCfg &&
+            maxFadeDuration == other.maxFadeDuration;
+    };
+
+    bool operator!=(const PwmFadeCfg& other) const {
+        return !(*this == other);
+    };
+
+    static PwmFadeCfg deserialize(std::string jsonString) {
+        PwmFadeCfg p;
+        JsonDocument doc;
+        DeserializationError error = deserializeJson(doc, jsonString);
+        if (error) {
+            Serial.println("Failed to deserialize PwmFadeCfg");
+            return p; // Return default config on error
+        }
+        JsonObject json = doc.as<JsonObject>();
+        p.pwmName = json["pwm_name"].as<std::string>();
+        if (json.containsKey("dmx")) {
+            p.dmxCfg = DmxCfg::deserialize(json["dmx"].as<std::string>());
+        }
+        p.maxFadeDuration = json["max_fade_duration"].as<std::uint16_t>();
+        return p;
+    };
+
+    static void serialize(JsonObject& json, const PwmFadeCfg& p) {
+        json["pwm_name"] = p.pwmName;
+        json["dmx"] = DmxCfg::serialize(p.dmxCfg);
+        json["max_fade_duration"] = p.maxFadeDuration;
+    };
+};
 
 class PWMFadeAnimation: public Animation {
     private:
-        PwmThing* led;
+        PwmThing* pwmThing;
         uint8_t value1; // value to fade from (off)
         uint8_t value2; // value to fade to (on)
-        boolean fadeInMode = false; // if false, fadeOut
+        uint16_t maxFadeDuration;
+        uint16_t fadeInDuration;
+        uint16_t fadeOutDuration;
 
-        uint8_t linearBlend(uint8_t left, uint8_t right, float progress) {
-            return left + (right - left) * progress;
-        }
+        boolean fadeInMode = false; // if false, fadeOut
 
         uint8_t getCurrentValue() {
             if (fadeInMode) {
-                return linearBlend(value1, value2, getProgress());
+                return NetpinsCommons::linearBlend(value1, value2, getProgress());
             } else {
-                return linearBlend(value2, value1, getProgress());
+                return NetpinsCommons::linearBlend(value2, value1, getProgress());
             }
         }
 
     public:
         PWMFadeAnimation(
-            Scheduler* aScheduler, 
-            PwmThing* led):
-            Animation(aScheduler, false),
-            led(led) {
+                PwmThing* pwmThing,
+                uint16_t maxFadeDuration):
+                Animation(false),
+                pwmThing(pwmThing),
+                maxFadeDuration(maxFadeDuration) {
+            // setName(std::string("PWM FA for ") + pwmThing->getName().c_str());
+            setName(std::string("PWM FA for "));
+            setDuration(maxFadeDuration);
+            Log.traceln("Created PWM fade animation for PWM thing '%s' with max fade duration: %d", pwmThing->getName().c_str(), maxFadeDuration);
         }
 
         void animate() {
             uint8_t data[1] = {getCurrentValue()};
             // Log.traceln("Setting PWM fade animation data: %d", data[0]);
-            led->setData(data);
+            pwmThing->setData(data);
         }
 
         void setValue1(uint8_t value) {
             value1 = value;
-            if (!fadeInMode && !isRunning()) {
-                uint8_t data[1] = {value};
-                led->setData(data);
-            }
         }
 
         void setValue2(uint8_t value) {
             value2 = value;
-            if (fadeInMode && !isRunning()) {
-                uint8_t data[1] = {value};
-                led->setData(data);
-            }
         }
 
-        void fadeIn(std::uint16_t fadeInDuration) {
+        void setFadeInDuration(uint8_t fInDuration) {
+            this->fadeInDuration = fInDuration * this->maxFadeDuration / 255;
+        }
+
+        void setFadeOutDuration(uint8_t fOutDuration) {
+            this->fadeOutDuration = fOutDuration * this->maxFadeDuration / 255;
+        }
+
+        void fadeIn() {
             if (!isRunning()) {
-                Log.traceln("Fresh Fade in to: %d, duration: %d, progress: %s.", this->value2, fadeInDuration, String(getProgress(), 4));
+                // Log.traceln("Fresh FadeIn to: %d, duration: %d, progress: %s.", this->value2, fadeInDuration, String(getProgress(), 4));
                 this->fadeInMode = true;
                 setDuration(fadeInDuration);
                 restart();
             } else if (!fadeInMode) {
-                Log.traceln("Middle Fade in to: %d, duration: %d, progress: %s.", this->value2, fadeInDuration, String(getProgress(), 4));
+                // Log.traceln("Middle FadeIn to: %d, duration: %d, progress: %s.", this->value2, fadeInDuration, String(getProgress(), 4));
                 float currentProgress = getProgress();
                 this->fadeInMode = true;
-                setDuration(fadeInDuration * getProgress());
+                setDuration(fadeInDuration * currentProgress);
                 restart(1 - currentProgress);
             }
         }
-        void fadeOut(std::uint16_t fadeOutDuration) {
+        void fadeOut() {
             if (!isRunning()) {
-                Log.traceln("Fresh Fade out to: %d, duration: %d, progress: %s.", this->value1, fadeOutDuration, String(getProgress(), 4));
+                // Log.traceln("Fresh FadeOut to: %d, duration: %d, progress: %s.", this->value1, fadeOutDuration, String(getProgress(), 4));
                 this->fadeInMode = false;
                 setDuration(fadeOutDuration);
                 restart();
             } else if (fadeInMode) {
-                Log.traceln("Middle Fade out to: %d, duration: %d, progress: %s.", this->value1, fadeOutDuration, String(getProgress(), 4));
+                // Log.traceln("Middle FadeOut to: %d, duration: %d, progress: %s.", this->value1, fadeOutDuration, String(getProgress(), 4));
                 float currentProgress = getProgress();
                 this->fadeInMode = false;
-                setDuration(fadeOutDuration);
+                setDuration(fadeOutDuration * currentProgress); // TODO 1 - currentProgress ??
                 restart(1 - currentProgress);
             }
         }
 
-        void togleFade(
-                std::uint16_t fadeInDuration,
-                std::uint16_t fadeOutDuration) {
+        void toggleFade() {
             if (fadeInMode) {
-                fadeOut(fadeOutDuration);
+                fadeOut();
             } else {
-                fadeIn(fadeInDuration);
+                fadeIn();
             }
         }
 };
@@ -113,13 +155,8 @@ class PWMFadeAnimationThing: public Thing {
 
     public:
         PWMFadeAnimationThing(
-                Scheduler* aScheduler, 
-                PwmThing* led, 
-                String name) {
-            fadeAnimation = new PWMFadeAnimation(
-                aScheduler, 
-                led);
-            setName(name);
+                PWMFadeAnimation* fadeAnimation):
+                fadeAnimation(fadeAnimation) {
         }
 
         int numChannels() {
@@ -129,26 +166,19 @@ class PWMFadeAnimationThing: public Thing {
         void setData(uint8_t* data) {
             boolean onOffChanged = lastDmxData[4] != data[4];
             if (setLastDmxData(data)) {
-                // Log.traceln("Setting PWM fade animation data: %d %d %d %d %d", data[0], data[1], data[2], data[3], data[4]);
+                Log.traceln("Setting PWM fade animation data: %d %d %d %d %d", data[0], data[1], data[2], data[3], data[4]);
                 fadeAnimation->setValue1(data[0]);
                 fadeAnimation->setValue2(data[1]);
+                fadeAnimation->setFadeInDuration(data[2]);
+                fadeAnimation->setFadeOutDuration(data[3]);
                 // trigger fade only if data[4] (on/off) changed
                 if (onOffChanged) { // TODO apply new fade data although on/off does not change
                     if (data[4] > 0) {
-                        fadeAnimation->fadeIn(data[2] * 100);
+                        fadeAnimation->fadeIn();
                     } else {
-                        fadeAnimation->fadeOut(data[3] * 100);
+                        fadeAnimation->fadeOut();
                     }
                 }
             }
         }
-};
-
-PWMFadeAnimationThing* findPwmFadeAnimationThing(std::vector<PWMFadeAnimationThing*> pwmFades, String name) {
-    for (auto pwmFade : pwmFades) {
-        if (pwmFade->getName().equals(name)) {
-            return pwmFade;
-        }
-    }
-    return nullptr;
 };

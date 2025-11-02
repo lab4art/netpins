@@ -1,7 +1,7 @@
-#include "colorUtils.h"
+#include "netpinsCommons.h"
 #include <stdexcept>
 
-RgbColor ColorUtils::parseHexColor(const std::string& hex) {
+RgbColor NetpinsCommons::parseHexColor(const std::string& hex) {
     // if string starts with # remove it
     std::string hexColor = hex;
     if (hexColor[0] == '#') {
@@ -16,8 +16,12 @@ RgbColor ColorUtils::parseHexColor(const std::string& hex) {
     return RgbColor(r, g, b);
 }
 
-std::string ColorUtils::toHexColor(const RgbColor& color) {
+std::string NetpinsCommons::toHexColor(const RgbColor& color) {
     char buffer[8];
     snprintf(buffer, sizeof(buffer), "#%02X%02X%02X", color.R, color.G, color.B);
     return std::string(buffer);
+}
+
+uint8_t NetpinsCommons::linearBlend(uint8_t left, uint8_t right, float progress) {
+    return left + (right - left) * progress;
 }

@@ -3,7 +3,7 @@
 #include <Things.h>
 #include <animations.h>
 #include <settings.h>
-#include <colorUtils.h>
+#include <netpinsCommons.h>
 
 struct WaveEffectCfg {
     std::string rgbStripName;

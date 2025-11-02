@@ -84,7 +84,7 @@ class DmxListener {
         }
 
         void addMapping(Thing* thing, DmxCfg dmxCfg) {
-            Log.noticeln("Adding mapping for thing %s on universe %d channel %d", thing->getName().c_str(), dmxCfg.universe, dmxCfg.channel);
+            Log.noticeln("Adding mapping for thing '%s' on universe %d channel %d", thing->getName().c_str(), dmxCfg.universe, dmxCfg.channel);
             dmxMappings.push_back(new DmxMapping(thing, dmxCfg));
             dmxUniverses.insert(dmxCfg.universe);
         }

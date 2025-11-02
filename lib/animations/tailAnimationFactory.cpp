@@ -37,6 +37,7 @@ public:
             animation->setDuration(cfg.maxDuration);
             
             dmxListener->removeMappingForThing(rgbThing->getName());
+            
             TailAnimationThing* tailAnimationThing = new TailAnimationThing(animation, cfg.maxDuration);
             tailAnimationThing->setName(String("TA Thing ") + (cfg.rgbStripName).c_str());
             dmxListener->addMapping(tailAnimationThing, cfg.dmxCfg);

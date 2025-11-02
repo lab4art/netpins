@@ -2,6 +2,7 @@
 
 #define FIRMWARE_VERSION "netpins-2.0.0-snapshot"
 
+// Useful for initial setup via serial console without booting to AP mode
 #define WIFI_SSID ""
 #define WIFI_PASS ""
 
@@ -11,24 +12,25 @@
 #define DNS            IPAddress(0, 0, 0, 0)
 
 #define FACTORY_REST_PIN -1 // -1 to use power cycle factory reset
-#define FORCE_RESET false
+
+#define ANIMATION_FRAME_RATE 50 // Hz
+
+#include <pluginFactory.h>
+// register factories to make sure they are not stripped by the linker
+#include <pwmFadeAnimationFactory.cpp>
+REGISTER_ANIMATION_FACTORY(PWMFadeAnimationFactory);
+#include <tailAnimationFactory.cpp>
+REGISTER_ANIMATION_FACTORY(TailAnimationFactory);
+#include <waveEffectFactory.cpp>
+REGISTER_ANIMATION_FACTORY(WaveEffectFactory);
+
 
 // debug settings ////////////
+#define FORCE_RESET false
 #define WAIT_FOR_SERIAL false
 
-// Uncomment line below to fully disable logging, and reduce project size
-//#define DISABLE_LOGGING
+//#define DISABLE_LOGGING // uncomment to disable logging completely
 #define LOG_LEVEL LOG_LEVEL_TRACE
 // #define LOG_LEVEL LOG_LEVEL_NOTICE
 
 #define PRINT_EXECUTION_STAT false
-
-#define ANIMATION_FRAME_RATE 50 // Hz
-
-// register factories to make sure they are not stripped by the linker
-#include <pluginFactory.h>
-
-#include <waveEffectFactory.cpp>
-#include <tailAnimationFactory.cpp>
-REGISTER_ANIMATION_FACTORY(WaveEffectFactory);
-REGISTER_ANIMATION_FACTORY(TailAnimationFactory);

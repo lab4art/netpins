@@ -199,6 +199,20 @@ plugins:
       max_fade_time: 5000
       dimmable: true
 ```
+PWM fade
+```yaml
+pwms:
+  - pin: 13
+    name: pwm-13
+    dmx: 1@0 # channel@universe
+plugins:
+  - name: pwm-fade-1
+    type: pwm-fade
+    config:
+      pwm_name: pwm-13
+      dmx: 1@0
+      max_fade_duration: 5000
+```
 
 ## Testing
 

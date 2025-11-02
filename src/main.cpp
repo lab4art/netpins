@@ -32,7 +32,6 @@
 #include <mqttUtils.h>
 #include <sensorEvents.h>
 #include <pluginFactory.h>
-#include <colorUtils.h>
 #include <scheduler.h>
 
 #define ON_WIFI_EXECUTION_CALLBACK_SIGNATURE std::function<void(String)> wifiExecutionCallback
@@ -46,11 +45,6 @@ std::vector<HumTempSensor*> humTempSensors;
 std::vector<TouchSensor*> touchSensors;
 std::map<uint8_t /* pin */, DigitalReadSensor*> digitalReadSensors;
 std::map<uint8_t /* pin */, AnalogReadSensor*> analogReadSensors;
-
-// Provide access to global pwm list for animation factories
-std::vector<PwmThing*>* getGlobalPwmList() { // TODO move to a better place
-    return &pwms;
-}
 
 unsigned long lastCommandReceivedAt = 0;
 unsigned long maxIdleMillis = 0;

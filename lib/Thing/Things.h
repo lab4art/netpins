@@ -383,5 +383,3 @@ class RgbwThingGroup : public ThingGroup {
             }
         }
 };
-
-PwmThing* findPwmThing(std::vector<PwmThing*> leds, String name);

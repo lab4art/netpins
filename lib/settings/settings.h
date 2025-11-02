@@ -372,38 +372,6 @@ struct TouchSensorCfg {
     };
 };
 
-struct PwmFadeCfg {
-    std::string name;
-    std::string pwmName;
-    DmxCfg dmxCfg;
-
-    bool operator==(const PwmFadeCfg& other) const {
-        return name == other.name &&
-            pwmName == other.pwmName &&
-            dmxCfg == other.dmxCfg;
-    };
-
-    bool operator!=(const PwmFadeCfg& other) const {
-        return !(*this == other);
-    };
-
-    static PwmFadeCfg deserialize(JsonObject& json) {
-        PwmFadeCfg p;
-        p.name = json["name"].as<std::string>();
-        p.pwmName = json["pwm_name"].as<std::string>();
-        if (json.containsKey("dmx")) {
-            p.dmxCfg = DmxCfg::deserialize(json["dmx"].as<std::string>());
-        }
-        return p;
-    };
-
-    static void serialize(JsonObject& json, const PwmFadeCfg& p) {
-        json["name"] = p.name;
-        json["pwm_name"] = p.pwmName;
-        json["dmx"] = DmxCfg::serialize(p.dmxCfg);
-    };
-};
-
 struct SensorMappingCfg {
     std::string sensorName;
     DmxCfg dmxCfg;

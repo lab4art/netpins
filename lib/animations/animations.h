@@ -31,7 +31,7 @@ class Animation {
     std::string name = "";
     bool repeat;
     unsigned int frameRate;
-    unsigned long frames = 0;
+    unsigned long frames = 0; // total number of frames for the animation
     unsigned long remainingFrames = 0;
     
     /**
@@ -65,6 +65,9 @@ class Animation {
      * 4 - 0.8 - 1
      */
     float getProgress() {
+        if (frames == 0) {
+            return 1.0f;
+        }
         float delta = 1.0f / ((float)frames - 1.0f); // one frame less to caltulate delta, to get a value between 0 and 1
         return 1.0f - (float)remainingFrames * delta + delta; 
     }
@@ -110,7 +113,7 @@ class Animation {
     }
 
     void restart(float progress = 0.0f) {
-        Log.traceln("Restarting animation '%s' at progress: %s", name.c_str(), String(progress, 4));
+        // Log.traceln("Restarting animation '%s' with total frames: %d at progress: %s", name.c_str(), frames, String(progress, 4));
         onEndCalled = false;
         remainingFrames = frames * (1 - progress);
         task->enable();
