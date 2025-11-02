@@ -1,6 +1,5 @@
 #pragma once
 
-#include "config.h"
 #include <Arduino.h>
 #include <ArduinoLog.h>
 #include <NeoPixelBus.h>
@@ -14,7 +13,7 @@ class AnimationTask: public ScheduledTask {
 
     public:
         AnimationTask(unsigned int framerate):
-            ScheduledTask(1000 / framerate) {
+            ScheduledTask(1000 / framerate, "AnimationTask", false) {
         }
 
         void callback() override {
@@ -28,9 +27,10 @@ class AnimationTask: public ScheduledTask {
 
 class Animation {
   private:
-    AnimationTask task;
+    AnimationTask* task = nullptr;
+    std::string name = "";
     bool repeat;
-    uint8_t frameRate;
+    unsigned int frameRate;
     unsigned long frames = 0;
     unsigned long remainingFrames = 0;
     
@@ -41,8 +41,12 @@ class Animation {
     // unsigned int nextDuration = 0;
     std::function<void()> onEnd = []() {};
     std::function<void()> onStart = []() {};
+    bool onEndCalled = false;
   
   protected:
+    bool isFirstFrame() const {
+        return remainingFrames == frames;
+    }
 
   public:
     Animation(bool repeat = true, unsigned int frameRate = 50/*Hz*/):
@@ -53,7 +57,7 @@ class Animation {
     virtual void animate() {}
 
     void schedule(Scheduler* scheduler) {
-        AnimationTask* task = new AnimationTask(1000 / frameRate);
+        task = new AnimationTask(frameRate);
         task->setOnFrame([this]() {
             // Log.traceln("Animation frame: %d, remaining frames: %d, progress: %s", frames, remainingFrames, String(getProgress(), 4));
             if (remainingFrames == frames) {
@@ -66,10 +70,14 @@ class Animation {
                 this->remainingFrames--;
             }
             if (remainingFrames == 0) {
-                onEnd();
+                if (!onEndCalled) {
+                    onEndCalled = true;
+                    onEnd();
+                    // Log.traceln("Animation '%s' ended.", name.c_str());
+                }
                 if (this->repeat) {
                     restart();
-                    Log.traceln("Animation restarted.");
+                    // Log.traceln("Animation '%s' restarted.", name.c_str());
                 }
             }
         });
@@ -77,9 +85,12 @@ class Animation {
     }
 
     void restart(float progress = 0.0f) {
-        // frames = nextDuration * frameRate / 1000; // store total iterations, function is returning remaining iterations
+        Log.traceln("Restarting animation '%s' at progress: %s", name.c_str(), String(progress, 4));
+        onEndCalled = false;
         remainingFrames = frames * (1 - progress);
-        Log.traceln("Staring animation with refreshRate: %d, frames: %d, remaining frames: %d, repeat: %d", frameRate, frames, remainingFrames, repeat);
+        task->enable();
+        // Log.traceln("Restarted animation '%s' with refreshRate: %d, frames: %d, remaining frames: %d, repeat: %d", 
+        //         name.c_str(), frameRate, frames, remainingFrames, repeat);
     }
 
     /**
@@ -109,11 +120,6 @@ class Animation {
 
     void setDuration(unsigned int duration) {
         frames = duration * frameRate / 1000; // store total iterations, function is returning remaining iterations
-        // restart(getProgress());
-    }
-
-    unsigned int getDuration() {
-        return frames * 1000 / frameRate; // return duration in ms
     }
 
     bool isRunning() {
@@ -130,6 +136,14 @@ class Animation {
     void setOnEnd(std::function<void()> onEnd) {
         this->onEnd = onEnd;
     }
+
+    void setName(std::string name) {
+        this->name = name;
+    }
+
+    std::string getName() const {
+        return name;
+    }
 };
 
 class FadeAnimation: public Animation {
@@ -143,25 +157,24 @@ class FadeAnimation: public Animation {
     RgbColor newColor;
     bool firstColor;
 
-    unsigned int fadeTimeMillis; // TODO hold
-
   public:
     FadeAnimation(
-        Scheduler* aScheduler,
         RgbThing* line,
-        unsigned int fadeTimeMillis,
-        bool repeat = false): 
-          Animation(aScheduler, repeat),
-          line(line),
-          fadeTimeMillis(fadeTimeMillis) { 
+        unsigned int frameRate,
+        bool repeat = false):
+          Animation(repeat, frameRate),
+          line(line) { 
         color1 = RgbColor(0,0,0);
         color2 = RgbColor(0,0,0);
         newColor = RgbColor(0,0,0);
         currentColor = RgbColor(0,0,0);
+        firstColor = true;
     }
     
     void animate() {
-        if (getProgress() == 0) {
+        // Check if this is the first frame of the animation cycle
+        if (isFirstFrame()) {
+            // Log.traceln("FadeAnimation '%s' 1st frame. newColor: %d %d %d, color1: %d %d %d, color2: %d %d %d. Is firstColor: %d", getName().c_str(), newColor.R, newColor.G, newColor.B, color1.R, color1.G, color1.B, color2.R, color2.G, color2.B, firstColor);
             if (firstColor) {
                 currentColor = newColor;
                 newColor = color1;
@@ -169,26 +182,28 @@ class FadeAnimation: public Animation {
                 currentColor = newColor;
                 newColor = color2;
             }
+            // Log.traceln("FadeAnimation '%s' 1st frame. currentColor: %d %d %d, newColor: %d %d %d", getName().c_str(), currentColor.R, currentColor.G, currentColor.B, newColor.R, newColor.G, newColor.B);
         }
-        float blendFactor = getProgress();
-        line->setColor(RgbColor::LinearBlend(currentColor, newColor, blendFactor), dimm);
+        
+        float progress = getProgress();
+        RgbColor blendedColor = RgbColor::LinearBlend(currentColor, newColor, progress);
+        // Log.traceln("FadeAnimation '%s' animating. Progress: %s. Blended color: %d %d %d. Dimm: %d", getName().c_str(), String(progress, 4), blendedColor.R, blendedColor.G, blendedColor.B, dimm);
+        line->setColor(blendedColor, dimm);
     }
 
-    void setColor1(RgbColor color1) {
-        this->color1 = color1;
+    void setColor1(RgbColor color) {
+        this->color1 = color;
     }
 
-    void setColor2(RgbColor color2) {
-        this->color2 = color2;
+    void setColor2(RgbColor color) {
+        this->color2 = color;
     }
 
     void setDimm(uint8_t dimm) {
         this->dimm = dimm;
     }
 
-    void setFirstColor(bool isFfirstColor) {
-        firstColor = isFfirstColor;
+    void setFirstColor(bool firstColor) {
+        this->firstColor = firstColor;
     }
 };
-
-

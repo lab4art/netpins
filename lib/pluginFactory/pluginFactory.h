@@ -10,7 +10,7 @@
 class DmxListener;
 class Scheduler;
 
-class AnimationFactory {
+class AnimationFactory { // TODO what's the difference between this and PluginFactory?
 public:
     virtual ~AnimationFactory() = default;
     virtual bool createAnimation(Scheduler* scheduler, const std::string& config, DmxListener* dmxListener) = 0;

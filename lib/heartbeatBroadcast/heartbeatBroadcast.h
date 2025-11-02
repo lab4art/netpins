@@ -43,7 +43,7 @@ class HeartbeatBroadcast: public ScheduledTask {
             firmwareVersion(firmwareVersion),
             hostName(hostName),
             interval(interval),
-            ScheduledTask(interval) {
+            ScheduledTask(interval, "HeartbeatBroadcast") {
         }
 
         void callback() override {

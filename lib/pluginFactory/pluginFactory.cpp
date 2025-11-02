@@ -12,13 +12,13 @@ PluginFactory& PluginFactory::getInstance() {
 
 void PluginFactory::registerFactory(std::unique_ptr<AnimationFactory> factory) {
     if (factory == nullptr) {
-        Log.errorln("Attempted to register null factory");
+        Log.errorln("Attempted to register null factory.");
         return;
     }
     
     std::string type = factory->getType();
     if (type.empty()) {
-        Log.errorln("Attempted to register factory with empty type");
+        Log.errorln("Attempted to register factory with empty type.");
         return;
     }
     

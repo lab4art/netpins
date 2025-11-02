@@ -856,7 +856,6 @@ class SettingsManager {
         T settings;
 
         void onError(std::string message) {
-            // TODO store last error for UI to display
             Serial.println(message.c_str());
         }
 

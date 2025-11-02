@@ -87,3 +87,6 @@ public:
 std::vector<PWMFadeAnimationThing*> PWMFadeAnimationFactory::pwmFadeAnimations;
 
 REGISTER_ANIMATION_FACTORY(PWMFadeAnimationFactory);
+
+// Force linker to include this file
+extern "C" void __pwmFadeAnimationFactory_init() {}

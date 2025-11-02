@@ -178,8 +178,8 @@ plugins:
         - '#002222'
         - '#002222'
 
-  - name: wave-animation-1
-    type: wave-animation
+  - name: wave-effect-1
+    type: wave-effect
     config:
       rgb_strip_name: rgb-strip-1
       dmx: 1@0

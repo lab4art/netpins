@@ -1,9 +1,7 @@
-#define _TASK_OO_CALLBACKS
-
 #define _ENABLE_UDP_BROADCAST true
 #define _ENABLE_WEBSERVER true
 
-#include "config.h"
+#include <config.h>
 
 #include <NeoPixelBus.h>
 #include <ArtnetWiFi.h>
@@ -37,7 +35,6 @@
 #include <colorUtils.h>
 #include <scheduler.h>
 
-
 #define ON_WIFI_EXECUTION_CALLBACK_SIGNATURE std::function<void(String)> wifiExecutionCallback
 
 // https://github.com/Makuna/NeoPixelBus/wiki/ESP32-NeoMethods
@@ -49,6 +46,11 @@ std::vector<HumTempSensor*> humTempSensors;
 std::vector<TouchSensor*> touchSensors;
 std::map<uint8_t /* pin */, DigitalReadSensor*> digitalReadSensors;
 std::map<uint8_t /* pin */, AnalogReadSensor*> analogReadSensors;
+
+// Provide access to global pwm list for animation factories
+std::vector<PwmThing*>* getGlobalPwmList() { // TODO move to a better place
+    return &pwms;
+}
 
 unsigned long lastCommandReceivedAt = 0;
 unsigned long maxIdleMillis = 0;
@@ -184,6 +186,7 @@ void doCommitThings() {
     for (auto pair : rgbStrips) {
         auto strip = pair.second;
         if (strip != nullptr) {
+            // Log.traceln("Before Show R:%d G:%d B:%d", strip->GetPixelColor(0).R, strip->GetPixelColor(0).G, strip->GetPixelColor(0).B);
             strip->Show();
         }
     }
@@ -334,6 +337,7 @@ std::vector<Switchabe*> createThings(Settings& settings) {
         Serial.println(String("ERR: configuring plugins. ") + e.what());
     }
 
+
     // ANIMATIONS
     // Log.noticeln("Creating tail animations ...");
     // // TODO create tail animations from settings
@@ -341,7 +345,7 @@ std::vector<Switchabe*> createThings(Settings& settings) {
     //     TailAnimationCfg& taCfg1 = settings.tailAnimations[0];
     //     auto rgbThing1 = allRgbThings[0];
     //     // dmxListener->removeMapping(rgbThing1);
-    //     dmxListener->removeMapping(rgbThingsGroupsIndex[0]); // TODO fix this
+    //     dmxListener->removeMapping(rgbThingsGroupsIndex[0]);
     //     tailAnimation1 = new TailAnimation(
     //         &scheduler, 
     //         rgbThing1, 
@@ -361,11 +365,11 @@ std::vector<Switchabe*> createThings(Settings& settings) {
     //         taCfg1.tailLength,
     //         taCfg1.headLength,
     //         taCfg1.duration);
-    //     // tailAnimation1->setRepeat(false); // TODO powerOff
+    //     // tailAnimation1->setRepeat(false);
 
     //     if (allRgbThings.size() > 1) {
     //         rgbSlice2 = allRgbThings[1];
-    //         dmxListener->removeMapping(rgbThingsGroupsIndex[1]); // TODO fix this
+    //         dmxListener->removeMapping(rgbThingsGroupsIndex[1]);
     //         animationColors = taCfg1.colors;
     //         if (animationColors.size() < 1) {
     //             animationColors.push_back(taCfg1.color1);
@@ -481,8 +485,7 @@ void setup() {
         settingsManager->load();
     }
 
-    // TODO validate input configs
-    if (settingsManager->getSettings().wifiSsid.empty() || settingsManager->getSettings().wifiSsid == "null") { // TODO make sure string literal "null" is not stored
+    if (settingsManager->getSettings().wifiSsid.empty() || settingsManager->getSettings().wifiSsid == "null") {
         Log.noticeln("Empty settings, setting defaults ...");
         settingsManager->setDefaults();
         // Set WiFi credentials from config
@@ -552,8 +555,7 @@ void setup() {
 
     Serial.println("Mounting LittleFS ...");
     if (!LittleFS.begin()) {
-        Serial.println("An Error has occurred while mounting LittleFS");
-        // return; //TODO add error message to sys-info
+        Serial.println("An Error has occurred while mounting LittleFS.");
     }
 
     if (settings.lightsTest) {
@@ -681,7 +683,7 @@ void onWifiExecutionCallback(String ip) {
     
     auto settigns = settingsManager->getSettings();
     if (_ENABLE_UDP_BROADCAST) {
-        if (settigns.udpPort > 0) {
+        if (settigns.udpPort > 0 && settigns.hbInt > 0) {
             if (heartbeatBroadcast == nullptr && settigns.hbInt > 0) {
                 auto ip = WiFi.localIP();
                 IPAddress broadcastIp = IPAddress(ip[0], ip[1], ip[2], 255);

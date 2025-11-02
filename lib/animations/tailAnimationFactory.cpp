@@ -17,12 +17,16 @@ public:
         try {
             TailAnimationCfg cfg = TailAnimationCfg::deserialize(config);
             
-            RgbThingGroup* rgbThing = dynamic_cast<RgbThingGroup*>(
-                dmxListener->getThing(String(cfg.rgbStripName.c_str()))
-            );
+            Thing* thing = dmxListener->getThing(String(cfg.rgbStripName.c_str()));
+            if (thing == nullptr) {
+                Log.errorln("RGB thing '%s' not found", cfg.rgbStripName.c_str());
+                return false;
+            }
             
-            if (rgbThing == nullptr || rgbThing->things().empty()) {
-                Log.errorln("RGB thing '%s' not found or empty", cfg.rgbStripName.c_str());
+            RgbThingGroup* rgbThing = static_cast<RgbThingGroup*>(thing);
+            
+            if (rgbThing->things().empty()) {
+                Log.errorln("RGB thing '%s' is empty", cfg.rgbStripName.c_str());
                 return false;
             }
             
@@ -63,3 +67,6 @@ public:
 std::vector<TailAnimation*> TailAnimationFactory::tailAnimations;
 
 REGISTER_ANIMATION_FACTORY(TailAnimationFactory);
+
+// Force linker to include this file
+extern "C" void __tailAnimationFactory_init() {}

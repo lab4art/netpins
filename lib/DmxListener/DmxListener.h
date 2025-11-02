@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <ArduinoLog.h>
 #include <vector>
+#include <set>
 #include <Things.h>
 #include <Preferences.h>
 #include <ArduinoLog.h>

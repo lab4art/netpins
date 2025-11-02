@@ -18,7 +18,15 @@
 
 // Uncomment line below to fully disable logging, and reduce project size
 //#define DISABLE_LOGGING
-// #define LOG_LEVEL LOG_LEVEL_TRACE
-#define LOG_LEVEL LOG_LEVEL_NOTICE
+#define LOG_LEVEL LOG_LEVEL_TRACE
+// #define LOG_LEVEL LOG_LEVEL_NOTICE
 
 #define PRINT_EXECUTION_STAT false
+
+#define ANIMATION_FRAME_RATE 50 // Hz
+
+// register factories to make sure they are not stripped by the linker
+#include <pluginFactory.h>
+#include <waveEffectFactory.cpp>
+REGISTER_ANIMATION_FACTORY(WaveEffectFactory);
+

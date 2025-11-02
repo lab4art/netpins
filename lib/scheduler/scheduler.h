@@ -7,28 +7,37 @@
 class ScheduledTask {
     private:
         // std::function<void()> callbackFunc = []() {};
-        long interval;
+        unsigned long interval;
         unsigned long lastExecution = 0;
-        
+        boolean enabled;
+        String name;
+
     public:
-        ScheduledTask(long interval):
-            interval(interval) {
+        ScheduledTask(unsigned long interval, String name, boolean enabled = true):
+            interval(interval),
+            enabled(enabled),
+            name(name) {
         }
 
         virtual void callback() {}
 
         void loop() {
-            if (interval < 0) {
+            if (!enabled || interval == 0) {
                 return;
             }
             if (millis() - lastExecution >= interval) {
                 lastExecution = millis();
+                // Log.traceln("Scheduling: %s", name.c_str());
                 callback();
             }
         }
 
+        void enable() {
+            this->enabled = true;
+        }
+
         void disable() {
-            this->interval = -1;
+            this->enabled = false;
         }
 
 };
