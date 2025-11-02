@@ -35,7 +35,6 @@ public:
             TailAnimation* animation = new TailAnimation(line, cfg.direction, true);
             animation->setName(std::string("TA ") + cfg.rgbStripName.c_str());
             animation->setDuration(cfg.maxDuration);
-            animation->setTailLength(cfg.tailLength);
             
             dmxListener->removeMappingForThing(rgbThing->getName());
             TailAnimationThing* tailAnimationThing = new TailAnimationThing(animation, cfg.maxDuration);

@@ -10,14 +10,12 @@ struct TailAnimationCfg {
     std::string rgbStripName;
     DmxCfg dmxCfg;
     std::uint16_t maxDuration = 10000; // ms, duration of the animation
-    std::uint16_t tailLength;
     Direction direction;
 
     bool operator==(const TailAnimationCfg& other) const {
         return rgbStripName == other.rgbStripName &&
             dmxCfg == other.dmxCfg &&
             maxDuration == other.maxDuration &&
-            tailLength == other.tailLength &&
             direction == other.direction;
     }
 
@@ -37,7 +35,6 @@ struct TailAnimationCfg {
         t.rgbStripName = json["rgb_strip_name"].as<std::string>();
         t.dmxCfg = DmxCfg::deserialize(json["dmx"].as<std::string>());
         t.maxDuration = json["max_duration"].as<std::uint16_t>();
-        t.tailLength = json["tail_length"].as<std::uint16_t>();
         if (json.containsKey("direction")) {
             std::string directionStr = json["direction"].as<std::string>();
             if (directionStr == "left") {
@@ -53,7 +50,6 @@ struct TailAnimationCfg {
         jsonTail["rgb_strip_name"] = t.rgbStripName;
         jsonTail["dmx"] = DmxCfg::serialize(t.dmxCfg);
         jsonTail["max_duration"] = t.maxDuration;
-        jsonTail["tail_length"] = t.tailLength;
         jsonTail["direction"] = (t.direction == RIGHT) ? "right" : "left";
     }
 };
@@ -68,7 +64,8 @@ class TailAnimation: public Animation {
     RgbColor color1;
     RgbColor color2;
     uint8_t dimm = 255;
-    int tailLength;
+    int tailLength = 1;
+    int headLength = 0;
     Direction direction;
 
   public:
@@ -91,12 +88,24 @@ class TailAnimation: public Animation {
             line->setColor(i, color2, dimm);
         }
 
+        // Draw tail behind the head
         for (int i = 0; i <= tailLength; i++) {
             float blendFactor = (float)i / (float)tailLength;
             RgbColor color = RgbColor::LinearBlend(color1, color2, blendFactor);
             
             int pixelPos = (headPosition - i + line->size()) % line->size(); // Handle circular wrap
             line->setColor(pixelPos, color, dimm);
+        }
+
+        // Draw head fade-in ahead of the head
+        if (headLength > 0) {
+            for (int i = 1; i <= headLength; i++) {
+                float blendFactor = (float)i / (float)headLength;
+                RgbColor color = RgbColor::LinearBlend(color1, color2, blendFactor);
+                
+                int pixelPos = (headPosition + i) % line->size(); // Handle circular wrap
+                line->setColor(pixelPos, color, dimm);
+            }
         }
     }
 
@@ -109,12 +118,24 @@ class TailAnimation: public Animation {
             line->setColor(i, color2, dimm);
         }
 
+        // Draw tail behind the head
         for (int i = 0; i <= tailLength; i++) {
             float blendFactor = (float)i / (float)tailLength;
             RgbColor color = RgbColor::LinearBlend(color1, color2, blendFactor);
             
             int pixelPos = (headPosition + i + line->size()) % line->size(); // Handle circular wrap
             line->setColor(pixelPos, color, dimm);
+        }
+
+        // Draw head fade-in ahead of the head
+        if (headLength > 0) {
+            for (int i = 1; i <= headLength; i++) {
+                float blendFactor = (float)i / (float)headLength;
+                RgbColor color = RgbColor::LinearBlend(color1, color2, blendFactor);
+                
+                int pixelPos = (headPosition - i + line->size()) % line->size(); // Handle circular wrap
+                line->setColor(pixelPos, color, dimm);
+            }
         }
     }
 
@@ -144,6 +165,11 @@ class TailAnimation: public Animation {
     void setDimm(uint8_t dimm) {
         this->dimm = dimm;
     }
+
+    void setHeadLength(int headLength) {
+        // TODO validate headLength
+        this->headLength = headLength;
+    }
 };
 
 class TailAnimationThing: public Thing {
@@ -160,7 +186,7 @@ class TailAnimationThing: public Thing {
         }
 
         int numChannels() {
-            return 9;
+            return 10;
         }
 
         /*
@@ -170,6 +196,7 @@ class TailAnimationThing: public Thing {
             * [6] - dimm (0-255)
             * [7] - duration (0-255) mapped to (0 - maxDuration)
             * [8] - tail length (in pixels)
+            * [9] - head length (in pixels)
         */
         void setData(uint8_t* data) {
             // TODO set only if changed
@@ -177,7 +204,8 @@ class TailAnimationThing: public Thing {
             tailAnimation->setColor2(RgbColor(data[3], data[4], data[5]));
             tailAnimation->setDimm(data[6]);
             tailAnimation->setDuration(data[7]/255.0 * maxDuration);
-            auto tailLength = data[8];
+            tailAnimation->setHeadLength(data[8]);
+            auto tailLength = data[9];
             if (tailLength < 1) {
                 tailLength = 1;
             }
