@@ -44,6 +44,31 @@ class Animation {
     bool onEndCalled = false;
   
   protected:
+    /**
+     * Get the progress of the animation as a float between 0 and 1.
+     * 
+     * frames = 5
+     * remainingFrames = 5
+     * 
+     * remainingFrames:
+     * 5 -> progress = 0 (start)
+     * 4
+     * 3
+     * 2
+     * 1 -> progress = 1 (end)
+     * 
+     * frame - time - value
+     * 0 - 0.0 - 0 
+     * 1 - 0.2 - 0.25
+     * 2 - 0.4 - 0.5
+     * 3 - 0.6 - 0.75
+     * 4 - 0.8 - 1
+     */
+    float getProgress() {
+        float delta = 1.0f / ((float)frames - 1.0f); // one frame less to caltulate delta, to get a value between 0 and 1
+        return 1.0f - (float)remainingFrames * delta + delta; 
+    }
+
     bool isFirstFrame() const {
         return remainingFrames == frames;
     }
@@ -59,7 +84,7 @@ class Animation {
     void schedule(Scheduler* scheduler) {
         task = new AnimationTask(frameRate);
         task->setOnFrame([this]() {
-            // Log.traceln("Animation frame: %d, remaining frames: %d, progress: %s", frames, remainingFrames, String(getProgress(), 4));
+            // Log.traceln("Animation total frames: %d, remaining frames: %d, progress: %s", frames, remainingFrames, String(getProgress(), 4));
             if (remainingFrames == frames) {
                 onStart();
             }
@@ -93,33 +118,8 @@ class Animation {
         //         name.c_str(), frameRate, frames, remainingFrames, repeat);
     }
 
-    /**
-     * Get the progress of the animation as a float between 0 and 1.
-     * 
-     * frames = 5
-     * remainingFrames = 5
-     * 
-     * remainingFrames:
-     * 5 -> progress = 0 (start)
-     * 4
-     * 3
-     * 2
-     * 1 -> progress = 1 (end)
-     * 
-     * frame - time - value
-     * 0 - 0.0 - 0 
-     * 1 - 0.2 - 0.25
-     * 2 - 0.4 - 0.5
-     * 3 - 0.6 - 0.75
-     * 4 - 0.8 - 1
-     */
-    float getProgress() {
-        float delta = 1.0f / ((float)frames - 1.0f); // one frame less to caltulate delta, to get a value between 0 and 1
-        return 1.0f - (float)remainingFrames * delta + delta; 
-    }
-
     void setDuration(unsigned int duration) {
-        frames = duration * frameRate / 1000; // store total iterations, function is returning remaining iterations
+        frames = duration * frameRate / 1000;
     }
 
     bool isRunning() {
@@ -155,7 +155,7 @@ class FadeAnimation: public Animation {
     uint8_t dimm = 255;
     RgbColor currentColor;
     RgbColor newColor;
-    bool firstColor;
+    bool firstColor; // TODO remove, should be generic fade, provide collor1 and color2 and potentially switch them
 
   public:
     FadeAnimation(

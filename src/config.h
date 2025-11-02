@@ -27,6 +27,8 @@
 
 // register factories to make sure they are not stripped by the linker
 #include <pluginFactory.h>
-#include <waveEffectFactory.cpp>
-REGISTER_ANIMATION_FACTORY(WaveEffectFactory);
 
+#include <waveEffectFactory.cpp>
+#include <tailAnimationFactory.cpp>
+REGISTER_ANIMATION_FACTORY(WaveEffectFactory);
+REGISTER_ANIMATION_FACTORY(TailAnimationFactory);

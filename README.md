@@ -156,35 +156,48 @@ pwm_fades:
   - name: fade-13
     pwm: pwm-13 # identified by name
 
+```
+Tail animation example configuration:
+```yaml
+rgb_strips:
+  - pin: 13
+    name: rgb-strip-1
+    size: 30
+    dimmer: single
+    slices:
+      - 0
+    dmx: 1@0
 plugins:
   - name: tail-animation-1
     type: tail-animation
     config:
       rgb_strip_name: rgb-strip-1
-      color1: '#BB9900'
-      color2: '#DD3300'
-      dimm: 255
-      duration: 10000
-      head_length: 0
-      tail_length: 15
-      direction: right
-      speed_up_step: 100
-      speed_down_step: 500
-      min_duration: 1000
-      colors:
-        - '#552200'
-        - '#445500'
-        - '#220022'
-        - '#002222'
-        - '#002222'
-
+      dmx: 1@0
+      max_duration: 10000
+      tail_length: 5
+      direction: left
+```
+Wave effect example configuration:
+```yaml
+rgb_strips:
+  - pin: 13
+    name: rgb-strip-1
+    size: 12
+    dimmer: single
+    slices:
+      - 0
+      - 3
+      - 6
+      - 9
+    dmx: 1@0
+plugins:
   - name: wave-effect-1
     type: wave-effect
     config:
       rgb_strip_name: rgb-strip-1
       dmx: 1@0
       max_fade_time: 5000
-      dimmable: false
+      dimmable: true
 ```
 
 ## Testing

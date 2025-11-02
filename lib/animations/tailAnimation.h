@@ -8,31 +8,17 @@
 
 struct TailAnimationCfg {
     std::string rgbStripName;
-    RgbColor color1;
-    RgbColor color2;
-    std::uint8_t dimm = 255;
-    std::uint16_t duration = 10000; // ms, duration of the animation
-    std::uint16_t headLength;
+    DmxCfg dmxCfg;
+    std::uint16_t maxDuration = 10000; // ms, duration of the animation
     std::uint16_t tailLength;
     Direction direction;
-    std::uint16_t speedUpStep = 100; // ms, how much to speed up the animation when moving
-    std::uint16_t speedDownStep = 500; // ms, how much to slow down the animation when not moving
-    std::uint16_t minDuration = 1000; // ms, minimum duration of the animation
-    std::vector<RgbColor> colors;
 
     bool operator==(const TailAnimationCfg& other) const {
         return rgbStripName == other.rgbStripName &&
-            color1 == other.color1 &&
-            color2 == other.color2 &&
-            dimm == other.dimm &&
-            duration == other.duration &&
-            headLength == other.headLength &&
+            dmxCfg == other.dmxCfg &&
+            maxDuration == other.maxDuration &&
             tailLength == other.tailLength &&
-            direction == other.direction &&
-            speedUpStep == other.speedUpStep &&
-            speedDownStep == other.speedDownStep &&
-            minDuration == other.minDuration &&
-            colors == other.colors;
+            direction == other.direction;
     }
 
     bool operator!=(const TailAnimationCfg& other) const {
@@ -49,11 +35,8 @@ struct TailAnimationCfg {
         }
         JsonObject json = doc.as<JsonObject>();
         t.rgbStripName = json["rgb_strip_name"].as<std::string>();
-        t.color1 = ColorUtils::parseHexColor(json["color1"].as<std::string>());
-        t.color2 = ColorUtils::parseHexColor(json["color2"].as<std::string>());
-        t.dimm = json["dimm"].as<std::uint8_t>();
-        t.duration = json["duration"].as<std::uint16_t>();
-        t.headLength = json["head_length"].as<std::uint16_t>();
+        t.dmxCfg = DmxCfg::deserialize(json["dmx"].as<std::string>());
+        t.maxDuration = json["max_duration"].as<std::uint16_t>();
         t.tailLength = json["tail_length"].as<std::uint16_t>();
         if (json.containsKey("direction")) {
             std::string directionStr = json["direction"].as<std::string>();
@@ -63,41 +46,15 @@ struct TailAnimationCfg {
                 t.direction = RIGHT;
             }
         }
-        if (json.containsKey("speed_up_step")) {
-            t.speedUpStep = json["speed_up_step"].as<std::uint16_t>();
-        }
-        if (json.containsKey("speed_down_step")) {
-            t.speedDownStep = json["speed_down_step"].as<std::uint16_t>();
-        }
-        if (json.containsKey("min_duration")) {
-            t.minDuration = json["min_duration"].as<std::uint16_t>();
-        }
-        if (json.containsKey("colors")) {
-            JsonArray colorsArray = json["colors"].as<JsonArray>();
-            for (JsonVariant v : colorsArray) {
-                auto colorStr = v.as<std::string>();
-                t.colors.push_back(ColorUtils::parseHexColor(colorStr));
-            }
-        }
         return t;
     }
 
     static void serialize(JsonObject& jsonTail, const TailAnimationCfg& t) {
         jsonTail["rgb_strip_name"] = t.rgbStripName;
-        jsonTail["color1"] = ColorUtils::toHexColor(t.color1);
-        jsonTail["color2"] = ColorUtils::toHexColor(t.color2);
-        jsonTail["dimm"] = t.dimm;
-        jsonTail["duration"] = t.duration;
-        jsonTail["head_length"] = t.headLength;
+        jsonTail["dmx"] = DmxCfg::serialize(t.dmxCfg);
+        jsonTail["max_duration"] = t.maxDuration;
         jsonTail["tail_length"] = t.tailLength;
         jsonTail["direction"] = (t.direction == RIGHT) ? "right" : "left";
-        jsonTail["speed_up_step"] = t.speedUpStep;
-        jsonTail["speed_down_step"] = t.speedDownStep;
-        jsonTail["min_duration"] = t.minDuration;
-        JsonArray colors = jsonTail["colors"].to<JsonArray>();
-        for (const auto& color : t.colors) {
-            colors.add(ColorUtils::toHexColor(color));
-        }
     }
 };
 
@@ -112,40 +69,23 @@ class TailAnimation: public Animation {
     RgbColor color2;
     uint8_t dimm = 255;
     int tailLength;
-    int headLength = 0;
     Direction direction;
-
-    int previousHeadPosition;
-    bool reachedEndCalled = false;
-
-    // callback function called when head Reached End
-    std::function<void()> onHeadReachedEnd;
 
   public:
     TailAnimation(
-            Scheduler* aScheduler, 
             RgbThing* line,
-            Direction direction = RIGHT,
-            bool repeat = false):
+            Direction direction,
+            bool repeat):
         line(line),
         direction(direction),
-        Animation(aScheduler, repeat) {
-            if (direction == RIGHT) {
-                previousHeadPosition = 0;
-            } else {
-                previousHeadPosition = line->size() - 1;
-            }
+        Animation(repeat) {
     }
-
+    
   private:
     void moveRight() {
         int headPosition = (int)(getProgress() * line->size());
-        if (!reachedEndCalled && getProgress() >= 1.0f) {
-            if (onHeadReachedEnd) {
-                onHeadReachedEnd();
-                reachedEndCalled = true;
-            }
-        }
+        // Log.traceln("TailAnimation '%s' moving right. HeadPosition: %d, progress: %s", 
+        //         getName().c_str(), headPosition, String(getProgress(), 4));
 
         for (int i = 0; i < line->size(); i++) {
             line->setColor(i, color2, dimm);
@@ -162,12 +102,8 @@ class TailAnimation: public Animation {
 
     void moveLeft() {
         int headPosition = (1 - getProgress()) * line->size();
-        if (!reachedEndCalled && getProgress() >= 1.0f) {
-            if (onHeadReachedEnd) {
-                onHeadReachedEnd();
-                reachedEndCalled = true;
-            }
-        }
+        // Log.traceln("TailAnimation '%s' moving left. HeadPosition: %d, progress: %s", 
+        //         getName().c_str(), headPosition, String(getProgress(), 4));
 
         for (int i = 0; i < line->size(); i++) {
             line->setColor(i, color2, dimm);
@@ -182,74 +118,14 @@ class TailAnimation: public Animation {
         }
     }
 
-    void fadeRight() { 
-        // define a head based on the progress of the animation
-        int headPosition = getProgress() * (line->size() + tailLength);
-        if (!reachedEndCalled && headPosition >= line->size()) {
-            if (onHeadReachedEnd) {
-                onHeadReachedEnd();
-                reachedEndCalled = true;
-            }
-        }
-
-        // draw tail as fade of color1 to color2
-        // at hight speeds the head can jump over multiple pixels, calculate the effective tail length, not to leave behind color1 pixels
-        int headJump = headPosition - previousHeadPosition;
-        u_int32_t effectivetail = tailLength + headJump;
-        // Serial.println(String("[") + name + "] New head position: " + headPosition + ", previousHeadPosition: " + previousHeadPosition + ", headJump: " + headJump + ", effectivetail: " + effectivetail + " progress: " + getProgress());
-        // for (int i = 0; i <= effectivetail; i++) {
-        for (int i = 0; i < effectivetail; i++) { // TODO test this compared to ^
-            if (headPosition - i < 0 || headPosition - i >= line->size()) {
-                Log.warningln("Head position out of bounds: %d", headPosition - i);
-                continue;
-            }
-
-            RgbColor color;
-            if (i > tailLength) {
-                color = color2;
-            } else {
-                // blend factor normalized to 0-1
-                // blend factor peaking at middle of tail
-                float blendFactor;
-                /*
-                0 -> 1
-                1 -> 0.5
-                2 -> 0
-                3 -> 0.5
-                4 -> 1
-                 */
-                if (i < tailLength / 2) {
-                    blendFactor = 1.0f - (float)(i) / (float)(tailLength / 2);
-                } else {
-                    // blendFactor = (float)(i - tailLength / 2) / (float)(tailLength / 2);
-                    blendFactor = (float)(i / (tailLength / 2)) - 1;
-                }
-                color = RgbColor::LinearBlend(color1, color2, blendFactor);
-                // Serial.println(String("[") + name + "] Setting color " + color.R + "-" + color.G + "-" + color.B + ", i: " + i + ", blendFactor: " + blendFactor + ", position: " + (headPosition - i));
-            }
-            line->setColor(headPosition - i, color, dimm);
-        }
-        previousHeadPosition = headPosition;
-    }
-
   public:
 
     void animate() {
-        if (getProgress() == 0) {
-            this->previousHeadPosition = 0;
-            this->reachedEndCalled = false;
-        }
-
         if (direction == RIGHT) {
             moveRight();
         } else {
             moveLeft();
         }
-        // fadeRight();
-    }
-
-    void setOnHeadReachedEnd(std::function<void()> onHeadReachedEnd) {
-        this->onHeadReachedEnd = onHeadReachedEnd;
     }
 
     void setColor1(RgbColor color1) {
@@ -265,11 +141,6 @@ class TailAnimation: public Animation {
         this->tailLength = tailLength;
     }
 
-    void setHeadLength(int headLength) {
-        // TODO validate headLength
-        this->headLength = headLength;
-    }
-
     void setDimm(uint8_t dimm) {
         this->dimm = dimm;
     }
@@ -282,34 +153,35 @@ class TailAnimationThing: public Thing {
     
     public:
         TailAnimationThing(
-                Scheduler* aScheduler, 
-                RgbThing* line, 
-                int tailLength = 5,
-                int maxDuration = 30000, 
-                Direction direction = Direction::RIGHT,
-                bool repeat = false) {
-            tailAnimation = new TailAnimation(
-                aScheduler, 
-                line, 
-                direction,
-                repeat);
+                TailAnimation* tailAnimation, 
+                int maxDuration):
+                tailAnimation(tailAnimation),
+                maxDuration(maxDuration) {
         }
 
         int numChannels() {
-            return 8;
+            return 9;
         }
 
+        /*
+            * Data format:
+            * [0-2] - color1 R,G,B
+            * [3-5] - color2 R,G,B
+            * [6] - dimm (0-255)
+            * [7] - duration (0-255) mapped to (0 - maxDuration)
+            * [8] - tail length (in pixels)
+        */
         void setData(uint8_t* data) {
             // TODO set only if changed
             tailAnimation->setColor1(RgbColor(data[0], data[1], data[2]));
             tailAnimation->setColor2(RgbColor(data[3], data[4], data[5]));
-            tailAnimation->setDuration(data[6]/255.0 * maxDuration);
-            if (data[6] > 0) {
-                tailAnimation->setRepeat(true);
-            } else {
-                tailAnimation->setRepeat(false);
+            tailAnimation->setDimm(data[6]);
+            tailAnimation->setDuration(data[7]/255.0 * maxDuration);
+            auto tailLength = data[8];
+            if (tailLength < 1) {
+                tailLength = 1;
             }
-            tailAnimation->setTailLength(data[7]);
+            tailAnimation->setTailLength(tailLength);
         }
 
 };

@@ -6,7 +6,7 @@
 
 class TailAnimationFactory : public AnimationFactory {
 private:
-    static std::vector<TailAnimation*> tailAnimations;
+
 
 public:
     std::string getType() const override {
@@ -32,41 +32,23 @@ public:
             
             RgbThing* line = rgbThing->things().front();
             
-            TailAnimation* animation = new TailAnimation(scheduler, line, cfg.direction, true);
-            animation->setColor1(cfg.color1);
-            animation->setColor2(cfg.color2);
-            animation->setDimm(cfg.dimm);
-            animation->setDuration(cfg.duration);
+            TailAnimation* animation = new TailAnimation(line, cfg.direction, true);
+            animation->setName(std::string("TA ") + cfg.rgbStripName.c_str());
+            animation->setDuration(cfg.maxDuration);
             animation->setTailLength(cfg.tailLength);
-            animation->setHeadLength(cfg.headLength);
             
             dmxListener->removeMappingForThing(rgbThing->getName());
-            tailAnimations.push_back(animation);
+            TailAnimationThing* tailAnimationThing = new TailAnimationThing(animation, cfg.maxDuration);
+            tailAnimationThing->setName(String("TA Thing ") + (cfg.rgbStripName).c_str());
+            dmxListener->addMapping(tailAnimationThing, cfg.dmxCfg);
+            
+            animation->schedule(scheduler);
             animation->restart();
             
             return true;
-            
         } catch (...) {
             Log.errorln("Failed to create tail animation");
             return false;
         }
     }
-    
-    static const std::vector<TailAnimation*>& getAnimations() {
-        return tailAnimations;
-    }
-    
-    static void cleanup() {
-        for (auto* animation : tailAnimations) {
-            delete animation;
-        }
-        tailAnimations.clear();
-    }
 };
-
-std::vector<TailAnimation*> TailAnimationFactory::tailAnimations;
-
-REGISTER_ANIMATION_FACTORY(TailAnimationFactory);
-
-// Force linker to include this file
-extern "C" void __tailAnimationFactory_init() {}
