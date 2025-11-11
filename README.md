@@ -174,7 +174,6 @@ plugins:
       rgb_strip_name: rgb-strip-1
       dmx: 1@0
       max_duration: 10000
-      tail_length: 5
       direction: left
 ```
 Wave effect example configuration:
@@ -213,6 +212,25 @@ plugins:
       dmx: 1@0
       max_fade_duration: 5000
 ```
+
+Analog read sensor example configuration:
+```yaml
+pwms:
+  - pin: 5
+    name: pwm-5
+    dmx: 1@0
+analog_reads:
+  - pin: 3
+    name: analog_read
+    read_ms: 10
+sensor_mappings:
+  - sensor: analog_read
+    dmx: 1@0
+    value_range:
+      from: 0
+      to: 65536
+```
+
 
 ## Testing
 

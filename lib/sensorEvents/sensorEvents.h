@@ -38,12 +38,12 @@ class SensorEvents {
                     if (mappedValue < 0) mappedValue = 0;
                     if (mappedValue > 255) mappedValue = 255;
                     dmxData[mapping.dmxCfg.universe][dmxChannel] = static_cast<uint8_t>(mappedValue);
-                    Log.traceln("Published local sensor %s value %d to DMX %d@%d as value %d", 
-                        sensorName.c_str(), 
-                        value, 
-                        mapping.dmxCfg.channel, 
-                        mapping.dmxCfg.universe, 
-                        mappedValue);
+                    // Log.traceln("Published local sensor %s value %d to DMX %d@%d as value %d", 
+                    //     sensorName.c_str(), 
+                    //     value, 
+                    //     mapping.dmxCfg.channel, 
+                    //     mapping.dmxCfg.universe, 
+                    //     mappedValue);
                 }
             }
         }

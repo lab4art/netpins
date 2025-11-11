@@ -195,8 +195,8 @@ class TailAnimationThing: public Thing {
             * [3-5] - color2 R,G,B
             * [6] - dimm (0-255)
             * [7] - duration (0-255) mapped to (0 - maxDuration)
-            * [8] - tail length (in pixels)
-            * [9] - head length (in pixels)
+            * [8] - head length (in pixels)
+            * [9] - tail length (in pixels)
         */
         void setData(uint8_t* data) {
             // TODO set only if changed

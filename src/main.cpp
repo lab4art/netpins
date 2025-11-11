@@ -540,10 +540,10 @@ void setup() {
         auto analogReadSensor = new AnalogReadSensor(areadCfg.pin, areadCfg.readMs);
         // TODO add optional filters to the listener: trashold, move average, etc.
         analogReadSensor->addOnChangeListener([areadCfg](uint16_t value) {
-            // Log.traceln("Analog read sensor mqtt listener %d value: %d", areadCfg.pin, value);
-            sensorEvents->publish(areadCfg.sensorName, value, false); // TODO reference by name not pin
+            // Log.traceln("Analog read %d value changed to: %d", areadCfg.pin, value);
+            sensorEvents->publish(areadCfg.sensorName, value, true);
         });
-        Log.traceln("Analog read sensor created. Pin: %d, readMs: %d", areadCfg.pin, areadCfg.readMs);
+        Log.noticeln("Analog read sensor created. Pin: %d, readMs: %d", areadCfg.pin, areadCfg.readMs);
         analogReadSensors[areadCfg.pin] = analogReadSensor;
     }
 

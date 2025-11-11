@@ -1,6 +1,6 @@
 #pragma once
 
-#define FIRMWARE_VERSION "netpins-2.0.0-snapshot"
+#define FIRMWARE_VERSION "netpins-2.0.0-a789160cf"
 
 // Useful for initial setup via serial console without booting to AP mode
 #define WIFI_SSID ""
@@ -30,7 +30,7 @@ REGISTER_ANIMATION_FACTORY(WaveEffectFactory);
 #define WAIT_FOR_SERIAL false
 
 //#define DISABLE_LOGGING // uncomment to disable logging completely
-#define LOG_LEVEL LOG_LEVEL_TRACE
-// #define LOG_LEVEL LOG_LEVEL_NOTICE
+// #define LOG_LEVEL LOG_LEVEL_TRACE
+#define LOG_LEVEL LOG_LEVEL_NOTICE
 
 #define PRINT_EXECUTION_STAT false
