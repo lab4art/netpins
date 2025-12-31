@@ -26,10 +26,10 @@ class ScheduledTask {
             if (!enabled || interval == 0) {
                 return;
             }
-            Log::traceln("Checking task: %s, interval: %lu, lastExecution: %lu, currentMillis: %lu", name.c_str(), interval, lastExecution, millis());
+            // Log::traceln("Checking task: %s, interval: %lu, lastExecution: %lu, currentMillis: %lu", name.c_str(), interval, lastExecution, millis());
             if (millis() - lastExecution >= interval) {
                 lastExecution = millis();
-                Log::traceln("Executing task: %s", name.c_str());
+                // Log::traceln("Executing task: %s", name.c_str());
                 callback();
             }
         }
