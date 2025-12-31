@@ -1,5 +1,5 @@
 #include "pluginFactory.h"
-#include <ArduinoLog.h>
+#include <Log.h>
 
 PluginFactory* PluginFactory::instance = nullptr;
 
@@ -12,17 +12,17 @@ PluginFactory& PluginFactory::getInstance() {
 
 void PluginFactory::registerFactory(std::unique_ptr<AnimationFactory> factory) {
     if (factory == nullptr) {
-        Log.errorln("Attempted to register null factory.");
+        Log::errorln("Attempted to register null factory.");
         return;
     }
     
     std::string type = factory->getType();
     if (type.empty()) {
-        Log.errorln("Attempted to register factory with empty type.");
+        Log::errorln("Attempted to register factory with empty type.");
         return;
     }
     
-    Log.infoln("Registering animation factory for type: %s", type.c_str());
+    Log::infoln("Registering animation factory for type: %s", type.c_str());
     factories[type] = std::move(factory);
 }
 
@@ -48,23 +48,23 @@ bool PluginFactory::createAnimationFromPlugin(
     DmxListener* dmxListener) {
     
     if (plugin.type.empty()) {
-        Log.errorln("Plugin has empty type, skipping");
+        Log::errorln("Plugin has empty type, skipping");
         return false;
     }
     
     auto factoryIt = factories.find(plugin.type);
     if (factoryIt == factories.end()) {
-        Log.errorln("No factory registered for plugin type: %s", plugin.type.c_str());
+        Log::errorln("No factory registered for plugin type: %s", plugin.type.c_str());
         return false;
     }
     
     try {
         return factoryIt->second->createAnimation(scheduler, plugin.config, dmxListener);
     } catch (const std::exception& e) {
-        Log.errorln("Exception creating animation %s: %s", plugin.name.c_str(), e.what());
+        Log::errorln("Exception creating animation %s: %s", plugin.name.c_str(), e.what());
         return false;
     } catch (...) {
-        Log.errorln("Unknown exception creating animation: %s", plugin.name.c_str());
+        Log::errorln("Unknown exception creating animation: %s", plugin.name.c_str());
         return false;
     }
 }

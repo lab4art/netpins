@@ -28,7 +28,7 @@ struct TailAnimationCfg {
         JsonDocument doc;
         DeserializationError error = deserializeJson(doc, jsonString);
         if (error) {
-            Serial.println("Failed to deserialize TailAnimationCfg");
+            Log::error("Failed to deserialize TailAnimationCfg");
             return t; // Return default config on error //TODO remove, we want to fail not go back to the defaults
         }
         JsonObject json = doc.as<JsonObject>();

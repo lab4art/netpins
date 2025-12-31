@@ -6,7 +6,7 @@
 #include <ESPAsyncWebServer.h>
 #include <LittleFS.h>
 #include "wifiUtils.cpp"
-#include <ArduinoLog.h>
+#include <Log.h>
 #include <config.h>
 #include <settings.h>
 #include <variant>
@@ -21,7 +21,7 @@ class WebAdmin {
         };
         struct CommandResult {
             CommandStatus status;
-            String message;
+            std::string message;
             int reloadDelay; // -1 no reload, 0 reload immediately, >0 reload after delay
         };
 
@@ -31,14 +31,14 @@ class WebAdmin {
         
         SettingsManager<Settings>* settingsManager;
         std::function<CommandResult(JsonVariant&)> onSystemCommand = [](JsonVariant&){ return CommandResult{OK, "Success."}; };
-        std::function<std::map<String, String>()> propertiesSupplier = [](){ return std::map<String, String>(); };
+        std::function<std::map<std::string, std::string>()> propertiesSupplier = [](){ return std::map<std::string, std::string>(); };
 
         void listFiles() {
             File root = LittleFS.open("/");
-            Log.noticeln("Files on /");
+            Log::infoln("Files on /");
             File file = root.openNextFile();
             while (file) {
-                Log.noticeln("- %s", file.name());
+                Log::infoln("- %s", file.name());
                 file = root.openNextFile();
             }
         }
@@ -59,7 +59,7 @@ class WebAdmin {
             webServer->on("/sys-info", HTTP_GET, [this](AsyncWebServerRequest *request){
                 this->onReceivedCallback();
 
-                String output;
+                std::string output;
                 JsonDocument doc;
                 doc["firmware"] = FIRMWARE_VERSION;
                 doc["mac"] = WifiUtils::macAddress;
@@ -69,12 +69,12 @@ class WebAdmin {
                 if (FACTORY_REST_PIN == -1) {
                     doc["factoryReset"] = "power cycle";
                 } else {
-                    doc["factoryReset"] = String("pin ") + String(FACTORY_REST_PIN);
+                    doc["factoryReset"] = "pin " + std::to_string(FACTORY_REST_PIN);
                 }
 
                 // if query parameter mode equas "details" add more details
                 if (request->hasParam("show")) {
-                    String show = request->getParam("show")->value();
+                    std::string show = request->getParam("show")->value().c_str();
                     if (show == "all") {
                         for (auto const& pair : propertiesSupplier()) {
                             const auto& key = pair.first;
@@ -84,7 +84,7 @@ class WebAdmin {
                     }
                 }
                 serializeJson(doc, output);
-                request->send(200, "application/json", output);
+                request->send(200, "application/json", output.c_str());
             });
 
             webServer->serveStatic("/admin.html", LittleFS, "/admin.html");
@@ -106,7 +106,7 @@ class WebAdmin {
                 CommandResult result = this->onSystemCommand(json);
 
                 // serialize CommandResult result to json
-                String resultJson;
+                std::string resultJson;
                 JsonDocument resultDoc;
                 resultDoc["status"] = result.status == OK ? "OK" : result.status == OK_REBOOT ? "OK_REBOOT" : "ERROR";
                 resultDoc["message"] = result.message;
@@ -114,17 +114,17 @@ class WebAdmin {
                 serializeJson(resultDoc, resultJson);
 
                 if (result.status == OK || result.status == OK_REBOOT) {
-                    AsyncWebServerResponse *response = request->beginResponse(200, "application/json", resultJson);
+                    AsyncWebServerResponse *response = request->beginResponse(200, "application/json", resultJson.c_str());
                     response->addHeader("Connection", "close");
                     request->send(response);
                     if (result.status == OK_REBOOT) {
                         request->onDisconnect([]() {
-                            Log.noticeln("Rebooting ...");
+                            Log::infoln("Rebooting ...");
                             ESP.restart();
                         });
                     }
                 } else {
-                    request->send(500, "application/json", resultJson);
+                    request->send(500, "application/json", resultJson.c_str());
                 }
             });
             webServer->addHandler(systemHandler);
@@ -141,7 +141,7 @@ class WebAdmin {
             this->onReceivedCallback = onReceivedCallback;
         }
 
-        void setPropertiesSupplier(std::function<std::map<String, String>()> propertiesSupplier) {
+        void setPropertiesSupplier(std::function<std::map<std::string, std::string>()> propertiesSupplier) {
             this->propertiesSupplier = propertiesSupplier;
         }
 

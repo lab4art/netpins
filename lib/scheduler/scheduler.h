@@ -2,7 +2,6 @@
 
 #include <functional>
 #include <vector>
-#include <Arduino.h>
 
 class ScheduledTask {
     private:
@@ -10,10 +9,10 @@ class ScheduledTask {
         unsigned long interval;
         unsigned long lastExecution = 0;
         boolean enabled;
-        String name;
+        std::string name;
 
     public:
-        ScheduledTask(unsigned long interval, String name, boolean enabled = true):
+        ScheduledTask(unsigned long interval, std::string name, boolean enabled = true):
             interval(interval),
             enabled(enabled),
             name(name) {

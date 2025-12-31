@@ -4,6 +4,7 @@
 #include <vector>
 #include <ArduinoJson.h>
 #include <Preferences.h>
+#include <Log.h>
 
 enum DimmerMode {
     none,
@@ -466,7 +467,7 @@ struct PluginCfg {
             
             // Serialize the config object to a string for safe storage
             if (json.containsKey("config")) {
-                String configStr;
+                std::string configStr;
                 size_t result = serializeJson(json["config"], configStr);
                 if (result > 0) {
                     p.config = configStr.c_str();
@@ -544,6 +545,7 @@ struct Settings {
     unsigned int rebootAfterWifiFailed = 15; // reboot after 15 failed wifi connections, 0 means no reboot
     bool disableWifiPowerSave;
     bool disableArtnet = false;
+    int logLevel = 2; // default to INFO level (-1=SILENT, 0=ERROR, 1=WARNING, 2=INFO, 3=TRACE)
 
     MqttCfg mqtt;
 
@@ -560,6 +562,7 @@ struct Settings {
             rebootAfterWifiFailed == other.rebootAfterWifiFailed &&
             disableWifiPowerSave == other.disableWifiPowerSave &&
             disableArtnet == other.disableArtnet &&
+            logLevel == other.logLevel &&
             mqtt == other.mqtt &&
 
             pwms == other.pwms &&
@@ -601,6 +604,11 @@ struct Settings {
             s.disableArtnet = json["disable_artnet"].as<bool>();
         } else {
             s.disableArtnet = false;
+        }
+        if (json.containsKey("log_level")) {
+            s.logLevel = json["log_level"].as<int>();
+        } else {
+            s.logLevel = 2; // default to INFO
         }
         if (json.containsKey("mqtt")) {
             JsonObject jsonMqtt = json["mqtt"].as<JsonObject>();
@@ -687,6 +695,7 @@ struct Settings {
         json["reboot_after_wifi_failed"] = rebootAfterWifiFailed;
         json["disable_wifi_power_save"] = disableWifiPowerSave;
         json["disable_artnet"] = disableArtnet;
+        json["log_level"] = logLevel;
 
         if (mqtt.server != "") {
             JsonObject jsonMqtt = json["mqtt"].to<JsonObject>();
@@ -769,35 +778,35 @@ struct Settings {
             }
         }
 
-        Serial.println("Serializing plugins, count: " + String(plugins.size()));
+        Log::info((std::string("Serializing ") + std::to_string(plugins.size()) + " plugins").c_str());
         if (plugins.size() > 0) {
             JsonArray plugins = json["plugins"].to<JsonArray>();
             for (size_t i = 0; i < this->plugins.size(); i++) {
                 try {
                     JsonObject jsonPlugin = plugins.add<JsonObject>();
                     if (jsonPlugin.isNull()) {
-                        Serial.println("ERROR: Failed to create JsonObject for plugin ");
+                        Log::error("Failed to create JsonObject for plugin");
                         continue;
                     }
                     PluginCfg::serialize(jsonPlugin, this->plugins[i]);
-                    Serial.println("Successfully serialized plugin ");
+                    Log::info("Successfully serialized plugin");
                 } catch (const std::exception& e) {
-                    Serial.println("ERROR: Exception while serializing plugin ");
+                    Log::error("Exception while serializing plugin");
                 } catch (...) {
-                    Serial.println("ERROR: Unknown exception while serializing plugin ");
+                    Log::error("Unknown exception while serializing plugin");
                 }
             }
         }
 
     };
 
-    String asJson() {
+    std::string asJson() {
         JsonDocument jsonDoc;
         serialize(jsonDoc);
-        String output;
+        std::string output;
         size_t result = serializeJson(jsonDoc, output);
         if (result == 0) {
-            Serial.println("ERROR: JSON serialization failed.");
+            Log::error("JSON serialization failed.");
             return "{}"; // Return empty JSON on failure
         }
         return output;
@@ -824,14 +833,14 @@ class SettingsManager {
         T settings;
 
         void onError(std::string message) {
-            Serial.println(message.c_str());
+            Log::error(message.c_str());
         }
 
         void fromJsonDoc(JsonDocument& jsonDoc) {
             T newSettings;
             T::deserialize(newSettings, jsonDoc);
             if (newSettings != this->settings) {
-                Serial.println("Settings changed.");
+                Log::info("Settings changed.");
                 this->settings = newSettings;
                 dirty = true;
             }
@@ -846,8 +855,8 @@ class SettingsManager {
         void load() {
             // Serial.println("Loading settings...");
             preferences.begin(this->nspace.c_str(), true);
-            String jsonStr = preferences.getString("json");
-            Serial.println("Loaded settings json: " + jsonStr);
+            std::string jsonStr = preferences.getString("json").c_str();
+            Log::info(("Loaded settings json: " + jsonStr).c_str());
 
             JsonDocument json_doc;
             deserializeJson(json_doc, jsonStr);
@@ -855,7 +864,7 @@ class SettingsManager {
             preferences.end();
             dirty = false;
 
-            Serial.println("Deserialized settings: ");
+            Log::info("Deserialized settings");
         }
 
         void save() {
@@ -867,27 +876,25 @@ class SettingsManager {
                 return;
             }
 
-            Serial.println("Saving settings ...");
+            Log::info("Saving settings ...");
             JsonDocument jsonDoc;
             this->settings.serialize(jsonDoc);
-            String output;
+            std::string output;
             size_t result = serializeJson(jsonDoc, output);
             if (result == 0) {
                 onError("JSON serialization failed.");
                 return;
             }
-            // Serial.println("Serialized settings (length: " + String(output.length()) + " bytes)");
 
-            size_t bytesWritten = preferences.putString("json", output);
+            size_t bytesWritten = preferences.putString("json", output.c_str());
             if (bytesWritten != output.length()) {
                 onError(std::string("Error writing to preferences: ") + this->nspace);
             }
             preferences.end();
             dirty = false;
-            // Serial.println("Settings saved successfully (" + String(output.length()) + " bytes)");
         }
 
-        void fromJson(String jsonString) {
+        void fromJson(std::string jsonString) {
             // parse jsonString to jsonDoc
             JsonDocument jsonDoc;
             DeserializationError error = deserializeJson(jsonDoc, jsonString);
@@ -902,7 +909,7 @@ class SettingsManager {
          * Applies potentially partial json to current settings.
          * Only top level keys are merged, nested keys are replaced.
          */
-        void mergeJson(String jsonString) {
+        void mergeJson(std::string jsonString) {
             JsonDocument newJsonDoc;
             DeserializationError error = deserializeJson(newJsonDoc, jsonString);
             if (error) {

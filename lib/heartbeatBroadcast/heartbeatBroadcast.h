@@ -14,14 +14,14 @@ class HeartbeatBroadcast: public ScheduledTask {
         unsigned long lastExecution = 0;
 
         void send() {
-            String output;
+            std::string output;
             JsonDocument doc;
             doc["uptime"] = millis();
             doc["firmwareVersion"] = firmwareVersion;
             doc["mac"] = WifiUtils::macAddress;
             doc["ip"] = WiFi.localIP().toString();
             doc["hostname"] = this->hostName;
-            serializeJson(doc, output);
+            serializeJsonPretty(doc, output);
 
             udp->beginPacket(broadcastIp, port);
             udp->print(output.c_str());

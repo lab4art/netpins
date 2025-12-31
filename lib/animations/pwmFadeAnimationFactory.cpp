@@ -1,6 +1,6 @@
 #include <animations.h>
 #include <pluginFactory.h>
-#include <ArduinoLog.h>
+#include <Log.h>
 #include <DmxListener.h>
 #include <Things.h>
 #include <pwmFadeAnimation.h>
@@ -20,9 +20,9 @@ public:
         try {
             PwmFadeCfg cfg = PwmFadeCfg::deserialize(config);
 
-            Thing* thing = dmxListener->getThing(String(cfg.pwmName.c_str()));
+            Thing* thing = dmxListener->getThing(cfg.pwmName);
             if (thing == nullptr) {
-                Log.errorln("PWM thing '%s' not found", cfg.pwmName.c_str());
+                Log::errorln("PWM thing '%s' not found", cfg.pwmName.c_str());
                 return false;
             }
             
@@ -32,7 +32,7 @@ public:
                 pwmThing,
                 cfg.maxFadeDuration);
 
-            dmxListener->removeMappingForThing(String(cfg.pwmName.c_str()));
+            dmxListener->removeMappingForThing(cfg.pwmName);
 
             PWMFadeAnimationThing* pwmFadeThing = new PWMFadeAnimationThing(
                 fadeAnimation);
@@ -43,7 +43,7 @@ public:
 
             return true;
         } catch (...) {
-            Log.errorln("Failed to create PWM fade animation");
+            Log::errorln("Failed to create PWM fade animation");
             return false;
         }
     }

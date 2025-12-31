@@ -26,7 +26,7 @@ struct PwmFadeCfg {
         JsonDocument doc;
         DeserializationError error = deserializeJson(doc, jsonString);
         if (error) {
-            Serial.println("Failed to deserialize PwmFadeCfg");
+            Log::error("Failed to deserialize PwmFadeCfg");
             return p; // Return default config on error
         }
         JsonObject json = doc.as<JsonObject>();
@@ -74,7 +74,7 @@ class PWMFadeAnimation: public Animation {
             // setName(std::string("PWM FA for ") + pwmThing->getName().c_str());
             setName(std::string("PWM FA for "));
             setDuration(maxFadeDuration);
-            Log.traceln("Created PWM fade animation for PWM thing '%s' with max fade duration: %d", pwmThing->getName().c_str(), maxFadeDuration);
+            Log::traceln("Created PWM fade animation for PWM thing '%s' with max fade duration: %d", pwmThing->getName().c_str(), maxFadeDuration);
         }
 
         void animate() {
@@ -166,7 +166,7 @@ class PWMFadeAnimationThing: public Thing {
         void setData(uint8_t* data) {
             boolean onOffChanged = lastDmxData[4] != data[4];
             if (setLastDmxData(data)) {
-                Log.traceln("Setting PWM fade animation data: %d %d %d %d %d", data[0], data[1], data[2], data[3], data[4]);
+                Log::traceln("Setting PWM fade animation data: %d %d %d %d %d", data[0], data[1], data[2], data[3], data[4]);
                 fadeAnimation->setValue1(data[0]);
                 fadeAnimation->setValue2(data[1]);
                 fadeAnimation->setFadeInDuration(data[2]);

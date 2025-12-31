@@ -258,7 +258,7 @@ class DistanceSensor : public SensorBase<int> {
             sensor.setMeasurementTimingBudget(33000);
             sensor.startContinuous(pullMillis);
             if (!sensor.init()) {
-                Serial.println("Failed to detect and initialize sensor!");
+                Log::error("Failed to detect and initialize sensor!");
             }
         }
 

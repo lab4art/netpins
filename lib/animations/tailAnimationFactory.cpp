@@ -1,6 +1,6 @@
 #include <tailAnimation.h>
 #include <pluginFactory.h>
-#include <ArduinoLog.h>
+#include <Log.h>
 #include <DmxListener.h>
 #include <Things.h>
 
@@ -17,16 +17,16 @@ public:
         try {
             TailAnimationCfg cfg = TailAnimationCfg::deserialize(config);
             
-            Thing* thing = dmxListener->getThing(String(cfg.rgbStripName.c_str()));
+            Thing* thing = dmxListener->getThing(cfg.rgbStripName);
             if (thing == nullptr) {
-                Log.errorln("RGB thing '%s' not found", cfg.rgbStripName.c_str());
+                Log::error((std::string("RGB thing '") + cfg.rgbStripName + "' not found").c_str());
                 return false;
             }
             
             RgbThingGroup* rgbThing = static_cast<RgbThingGroup*>(thing);
             
             if (rgbThing->things().empty()) {
-                Log.errorln("RGB thing '%s' is empty", cfg.rgbStripName.c_str());
+                Log::error((std::string("RGB thing '") + cfg.rgbStripName + "' is empty").c_str());
                 return false;
             }
             
@@ -39,7 +39,7 @@ public:
             dmxListener->removeMappingForThing(rgbThing->getName());
             
             TailAnimationThing* tailAnimationThing = new TailAnimationThing(animation, cfg.maxDuration);
-            tailAnimationThing->setName(String("TA Thing ") + (cfg.rgbStripName).c_str());
+            tailAnimationThing->setName("TA Thing " + cfg.rgbStripName);
             dmxListener->addMapping(tailAnimationThing, cfg.dmxCfg);
             
             animation->schedule(scheduler);
@@ -47,7 +47,7 @@ public:
             
             return true;
         } catch (...) {
-            Log.errorln("Failed to create tail animation");
+            Log::error("Failed to create tail animation");
             return false;
         }
     }

@@ -1,12 +1,11 @@
 #pragma once
 
-#include <Arduino.h>
-#include <ArduinoLog.h>
+#include <Log.h>
 #include <vector>
 #include <set>
 #include <Things.h>
 #include <Preferences.h>
-#include <ArduinoLog.h>
+#include <Log.h>
 #include <settings.h>
 
 /**
@@ -84,24 +83,24 @@ class DmxListener {
         }
 
         void addMapping(Thing* thing, DmxCfg dmxCfg) {
-            Log.noticeln("Adding mapping for thing '%s' on universe %d channel %d", thing->getName().c_str(), dmxCfg.universe, dmxCfg.channel);
+            Log::infoln("Adding mapping for thing '%s' on universe %d channel %d", thing->getName().c_str(), dmxCfg.universe, dmxCfg.channel);
             dmxMappings.push_back(new DmxMapping(thing, dmxCfg));
             dmxUniverses.insert(dmxCfg.universe);
         }
 
-        void removeMappingForThing(String thingName) {
+        void removeMappingForThing(std::string thingName) {
             auto it = std::remove_if(dmxMappings.begin(), dmxMappings.end(),
                 [&thingName](DmxMapping* mapping) {
-                    return mapping->thing->getName().equals(thingName);
+                    return mapping->thing->getName() == thingName;
                 });
             if (it != dmxMappings.end()) {
                 dmxMappings.erase(it, dmxMappings.end());
             }
         }
 
-        Thing* getThing(String thingName) {
+        Thing* getThing(std::string thingName) {
             for (auto& mapping : dmxMappings) {
-                if (mapping->thing->getName().equals(thingName)) {
+                if (mapping->thing->getName() == thingName) {
                     return mapping->thing;
                 }
             }
@@ -142,7 +141,7 @@ class DmxListener {
                 }
             }
             if (changed) {
-                Log.traceln("Storing changed DMX data");
+                Log::traceln("Storing changed DMX data");
                 storage.clear(); // clear old data
                 for (const auto& pair : dmxData) {
                     storage.storeUniverse(pair.first, pair.second.data());

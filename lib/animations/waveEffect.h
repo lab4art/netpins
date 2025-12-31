@@ -27,7 +27,7 @@ struct WaveEffectCfg {
         JsonDocument doc;
         DeserializationError error = deserializeJson(doc, jsonString);
         if (error) {
-            Serial.println("Failed to deserialize WaveEffectCfg");
+            Log::error("Failed to deserialize WaveEffectCfg");
             return w; // Return default config on error
         }
         JsonObject json = doc.as<JsonObject>();
@@ -89,11 +89,11 @@ class WaveEffect : public Thing {
                         firstColor = !firstColor;
                     }
                     
-                    Log.traceln("Restarting wave fade: %s, firstColor: %d", fades[current]->getName().c_str(), firstColor);
+                    Log::trace((std::string("Restarting wave fade: ") + fades[current]->getName() + ", firstColor: " + std::to_string(firstColor)).c_str());
                     fades[current]->setFirstColor(firstColor);
                     fades[current]->restart();
                 });
-                Log.noticeln("Adding fade animation %s for line: %s", fadeAnimation->getName().c_str(), line->getName().c_str());
+                Log::info((std::string("Adding fade animation ") + fadeAnimation->getName() + " for line: " + line->getName()).c_str());
                 fades.push_back(fadeAnimation);
             }
         }
@@ -133,6 +133,7 @@ class WaveEffect : public Thing {
                 }
                 // Log.noticeln("Setting fade time: %d from input %d", fadeTime, data[6]);
                 fade->setDuration(fadeTime);
+                // TODO dimmer ?
             }
         }
 
@@ -141,7 +142,7 @@ class WaveEffect : public Thing {
         }
 
         void restart() {
-            Log.traceln("Restarting wave effect, total fades: %d", fades.size());
+            Log::trace((std::string("Restarting wave effect, total fades: ") + std::to_string(fades.size())).c_str());
             current = 0;
             if (!fades.empty()) {
                 fades[0]->restart();

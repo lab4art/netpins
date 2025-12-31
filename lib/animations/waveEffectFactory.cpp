@@ -1,6 +1,6 @@
 #include <waveEffect.h>
 #include <pluginFactory.h>
-#include <ArduinoLog.h>
+#include <Log.h>
 #include <DmxListener.h>
 #include <Things.h>
 
@@ -16,16 +16,16 @@ public:
         try {
             WaveEffectCfg cfg = WaveEffectCfg::deserialize(config);
             
-            Thing* thing = dmxListener->getThing(String(cfg.rgbStripName.c_str()));
+            Thing* thing = dmxListener->getThing(cfg.rgbStripName);
             if (thing == nullptr) {
-                Log.errorln("RGB thing '%s' not found", cfg.rgbStripName.c_str());
+                Log::error((std::string("RGB thing '") + cfg.rgbStripName + "' not found").c_str());
                 return false;
             }
             
             RgbThingGroup* rgbThingGroup = static_cast<RgbThingGroup*>(thing);
             
             if (rgbThingGroup->things().empty()) {
-                Log.errorln("RGB thing '%s' is empty", cfg.rgbStripName.c_str());
+                Log::error((std::string("RGB thing '") + cfg.rgbStripName + "' is empty").c_str());
                 return false;
             }
             
@@ -37,7 +37,7 @@ public:
                 cfg.maxFadeTime,
                 cfg.dimmable
             );
-            waveEffect->setName(String("WA ") + String(cfg.rgbStripName.c_str()));
+            waveEffect->setName("WA " + cfg.rgbStripName);
             waveEffect->setMaxFadeTime(cfg.maxFadeTime);
             
             dmxListener->removeMappingForThing(rgbThingGroup->getName());
@@ -47,13 +47,12 @@ public:
             waveEffect->schedule(scheduler);
             waveEffect->restart();
 
-            Log.noticeln("Created wave effect for RGB thing '%s' with %d lines", 
-                        cfg.rgbStripName.c_str(), lines.size());
+            Log::info((std::string("Created wave effect for RGB thing '") + cfg.rgbStripName + "' with " + std::to_string(lines.size()) + " lines").c_str());
             
             return true;
             
         } catch (...) {
-            Log.errorln("Failed to create wave effect");
+            Log::error("Failed to create wave effect");
             return false;
         }
     }

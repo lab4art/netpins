@@ -10,7 +10,7 @@
 #include <set>
 #include <list>
 #include <Arduino.h>
-#include <ArduinoLog.h>
+#include <Log.h>
 #include <nvs.h>
 #include <nvs_flash.h>
 #include <Preferences.h>
@@ -21,7 +21,6 @@
 #include <uri/UriBraces.h>
 #include <settings.h>
 #include "heartbeatBroadcast.h"
-#include <logUtils.h>
 #include <GeneralUtils.h>
 #include <LittleFS.h>
 #include <DmxListener.h>
@@ -74,7 +73,7 @@ Scheduler* scheduler = new Scheduler();
 int numOfCreatedStrips = 0;
 template<typename Feature, typename Method>
 void createStrip(int pin, int maxNeopx, std::map<int, NeoPixelBus<Feature, Method>*>& strips) {
-    Log.infoln("Initializing strip on pin %d ...", pin);
+    Log::infoln("Initializing strip on pin %d ...", pin);
     pinMode(pin, OUTPUT);
 
     if (numOfCreatedStrips == 0) {
@@ -84,7 +83,7 @@ void createStrip(int pin, int maxNeopx, std::map<int, NeoPixelBus<Feature, Metho
     } else if (numOfCreatedStrips == 2) {
         strips[pin] = new NeoPixelBus<Feature, Method>(maxNeopx, pin, NeoBusChannel_2);
     } else {
-        Log.errorln("Reached maximum number of strips (3).");
+        Log::errorln("Reached maximum number of strips (3).");
         return;
     }
     numOfCreatedStrips++;
@@ -97,20 +96,24 @@ WebAdmin::CommandResult onSystemCommand(JsonVariant &jsonVariant) {
     lastCommandReceivedAt = millis();
     FactoryReset::getInstance().resetCounter(true);
 
-    String command = jsonVariant["command"].as<String>();
+    std::string command = jsonVariant["command"].as<std::string>();
 
     if (command == "sys-config") {
-        settingsManager->fromJson(jsonVariant["data"].as<String>());
+        settingsManager->fromJson(jsonVariant["data"].as<std::string>());
         if (settingsManager->isDirty()) {
             settingsManager->save();
+            // Apply log level immediately before reboot
+            Log::setLogLevel(settingsManager->getSettings().logLevel);
             return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK_REBOOT, "Saved, rebooting ...", 3000};
         } else {
             return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, "No updates.", -1};
         }
     } else if (command == "sys-config-merge") {
-        settingsManager->mergeJson(jsonVariant["data"].as<String>());
+        settingsManager->mergeJson(jsonVariant["data"].as<std::string>());
         if (settingsManager->isDirty()) {
             settingsManager->save();
+            // Apply log level immediately before reboot
+            Log::setLogLevel(settingsManager->getSettings().logLevel);
             return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK_REBOOT, "Saved, rebooting ...", 3000};
         } else {
             return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, "No updates.", -1};
@@ -119,9 +122,9 @@ WebAdmin::CommandResult onSystemCommand(JsonVariant &jsonVariant) {
         FirmwareUpdateParams* params;
 
         if (command == "firmware-update") {
-            params = new FirmwareUpdateParams{jsonVariant["data"]["url"].as<String>(), false};
+            params = new FirmwareUpdateParams{jsonVariant["data"]["url"].as<std::string>(), false};
         } else {
-            params = new FirmwareUpdateParams{jsonVariant["data"]["url"].as<String>(), true};
+            params = new FirmwareUpdateParams{jsonVariant["data"]["url"].as<std::string>(), true};
         }
 
         xTaskCreate(
@@ -135,7 +138,7 @@ WebAdmin::CommandResult onSystemCommand(JsonVariant &jsonVariant) {
         // Wait for the result from the firmware update task
         FirmwareUpdateResult* updateResult;
         if (xQueueReceive(firmwareUpdateResultQueue, &updateResult, pdMS_TO_TICKS(90000)) != pdTRUE) {
-            Log.errorln("Failed to receive update result within 90 seconds.");
+            Log::errorln("Failed to receive update result within 90 seconds.");
             return WebAdmin::CommandResult{WebAdmin::CommandStatus::ERROR, "Update timed-out after 90 seconds.", 3000};
         } else {
             if (updateResult->status == FirmwareUpdateStatus::NO_UPDATES) {
@@ -225,10 +228,10 @@ void initNeoStipTask() {
 DigitalReadSensor* getDigitalReadSensor(int pin) {
     if (digitalReadSensors.find(pin) != digitalReadSensors.end()) { // if map is accesssed with missing key, it causes a crash at some later point. No idea why?.
         auto dReadSensor = digitalReadSensors[pin];
-        Log.noticeln("Found digital sensor at pin %d.", pin);
+        Log::infoln("Found digital sensor at pin %d.", pin);
         return dReadSensor;
     } else {
-        Log.traceln("Digital sensor at pin %d not found.", pin);
+        Log::traceln("Digital sensor at pin %d not found.", pin);
         return nullptr;
     }
 }
@@ -272,11 +275,11 @@ std::vector<InitializedThingGroup<ThingGroupType>> createStripThings(
         for (int i = 0; i < stripSlices.size(); i++) {
             int firstPx = stripSlices[i];
             int lastPx = i < stripSlices.size() - 1 ? stripSlices[i + 1] - 1 : strip->PixelCount() - 1;
-            Log.noticeln("Creating led strip slice: %d-%d, dimmer mode %s.", firstPx, lastPx, dimmerModeToString(stripeCfg.dimmer).c_str());
-            auto thing = new ThingType(strip, firstPx, lastPx, stripeCfg.dimmer == DimmerMode::perSlice ? true : false, String(stripeCfg.name.c_str()) + "-" + String(i));
+            Log::infoln("Creating led strip slice: %d-%d, dimmer mode %s.", firstPx, lastPx, dimmerModeToString(stripeCfg.dimmer).c_str());
+            auto thing = new ThingType(strip, firstPx, lastPx, stripeCfg.dimmer == DimmerMode::perSlice ? true : false, stripeCfg.name + "-" + std::to_string(i));
             sliceThings.push_back(thing);
         }
-        ThingGroupType* group = new ThingGroupType(sliceThings, stripeCfg.dimmer == DimmerMode::single ? true : false, String(stripeCfg.name.c_str()));
+        ThingGroupType* group = new ThingGroupType(sliceThings, stripeCfg.dimmer == DimmerMode::single ? true : false, stripeCfg.name);
         groups.push_back(InitializedThingGroup<ThingGroupType>(group, stripeCfg.dmxCfg));
     }
     return groups;
@@ -291,29 +294,29 @@ std::vector<Switchabe*> createThings(Settings& settings) {
         PwmThing::set8bitTo14BitMapping();
         for (auto& pwmCfg : settings.pwms) {
             // initialize pwm Things
-            auto pwmThing = new PwmThing(pwmCfg.pin, String(pwmCfg.name.c_str()));
+            auto pwmThing = new PwmThing(pwmCfg.pin, pwmCfg.name);
             dmxListener->addMapping(pwmThing, pwmCfg.dmxCfg);
             switchables.push_back(pwmThing);
             pwms.push_back(pwmThing);
         }
-        Log.noticeln("PWMs created.");
+        Log::infoln("PWMs created.");
     }
 
-    Log.noticeln("Creating RGBW strips ...");
+    Log::infoln("Creating RGBW strips ...");
     std::vector<InitializedThingGroup<RgbwThingGroup>> rgbwThingGroups = createStripThings<NeoGrbwFeature, NeoEsp32RmtNSk6812Method, RgbwThing, RgbwThingGroup>(rgbwStrips, settings.rgbwStrips);
     for (auto& rgbwThingGroup : rgbwThingGroups) {
         dmxListener->addMapping(rgbwThingGroup.group, rgbwThingGroup.dmxCfg);
         switchables.push_back(rgbwThingGroup.group);
     }
 
-    Log.noticeln("Creating RGB strips ...");
+    Log::infoln("Creating RGB strips ...");
     std::vector<InitializedThingGroup<RgbThingGroup>> rgbThingsGroups = createStripThings<NeoGrbFeature, NeoEsp32RmtNWs2812xMethod, RgbThing, RgbThingGroup>(rgbStrips, settings.rgbStrips);
     for (auto& rgbThingGroup : rgbThingsGroups) {
         dmxListener->addMapping(rgbThingGroup.group, rgbThingGroup.dmxCfg);
         switchables.push_back(rgbThingGroup.group);
     }
 
-    Log.noticeln("Creating servos ...");
+    Log::infoln("Creating servos ...");
     for (auto& servoCfg : settings.servos) {
         auto minPulseWidth = servoCfg.minPulseWidth == 0 ? 500 : servoCfg.minPulseWidth;
         auto maxPulseWidth = servoCfg.maxPulseWidth == 0 ? 2500 : servoCfg.maxPulseWidth;
@@ -326,9 +329,9 @@ std::vector<Switchabe*> createThings(Settings& settings) {
     try {
         int createdAnimations = PluginFactory::getInstance().createAnimationsFromPlugins(
             scheduler, settings.plugins, dmxListener);
-        Log.infoln("Created %d animations from plugins", createdAnimations);
+        Log::infoln("Created %d animations from plugins", createdAnimations);
     } catch (const std::exception& e) {
-        Serial.println(String("ERR: configuring plugins. ") + e.what());
+        Log::error((std::string("ERR: configuring plugins. ") + e.what()).c_str());
     }
 
 
@@ -388,7 +391,7 @@ void onDmxFrame(const uint8_t *data, uint16_t size, const ArtDmxMetadata &metada
     // ignore old sequences unless counter flipped (per-universe tracking)
     uint8_t lastSequence = lastDmxSequences[metadata.universe];
     if (metadata.sequence < lastSequence && lastSequence - metadata.sequence < 10) {
-        Log.traceln("Ignoring old sequence %d for universe %d, last sequence: %d", metadata.sequence, metadata.universe, lastSequence);
+        Log::traceln("Ignoring old sequence %d for universe %d, last sequence: %d", metadata.sequence, metadata.universe, lastSequence);
         return;
     }
     lastDmxSequences[metadata.universe] = metadata.sequence;
@@ -401,19 +404,19 @@ void onDmxFrame(const uint8_t *data, uint16_t size, const ArtDmxMetadata &metada
 void eraseAllPreferences() {
     esp_err_t err = nvs_flash_erase();
     if (err != ESP_OK) {
-        Log.errorln("Failed to erase NVS: %s\n", esp_err_to_name(err));
+        Log::errorln("Failed to erase NVS: %s\n", esp_err_to_name(err));
     } else {
-        Log.noticeln("NVS erased successfully.");
+        Log::infoln("NVS erased successfully.");
         err = nvs_flash_init();
         if (err != ESP_OK) {
-            Log.errorln("Failed to initialize NVS: %s", esp_err_to_name(err));
+            Log::errorln("Failed to initialize NVS: %s", esp_err_to_name(err));
         } else {
-            Log.noticeln("NVS initialized successfully.");
+            Log::infoln("NVS initialized successfully.");
         }        
     }
 }
 void onMqttMessage(char* topic, byte* payload, unsigned int length) {
-    Log.noticeln("MQTT message received: %s, %s", topic, payload);
+    Log::infoln("MQTT message received: %s, %s", topic, payload);
 };
 
 void beforeWiFiReboot() {
@@ -427,10 +430,10 @@ void beforeWiFiReboot() {
 AnalogReadSensor* getAnalogReadSensor(int pin) {
     if (analogReadSensors.find(pin) != analogReadSensors.end()) { // if map is accesssed with missing key, it causes a crash at some later point. No idea why?.
         auto aReadSensor = analogReadSensors[pin];
-        Log.noticeln("Found analog sensor at pin %d.", pin);
+        Log::infoln("Found analog sensor at pin %d.", pin);
         return aReadSensor;
     } else {
-        Log.traceln("Analog sensor at pin %d not found.", pin);
+        Log::traceln("Analog sensor at pin %d not found.", pin);
         return nullptr;
     }
 }
@@ -447,12 +450,7 @@ void setup() {
         }
     }
 
-    Serial.println("Booting ...");
-
-    Log.begin(LOG_LEVEL, &Serial, true);
-    Log.setShowLevel(false);    // Do not show loglevel, we will do this in the prefix
-    Log.setPrefix(printPrefix);
-    Log.infoln("Logging initialized.");
+    Log::info("Booting ...");
 
     Preferences preferences;
     preferences.begin("sys", false);
@@ -467,7 +465,7 @@ void setup() {
 
     FactoryReset::getInstance().evaluate(FACTORY_REST_PIN);
     if (FORCE_RESET || FactoryReset::getInstance().shouldReset()) {
-        Log.noticeln("Factory reset requested, setting defaults ...");
+        Log::infoln("Factory reset requested, setting defaults ...");
         eraseAllPreferences();
         settingsManager->setDefaults();
         // Set WiFi credentials from config
@@ -480,7 +478,7 @@ void setup() {
     }
 
     if (settingsManager->getSettings().wifiSsid.empty() || settingsManager->getSettings().wifiSsid == "null") {
-        Log.noticeln("Empty settings, setting defaults ...");
+        Log::infoln("Empty settings, setting defaults ...");
         settingsManager->setDefaults();
         // Set WiFi credentials from config
         settingsManager->getSettings().wifiSsid = WIFI_SSID;
@@ -488,25 +486,29 @@ void setup() {
         settingsManager->save();
     }
     Settings settings = settingsManager->getSettings();
-    Serial.println(String("Loaded settings: ") + settings.asJson().c_str());
+    Log::info((std::string("Loaded settings: ") + settings.asJson()).c_str());
+    
+    // Apply log level from settings
+    Log::setLogLevel(settings.logLevel);
+    Log::infoln("Log level set to %d", settings.logLevel);
     
     dmxListener = new DmxListener(settings.dmxChOffset);
 
     try {
         switchables = createThings(settings);
-        Serial.println("Things created.");
+        Log::info("Things created.");
     } catch(const std::exception& e) {
-        Serial.println(String("ERR: creating things. ") + e.what());
+        Log::error((std::string("ERR: creating things. ") + e.what()).c_str());
     }
 
     // SENSORS ////
-    Log.noticeln("Creating Hum/Temp sensor ...");
+    Log::infoln("Creating Hum/Temp sensor ...");
     for (auto& humTempCfg : settings.humTemps) {
         auto humTempSensor = new HumTempSensor(humTempCfg.pin, humTempCfg.readMs);
         humTempSensors.push_back(humTempSensor);
     }
 
-    Log.noticeln("Creating touch sensors ...");
+    Log::infoln("Creating touch sensors ...");
     for (auto& touch : settings.touchSensors) {
         auto touchSensor = new TouchSensor(touch.pin, 200, touch.threshold);
         std::string sensorName = touch.sensorName;
@@ -516,7 +518,7 @@ void setup() {
         touchSensors.push_back(touchSensor);
     }
 
-    Log.noticeln("Creating digital read sensors ...");
+    Log::infoln("Creating digital read sensors ...");
     for (auto& dreadCfg : settings.digitalReadSensors) {
         auto digitalReadSensor = new DigitalReadSensor(dreadCfg.pin, dreadCfg.readMs, INPUT_PULLUP);
         digitalReadSensor->addOnChangeListener([dreadCfg](bool value) {
@@ -524,18 +526,18 @@ void setup() {
         });
 
         digitalReadSensor->addOnChangeListener([](bool value) {
-            Log.infoln("Digital read sensor value changed to: %d", value);
+            Log::infoln("Digital read sensor value changed to: %d", value);
             if (value) {
                 // isMovementDetected = true; TODO
             } else {
                 // isMovementDetected = false;
             }
         });
-        Log.noticeln("Digital read sensor %d created.", dreadCfg.pin);
+        Log::infoln("Digital read sensor %d created.", dreadCfg.pin);
         digitalReadSensors[dreadCfg.pin] = digitalReadSensor;
     }
 
-    Log.noticeln("Creating analog read sensors ...");
+    Log::infoln("Creating analog read sensors ...");
     for (auto& areadCfg : settings.analogReadSensors) {
         auto analogReadSensor = new AnalogReadSensor(areadCfg.pin, areadCfg.readMs);
         // TODO add optional filters to the listener: trashold, move average, etc.
@@ -543,28 +545,28 @@ void setup() {
             // Log.traceln("Analog read %d value changed to: %d", areadCfg.pin, value);
             sensorEvents->publish(areadCfg.sensorName, value, true);
         });
-        Log.noticeln("Analog read sensor created. Pin: %d, readMs: %d", areadCfg.pin, areadCfg.readMs);
+        Log::infoln("Analog read sensor created. Pin: %d, readMs: %d", areadCfg.pin, areadCfg.readMs);
         analogReadSensors[areadCfg.pin] = analogReadSensor;
     }
 
-    Serial.println("Mounting LittleFS ...");
+    Log::info("Mounting LittleFS ...");
     if (!LittleFS.begin()) {
-        Serial.println("An Error has occurred while mounting LittleFS.");
+        Log::error("An Error has occurred while mounting LittleFS.");
     }
 
     if (settings.lightsTest) {
-        Serial.println("Starting lights test ...");
+        Log::info("Starting lights test ...");
         for (auto& switchable : switchables) {
             switchable->on();
         }
         doCommitThings();
-        Serial.println("Waiting 2s ...");
+        Log::info("Waiting 2s ...");
         delay(2000);
         for (auto& switchable : switchables) {
             switchable->off();
         }
         doCommitThings();
-        Serial.println("Lights test done.");
+        Log::info("Lights test done.");
     }
 
     initNeoStipTask();
@@ -577,7 +579,7 @@ void setup() {
         maxIdleMillis = settings.maxIdle * 60000;
     }
 
-    Serial.println(String("Using ssid: ") + settings.wifiSsid.c_str());
+    Log::info((std::string("Using ssid: ") + settings.wifiSsid).c_str());
 
     wifi = new WifiUtils(
         settings.wifiSsid.c_str(), 
@@ -587,7 +589,7 @@ void setup() {
         settings.rebootAfterWifiFailed,
         beforeWiFiReboot,
         settings.hostname.c_str());
-    Serial.println("Wifi MAC: " + WifiUtils::macAddress);
+    Log::info((std::string("Wifi MAC: ") + WifiUtils::macAddress.c_str()).c_str());
 
     if (!settings.disableArtnet) {
         artnet = new ArtnetWiFiReceiver();
@@ -608,11 +610,11 @@ void setup() {
 
         artnet->setArtPollReplyConfigLongName(String(WiFi.getHostname()) + " - " + settings.dmxChOffset + "@" + universeStr + " - " + FIRMWARE_VERSION);
     } else {
-        Log.noticeln("Artnet is disabled.");
+        Log::infoln("Artnet is disabled.");
     }
 
     if (_ENABLE_WEBSERVER) {
-        Log.noticeln("Starting web server ...");
+        Log::infoln("Starting web server ...");
         webAdmin = new WebAdmin(
             settingsManager,
             onSystemCommand
@@ -620,25 +622,25 @@ void setup() {
         webAdmin->setOnReceivedCallback([](){
             lastCommandReceivedAt = millis();
         });
-        Log.noticeln("Web server listening on %s", WiFi.localIP().toString().c_str());
+        Log::infoln("Web server listening on %s", WiFi.localIP().toString().c_str());
     }
 
     webAdmin->setPropertiesSupplier([](){
-        std::map<String, String> props;
+        std::map<std::string, std::string> props;
         for (auto& humTempSensor : humTempSensors) {
-            props[String("temp-") + humTempSensor->getPin()] = String(humTempSensor->getValue().humidity, 2);
-            props[String("hum-") + humTempSensor->getPin()] = String(humTempSensor->getValue().temperature, 2);
+            props["temp-" + std::to_string(humTempSensor->getPin())] = std::to_string(humTempSensor->getValue().humidity);
+            props["hum-" + std::to_string(humTempSensor->getPin())] = std::to_string(humTempSensor->getValue().temperature);
         }
 
         std::map<uint16_t /*universe*/, std::array<uint8_t, 512>> storedDmx;
         dmxListener->initializeDmxData(storedDmx);
         dmxListener->restoreDmxData(storedDmx);
         // convert dmxData to string
-        String dmxDataStr = "";
+        std::string dmxDataStr = "";
         for (auto& universeData : storedDmx) {
-            dmxDataStr += "U" + String(universeData.first) + ":";
+            dmxDataStr += "U" + std::to_string(universeData.first) + ":";
             for (int i = 0; i < 512; i++) {
-                dmxDataStr += String(universeData.second[i]);
+                dmxDataStr += std::to_string(universeData.second[i]);
                 if (i < 511) {
                     dmxDataStr += ",";
                 }
@@ -666,11 +668,11 @@ void setup() {
         dmxData
     );
 
-    Log.noticeln("Running ...");
+    Log::infoln("Running ...");
 }
 
 void onWifiExecutionCallback(String ip) {
-    Log.noticeln("WiFi connected, IP address: %s.", ip.c_str());
+    Log::infoln("WiFi connected, IP address: %s.", ip.c_str());
     if (settingsManager->getSettings().disableWifiPowerSave) {
         esp_wifi_set_ps(WIFI_PS_NONE); // Disable power-saving mode
     }
@@ -681,7 +683,7 @@ void onWifiExecutionCallback(String ip) {
             if (heartbeatBroadcast == nullptr && settigns.hbInt > 0) {
                 auto ip = WiFi.localIP();
                 IPAddress broadcastIp = IPAddress(ip[0], ip[1], ip[2], 255);
-                Log.noticeln("Starting UDP heartbeat on %d.%d.%d.255 ...", ip[0], ip[1], ip[2]);
+                Log::infoln("Starting UDP heartbeat on %d.%d.%d.255 ...", ip[0], ip[1], ip[2]);
                 udp = new WiFiUDP();
                 heartbeatBroadcast = new HeartbeatBroadcast(
                 udp, 
@@ -756,8 +758,8 @@ void loop() {
     // idle power off
     auto virtualUptime = uptimeOffset + millis();
     if (maxIdleMillis > 0 && virtualUptime - lastCommandReceivedAt > maxIdleMillis) {
-        Log.noticeln("No command received for %d min, going to sleep ...", maxIdleMillis / 60000);
-        Log.noticeln("maxIdleMillis: %d, lastCommandReceivedAt: %d, virtualUptime %d, millis: %d", maxIdleMillis, lastCommandReceivedAt, virtualUptime, millis());
+        Log::infoln("No command received for %d min, going to sleep ...", maxIdleMillis / 60000);
+        Log::infoln("maxIdleMillis: %d, lastCommandReceivedAt: %d, virtualUptime %d, millis: %d", maxIdleMillis, lastCommandReceivedAt, virtualUptime, millis());
         
         if (webAdmin != nullptr) {
             webAdmin->end();
@@ -791,11 +793,11 @@ void loop() {
         }
 
         if (loopCounter % 5000 == 0) {
-            Log.noticeln("Max loop execution time: %d us, avg loop execution time: %d us", maxExecutionTime, executionTimeSum / loopCounter);
+            Log::infoln("Max loop execution time: %d us, avg loop execution time: %d us", maxExecutionTime, executionTimeSum / loopCounter);
             executionTimeSum = 0;
             maxExecutionTime = 0;
             loopCounter = 0;
-            Log.noticeln("Min free heap: %d, low water mark: %d of %d. Min free psram: %d, low water mark: %d of %d", 
+            Log::infoln("Min free heap: %d, low water mark: %d of %d. Min free psram: %d, low water mark: %d of %d", 
                 minFreeHeap, ESP.getMinFreeHeap(), ESP.getHeapSize(), minFreePsram, ESP.getMinFreePsram(), ESP.getPsramSize());
             minFreeHeap = UINT32_MAX;
             minFreePsram = UINT32_MAX;

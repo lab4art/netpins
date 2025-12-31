@@ -1,8 +1,9 @@
-#pragma once
+#ifndef WIFI_UTILS_CPP
+#define WIFI_UTILS_CPP
 
 #include <esp_wifi.h>
 #include <WiFi.h>
-#include <ArduinoLog.h>
+#include <Log.h>
 #include <factoryReset.h>
 
 
@@ -49,11 +50,11 @@ class WifiUtils {
             WiFi.setHostname(getHostname(hostname).c_str());
 
             if (ssid == nullptr || strlen(ssid) == 0 || ssid == "null") {
-                Log.noticeln("Starting WiFi in AP mode.");
+                Log::infoln("Starting WiFi in AP mode.");
                 WiFi.mode(WIFI_AP);
                 String apSsid = "netpins-" + WifiUtils::macAddress;
                 WiFi.softAP(apSsid);
-                Log.noticeln("AP IP address: %s", WiFi.softAPIP().toString().c_str()); // default IP is 192.168.4.1
+                Log::infoln("AP IP address: %s", WiFi.softAPIP().toString().c_str()); // default IP is 192.168.4.1
             } else {
                 WiFi.mode(WIFI_STA);
                 if (staticIp.ip != IPAddress(0, 0, 0, 0)) {
@@ -76,7 +77,7 @@ class WifiUtils {
                         reconnectDelay = reconnectInterval * 10;
                     }
                     reconnectDelay = reconnectDelay + random(0, reconnectInterval);
-                    Log.noticeln("Reconnecting to WiFi %s ...", ssidString.c_str());
+                    Log::infoln("Reconnecting to WiFi %s ...", ssidString.c_str());
                     WiFi.reconnect();
                     connectedCallbackCalled = false;
                     connectAttempt++;
@@ -86,7 +87,7 @@ class WifiUtils {
                         if (beforeWiFiReboot != nullptr) {
                             beforeWiFiReboot();
                         }
-                        Log.errorln("Too many failed attempts to connect to WiFi. Restarting ...");
+                        Log::errorln("Too many failed attempts to connect to WiFi. Restarting ...");
                         ESP.restart();
                     }
                 } else {
@@ -120,3 +121,5 @@ class WifiUtils {
 };
 
 String WifiUtils::macAddress = "";
+
+#endif // WIFI_UTILS_CPP

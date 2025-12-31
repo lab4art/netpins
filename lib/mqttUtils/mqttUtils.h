@@ -10,7 +10,7 @@ void serialPrintln(const char* templateString, ...) {
     char buffer[256];
     vsnprintf(buffer, 256, templateString, args);
     va_end(args);
-    Serial.println(buffer);
+    Log::println(buffer);
 }
 
 class MqttUtils {
@@ -34,14 +34,14 @@ class MqttUtils {
                 pass(pass),
                 clientId(clientId) {
             if (mqttHost == nullptr || mqttHost.isEmpty()) {
-                Serial.println("MQTT DISABLED, host is not defined.");
+                Log::info("MQTT DISABLED, host is not defined.");
                 mqttClient = nullptr;
             } else {
                 serialPrintln("Creating MQTT client with host: %s, port: %d, user: %s, topic: %s, clientId: %s", mqttHost.c_str(), mqttPort, user.c_str(), subscribeTopic.c_str(), clientId.c_str());
                 mqttClient = new PubSubClient(espClient);
                 mqttClient->setServer(host.c_str(), port);
                 mqttClient->setCallback(callback);
-                Serial.println("MQTT client created.");
+                Log::info("MQTT client created.");
             }
         }
 

@@ -1,22 +1,22 @@
 #pragma once
 
 #include <vector>
-#include <ArduinoLog.h>
+#include <Log.h>
 #include <NeoPixelBus.h>
 #include <ESP32Servo.h>
 
 class Thing {
     protected:
-        String name;
+        std::string name;
     public:
         virtual int numChannels() = 0;
         virtual void setData(uint8_t* data) = 0;
 
-        void setName(String name) {
+        void setName(std::string name) {
             this->name = name;
         }
 
-        String getName() {
+        std::string getName() {
             return name;
         }
 };
@@ -107,7 +107,7 @@ class PwmThing : public SwitchableThing {
     public:
         static uint16_t gammaTable[256];
         
-        PwmThing(int pin, String name):
+        PwmThing(int pin, std::string name):
             pin(pin) {
             pinMode(pin, OUTPUT);
             this->name = name;
@@ -176,11 +176,11 @@ class RgbThing : public SliceThingBase<RgbColor> {
     }
 
   public:
-        RgbThing(NeoPixelBus<NeoGrbFeature, NeoEsp32RmtNWs2812xMethod>* strip, int pxFrom, int pxTo, bool dimmable, String name):
+        RgbThing(NeoPixelBus<NeoGrbFeature, NeoEsp32RmtNWs2812xMethod>* strip, int pxFrom, int pxTo, bool dimmable, std::string name):
                 strip(strip),
                 SliceThingBase<RgbColor>(pxFrom, pxTo, dimmable) {
             this->name = name;
-            Log.traceln("RgbThing created. FromPx: %d, ToPx: %d. Dimmable: %d", pxFrom, pxTo, dimmable);
+            Log::traceln("RgbThing created. FromPx: %d, ToPx: %d. Dimmable: %d", pxFrom, pxTo, dimmable);
         }
 
         int numChannels() {
@@ -215,11 +215,11 @@ class RgbwThing : public SliceThingBase<RgbwColor> {
         }
 
     public:
-        RgbwThing(NeoPixelBus<NeoGrbwFeature, NeoEsp32RmtNSk6812Method>* strip, int pxFrom, int pxTo, bool dimmable, String name):
+        RgbwThing(NeoPixelBus<NeoGrbwFeature, NeoEsp32RmtNSk6812Method>* strip, int pxFrom, int pxTo, bool dimmable, std::string name):
                 strip(strip),
                 SliceThingBase<RgbwColor>(pxFrom, pxTo, dimmable) {
             this->name = name;
-            Log.traceln("RgbwThing created. FromPx: %d, ToPx: %d. Dimmable: %d", pxFrom, pxTo, dimmable);
+            Log::traceln("RgbwThing created. FromPx: %d, ToPx: %d. Dimmable: %d", pxFrom, pxTo, dimmable);
         }
 
         int numChannels() {
@@ -228,10 +228,10 @@ class RgbwThing : public SliceThingBase<RgbwColor> {
         
         void setData(uint8_t* data) { // data is a pointer to the first element of the array
             if (dimmable) {
-                Log.traceln("Setting color to %d %d %d %d, dimm %d", data[0], data[1], data[2], data[3], data[4]);
+                Log::traceln("Setting color to %d %d %d %d, dimm %d", data[0], data[1], data[2], data[3], data[4]);
                 setColor(RgbwColor(data[0], data[1], data[2], data[3]), data[4]);
             } else {
-                Log.traceln("Setting color to %d %d %d %d, not dimmable", data[0], data[1], data[2], data[3]);
+                Log::traceln("Setting color to %d %d %d %d, not dimmable", data[0], data[1], data[2], data[3]);
                 setColor(RgbwColor(data[0], data[1], data[2], data[3]));
             }
         }
@@ -245,7 +245,7 @@ class ServoThing : public Thing {
         int maxAngle;
 
     public:
-        ServoThing(int pin, int maxAngle, int minPulseWidth = 500, int maxPulseWidth = 2500, String name = "") {
+        ServoThing(int pin, int maxAngle, int minPulseWidth = 500, int maxPulseWidth = 2500, std::string name = "") {
             this->maxAngle = maxAngle;
             pinMode(pin, OUTPUT);
             servo.setPeriodHertz(50);
@@ -284,7 +284,7 @@ class ThingGroup : public SwitchableThing {
         boolean dimmable;
 
     public:
-        ThingGroup(std::vector<SwitchableThing*> things, boolean dimmable, String name):
+        ThingGroup(std::vector<SwitchableThing*> things, boolean dimmable, std::string name):
             things(things),
             dimmable(dimmable) {
                 int sumChannels = 0;
@@ -324,7 +324,7 @@ class RgbThingGroup : public ThingGroup {
         std::vector<RgbThing*> rgbThings;
 
     public:
-        RgbThingGroup(std::vector<RgbThing*> rgbThings, boolean dimmable, String name):
+        RgbThingGroup(std::vector<RgbThing*> rgbThings, boolean dimmable, std::string name):
             ThingGroup(std::vector<SwitchableThing*>(rgbThings.begin(), rgbThings.end()), dimmable, name),
             rgbThings(rgbThings) {
         }
@@ -356,7 +356,7 @@ class RgbwThingGroup : public ThingGroup {
         std::vector<RgbwThing*> rgbwThings;
 
     public:
-        RgbwThingGroup(std::vector<RgbwThing*> rgbwThings, boolean dimmable, String name):
+        RgbwThingGroup(std::vector<RgbwThing*> rgbwThings, boolean dimmable, std::string name):
             ThingGroup(std::vector<SwitchableThing*>(rgbwThings.begin(), rgbwThings.end()), dimmable, name),
             rgbwThings(rgbwThings) {
         }

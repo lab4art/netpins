@@ -1,8 +1,7 @@
 #pragma once
 
-#include <Arduino.h>
 #include <Preferences.h>
-#include <ArduinoLog.h>
+#include <Log.h>
 
 /**
  * FactoryReset singleton class
@@ -45,14 +44,14 @@ class FactoryReset {
             int rebootCount = preferences.getInt("rst-cnt", 0); // factory reset counter
             int rebootCount2 = preferences.getInt("rst-cnt-2", secondaryCounterInitalValue); // factory reset counter
             rebootCount++;
-            Log.noticeln("FactoryReset counter: %d, 2nd counter %d.", rebootCount, rebootCount2);
+            Log::infoln("FactoryReset counter: %d, 2nd counter %d.", rebootCount, rebootCount2);
             // save the counter before the delay
             preferences.putInt("rst-cnt", rebootCount);
             preferences.end();
-            Log.traceln("FactoryReset counter: %d, 2nd counter %d.", rebootCount, rebootCount2);
+            Log::traceln("FactoryReset counter: %d, 2nd counter %d.", rebootCount, rebootCount2);
             // prevent factory reset in case of immediate reboots
             if (rebootCount >= secondaryCounterInitalValue) {
-                Log.traceln("Waiting for 5 sec ...");
+                Log::traceln("Waiting for 5 sec ...");
                 delay(5000);
 
                 /**
@@ -74,9 +73,9 @@ class FactoryReset {
             }
 
             preferences.begin("sys", false);
-            Log.traceln("Should reset counter: %d, 2nd counter %d.", rebootCount, rebootCount2);
+            Log::traceln("Should reset counter: %d, 2nd counter %d.", rebootCount, rebootCount2);
             if (rebootCount >= 5) {
-                Log.noticeln("Factory reset flagged ...");
+                Log::infoln("Factory reset flagged ...");
                 doReset = true;
                 preferences.putInt("rst-cnt", 0);
                 preferences.putInt("rst-cnt-2", secondaryCounterInitalValue);
@@ -96,7 +95,7 @@ class FactoryReset {
             if (digitalRead(pin) == LOW) {
                 delay(1000);
                 if (digitalRead(pin) == LOW) {
-                    Log.noticeln("Factory reset button pressed ...");
+                    Log::infoln("Factory reset button pressed ...");
                     doReset = true;
                 }
             }
@@ -108,7 +107,7 @@ class FactoryReset {
          */
         bool resetCounter(boolean force = false) {
             if (!usingButton && !couterReseted && (force || millis() > 10000)) {
-                Log.noticeln("Resetting factoryReset counter ...");
+                Log::infoln("Resetting factoryReset counter ...");
                 preferences.begin("sys", false);
                 preferences.putInt("rst-cnt", 0);
                 preferences.putInt("rst-cnt-2", secondaryCounterInitalValue);

@@ -1,7 +1,6 @@
 #pragma once
 
-#include <Arduino.h>
-#include <ArduinoLog.h>
+#include <Log.h>
 #include <NeoPixelBus.h>
 #include <Things.h>
 #include <settings.h>
