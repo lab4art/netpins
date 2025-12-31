@@ -38,7 +38,7 @@ class SliceThingBase : public SwitchableThing {
         static NeoGamma<NeoGammaTableMethod> colorGamma;
 
         virtual void doSetColor(uint16_t px, T_COLOR color, uint8_t dimm) = 0;
-        boolean dimmable;
+        bool dimmable;
 
     public:
         SliceThingBase(int pxFrom, int pxTo, bool dimmable):
@@ -77,7 +77,7 @@ class SliceThingBase : public SwitchableThing {
             }
         }
 
-        boolean isDimmable() {
+        bool isDimmable() {
             return dimmable;
         }
 };
@@ -281,10 +281,10 @@ class ThingGroup : public SwitchableThing {
         int numOfChannels;
     protected:
         std::vector<SwitchableThing*> things;
-        boolean dimmable;
+        bool dimmable;
 
     public:
-        ThingGroup(std::vector<SwitchableThing*> things, boolean dimmable, std::string name):
+        ThingGroup(std::vector<SwitchableThing*> things, bool dimmable, std::string name):
             things(things),
             dimmable(dimmable) {
                 int sumChannels = 0;
@@ -303,7 +303,7 @@ class ThingGroup : public SwitchableThing {
             return numOfChannels;
         }
 
-        boolean isDimmable() {
+        bool isDimmable() {
             return dimmable;
         }
 
@@ -324,7 +324,7 @@ class RgbThingGroup : public ThingGroup {
         std::vector<RgbThing*> rgbThings;
 
     public:
-        RgbThingGroup(std::vector<RgbThing*> rgbThings, boolean dimmable, std::string name):
+        RgbThingGroup(std::vector<RgbThing*> rgbThings, bool dimmable, std::string name):
             ThingGroup(std::vector<SwitchableThing*>(rgbThings.begin(), rgbThings.end()), dimmable, name),
             rgbThings(rgbThings) {
         }
@@ -356,7 +356,7 @@ class RgbwThingGroup : public ThingGroup {
         std::vector<RgbwThing*> rgbwThings;
 
     public:
-        RgbwThingGroup(std::vector<RgbwThing*> rgbwThings, boolean dimmable, std::string name):
+        RgbwThingGroup(std::vector<RgbwThing*> rgbwThings, bool dimmable, std::string name):
             ThingGroup(std::vector<SwitchableThing*>(rgbwThings.begin(), rgbwThings.end()), dimmable, name),
             rgbwThings(rgbwThings) {
         }

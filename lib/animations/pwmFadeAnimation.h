@@ -54,7 +54,7 @@ class PWMFadeAnimation: public Animation {
         uint16_t fadeInDuration;
         uint16_t fadeOutDuration;
 
-        boolean fadeInMode = false; // if false, fadeOut
+        bool fadeInMode = false; // if false, fadeOut
 
         uint8_t getCurrentValue() {
             if (fadeInMode) {
@@ -142,7 +142,7 @@ class PWMFadeAnimationThing: public Thing {
         PWMFadeAnimation* fadeAnimation;
         uint8_t lastDmxData[5] = {0, 0, 0, 0, 0}; // value1, value2, fadeInDuration, fadeOutDuration, on/off
     
-        boolean setLastDmxData(uint8_t* data) {
+        bool setLastDmxData(uint8_t* data) {
             bool changed = false;
             for (int i = 0; i < 5; i++) {
                 if (lastDmxData[i] != data[i]) {
@@ -164,7 +164,7 @@ class PWMFadeAnimationThing: public Thing {
         }
 
         void setData(uint8_t* data) {
-            boolean onOffChanged = lastDmxData[4] != data[4];
+            bool onOffChanged = lastDmxData[4] != data[4];
             if (setLastDmxData(data)) {
                 Log::traceln("Setting PWM fade animation data: %d %d %d %d %d", data[0], data[1], data[2], data[3], data[4]);
                 fadeAnimation->setValue1(data[0]);

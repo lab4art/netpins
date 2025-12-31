@@ -105,7 +105,7 @@ class FactoryReset {
          * Reset factoryReset counter if the time is greater than a threshold.
          * Returns true if the counter was reset.
          */
-        bool resetCounter(boolean force = false) {
+        bool resetCounter(bool force = false) {
             if (!usingButton && !couterReseted && (force || millis() > 10000)) {
                 Log::infoln("Resetting factoryReset counter ...");
                 preferences.begin("sys", false);

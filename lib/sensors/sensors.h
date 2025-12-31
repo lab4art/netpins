@@ -42,7 +42,7 @@ class MovingAverage {
             return sum / size;
         }
 
-        boolean isFull() {
+        bool isFull() {
             return count == size;
         }
 };
@@ -58,7 +58,7 @@ class SensorBase {
         std::vector<std::function<void(VALUE_TYPE)>> onChangeListeners;
 
     protected:
-        boolean shouldPull() {
+        bool shouldPull() {
             unsigned long currentMillis = millis();
             if (currentMillis - lastPullMillis > pullMillis) {
                 lastPullMillis = currentMillis;
@@ -76,9 +76,9 @@ class SensorBase {
          * Read the sensor and set the value.
          * Return true if the value has changed, false otherwise.
         */
-        virtual boolean doRead() = 0;
+        virtual bool doRead() = 0;
 
-        boolean setValue(VALUE_TYPE value) {
+        bool setValue(VALUE_TYPE value) {
             if (this->value == value) {
                 return false;
             } else {
@@ -97,7 +97,7 @@ class SensorBase {
                 pullMillis(pullMillis) {
         }
 
-        boolean read() {
+        bool read() {
             if (!shouldPull()) {
                 return false;
             }
@@ -117,7 +117,7 @@ class SensorBase {
         }
 };
 
-class DigitalReadSensor : public SensorBase<boolean> {
+class DigitalReadSensor : public SensorBase<bool> {
 
     public:
         DigitalReadSensor(uint8_t pin, unsigned long pullMillis, uint8_t pinInputMode = INPUT):
@@ -125,7 +125,7 @@ class DigitalReadSensor : public SensorBase<boolean> {
             pinMode(pin, pinInputMode);
         }
 
-        boolean doRead() {
+        bool doRead() {
             return setValue(digitalRead(getPin()) == HIGH);
         }
 };
@@ -139,23 +139,23 @@ class AnalogReadSensor : public SensorBase<uint16_t> {
             analogReadResolution(13);
         }
 
-        boolean doRead() {
+        bool doRead() {
             return setValue(analogRead(getPin()));
         }
 };
 
-class TouchSensor : public SensorBase<boolean> {
+class TouchSensor : public SensorBase<bool> {
     private:
         int threshold;
 
         uint8_t veryfingTouch = 0;
-        boolean unveryfiedTouch = false;
+        bool unveryfiedTouch = false;
         MovingAverage* nonTouchedAverage = new MovingAverage(10);
 
         /**
          * Return true if touch is detected, false otherwise.
          */
-        boolean doRead() {
+        bool doRead() {
             int currentRead = touchRead(getPin());
             if (nonTouchedAverage->isFull() && abs(nonTouchedAverage->get() - currentRead) > threshold) {
                 // Log.infoln("Touched. Avg touch %d, current touch %d", nonTouchedAverage->get(), currentRead);
@@ -175,7 +175,7 @@ class TouchSensor : public SensorBase<boolean> {
         }
 
         // threat as touched when 3 consecutive reads are detected
-        boolean read() {
+        bool read() {
             if (shouldPull()) {
                 veryfingTouch = 1;
                 unveryfiedTouch = doRead();
@@ -230,7 +230,7 @@ class HumTempSensor : public SensorBase<HumTemp> {
             dht->begin();
         }
 
-        boolean doRead() {
+        bool doRead() {
             sensors_event_t tempEvent;
             sensors_event_t humidityEvent;
             dht->temperature().getEvent(&tempEvent);
@@ -262,7 +262,7 @@ class DistanceSensor : public SensorBase<int> {
             }
         }
 
-        boolean doRead() {
+        bool doRead() {
             // sensor.read(false);
             // sensor.read(true);
             int currentValue = sensor.ranging_data.range_mm;

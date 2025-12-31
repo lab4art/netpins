@@ -19,7 +19,7 @@ class WifiUtils {
     private:
         String ssidString;
         unsigned long previousMillis = 0;
-        boolean connectedCallbackCalled = false;
+        bool connectedCallbackCalled = false;
         unsigned long reconnectInterval = 0;
         // prevent all devices to connect at the same time at boot
         unsigned long reconnectDelay = 0;

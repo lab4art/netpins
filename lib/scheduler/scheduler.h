@@ -2,17 +2,19 @@
 
 #include <functional>
 #include <vector>
+#include <string>
+#include <Log.h>
 
 class ScheduledTask {
     private:
         // std::function<void()> callbackFunc = []() {};
         unsigned long interval;
         unsigned long lastExecution = 0;
-        boolean enabled;
+        bool enabled;
         std::string name;
 
     public:
-        ScheduledTask(unsigned long interval, std::string name, boolean enabled = true):
+        ScheduledTask(unsigned long interval, std::string name, bool enabled = true):
             interval(interval),
             enabled(enabled),
             name(name) {
@@ -24,9 +26,10 @@ class ScheduledTask {
             if (!enabled || interval == 0) {
                 return;
             }
+            Log::traceln("Checking task: %s, interval: %lu, lastExecution: %lu, currentMillis: %lu", name.c_str(), interval, lastExecution, millis());
             if (millis() - lastExecution >= interval) {
                 lastExecution = millis();
-                // Log.traceln("Scheduling: %s", name.c_str());
+                Log::traceln("Executing task: %s", name.c_str());
                 callback();
             }
         }

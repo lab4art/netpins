@@ -128,7 +128,7 @@ class DmxListener {
         /** 
          * Store map of dmx universes with channel data if data has changed.
          */
-        boolean storeDmxData(const std::map<uint16_t /*universe*/, std::array<uint8_t, 512> /*data*/>& dmxData) {
+        bool storeDmxData(const std::map<uint16_t /*universe*/, std::array<uint8_t, 512> /*data*/>& dmxData) {
             UniverseStorage storage;
             storage.begin(false);
             bool changed = false;

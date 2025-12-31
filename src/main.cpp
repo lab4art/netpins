@@ -512,7 +512,7 @@ void setup() {
     for (auto& touch : settings.touchSensors) {
         auto touchSensor = new TouchSensor(touch.pin, 200, touch.threshold);
         std::string sensorName = touch.sensorName;
-        touchSensor->addOnChangeListener([sensorName](boolean touched) {
+        touchSensor->addOnChangeListener([sensorName](bool touched) {
             sensorEvents->publish(sensorName, touched ? 1 : 0, false); // TODO reference by name not pin
         });
         touchSensors.push_back(touchSensor);
