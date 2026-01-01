@@ -1,13 +1,13 @@
 #pragma once
 
+#include <map>
 #include <WebServer.h>
 #include <AsyncJson.h>
 #include <ArduinoJson.h>
 #include <ESPAsyncWebServer.h>
 #include <LittleFS.h>
-#include "wifiUtils.cpp"
+#include <wifiUtils.h>
 #include <Log.h>
-#include <config.h>
 #include <settings.h>
 #include <variant>
 
@@ -32,6 +32,9 @@ class WebAdmin {
         SettingsManager<Settings>* settingsManager;
         std::function<CommandResult(JsonVariant&)> onSystemCommand = [](JsonVariant&){ return CommandResult{OK, "Success."}; };
         std::function<std::map<std::string, std::string>()> propertiesSupplier = [](){ return std::map<std::string, std::string>(); };
+        
+        std::string firmwareVersion;
+        int factoryResetPin;
 
         void listFiles() {
             File root = LittleFS.open("/");
@@ -46,9 +49,13 @@ class WebAdmin {
     public:
         WebAdmin(
                 SettingsManager<Settings>* settingsManager,
-                std::function<CommandResult(JsonVariant&)> onSystemCommand):
+                std::function<CommandResult(JsonVariant&)> onSystemCommand,
+                const std::string& firmwareVersion,
+                int factoryResetPin):
                 settingsManager(settingsManager),
-                onSystemCommand(onSystemCommand) {
+                onSystemCommand(onSystemCommand),
+                firmwareVersion(firmwareVersion),
+                factoryResetPin(factoryResetPin) {
 
             listFiles();
 
@@ -61,15 +68,15 @@ class WebAdmin {
 
                 std::string output;
                 JsonDocument doc;
-                doc["firmware"] = FIRMWARE_VERSION;
+                doc["firmware"] = this->firmwareVersion;
                 doc["mac"] = WifiUtils::macAddress;
                 doc["ip"] = WiFi.localIP().toString();
                 doc["hostname"] = this->settingsManager->getSettings().hostname;
                 doc["uptime"] = std::to_string(millis());
-                if (FACTORY_REST_PIN == -1) {
+                if (this->factoryResetPin == -1) {
                     doc["factoryReset"] = "power cycle";
                 } else {
-                    doc["factoryReset"] = "pin " + std::to_string(FACTORY_REST_PIN);
+                    doc["factoryReset"] = "pin " + std::to_string(this->factoryResetPin);
                 }
 
                 // if query parameter mode equas "details" add more details

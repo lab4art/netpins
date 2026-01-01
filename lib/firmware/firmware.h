@@ -7,7 +7,7 @@
 #include <freertos/queue.h>
 #include <Log.h>
 
-QueueHandle_t firmwareUpdateResultQueue;
+extern QueueHandle_t firmwareUpdateResultQueue;
 
 enum FirmwareUpdateStatus {
     STARTED,
@@ -21,16 +21,16 @@ struct FirmwareUpdateResult {
     std::string message;
 };
 
-void emptyQueue(QueueHandle_t queue) {
+inline void emptyQueue(QueueHandle_t queue) {
     FirmwareUpdateResult* result;
     while (xQueueReceive(firmwareUpdateResultQueue, &result, 0) == pdTRUE) {
         // do nothing
     }
 }
 
-FirmwareUpdateResult* lastResult = new FirmwareUpdateResult();
+extern FirmwareUpdateResult* lastResult;
 
-void update_started() {
+inline void update_started() {
     Log::infoln("HTTP update process started");
     lastResult->status = FirmwareUpdateStatus::STARTED;
     lastResult->message = "Update started. It takes about 30 sec, hold tight.";
@@ -41,19 +41,19 @@ void update_started() {
     }
 }
 
-void update_finished() {
+inline void update_finished() {
     Log::infoln("HTTP update process finished.");
 }
 
-void update_progress(int cur, int total) {
+inline void update_progress(int cur, int total) {
     Log::infoln("HTTP update process at %d of %d bytes...", cur, total);
 }
 
-void update_error(int err) {
+inline void update_error(int err) {
     Log::infoln("HTTP update fatal error code %d", err);
 }
 
-void firmwareUpdate(std::string url, bool spiffs = false) {
+inline void firmwareUpdate(std::string url, bool spiffs = false) {
     std::unique_ptr<WiFiClient> client;
     if (ENABLE_HTTPS_OTA) {
         if (url.rfind("https://", 0) == 0) {  // Check if string starts with "https://"
@@ -124,7 +124,7 @@ struct FirmwareUpdateParams {
     bool spiffs;
 };
 
-void firmwareUpdateTask(void * pvParameters) {
+inline void firmwareUpdateTask(void * pvParameters) {
   // Cast the parameters
   FirmwareUpdateParams* params = static_cast<FirmwareUpdateParams*>(pvParameters);
   firmwareUpdate(params->url, params->spiffs);

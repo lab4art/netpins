@@ -1,59 +1,33 @@
-#ifndef WIFI_UTILS_CPP
-#define WIFI_UTILS_CPP
-
-#include <esp_wifi.h>
-#include <WiFi.h>
+#include "wifiUtils.h"
 #include <Log.h>
 #include <factoryReset.h>
 
+std::string WifiUtils::macAddress = "";
 
-#define ON_WIFI_EXECUTION_CALLBACK_SIGNATURE std::function<void(String)> wifiExecutionCallback
+void WifiUtils::resetReconnectDelay() {
+    connectAttempt = 0;
+    reconnectDelay = random(reconnectInterval, 2 * reconnectInterval);
+}
 
-struct static_ip_t {
-    IPAddress ip;
-    IPAddress gateway;
-    IPAddress subnet;
-    IPAddress dns1;
-};
-class WifiUtils {
-    private:
-        String ssidString;
-        unsigned long previousMillis = 0;
-        bool connectedCallbackCalled = false;
-        unsigned long reconnectInterval = 0;
-        // prevent all devices to connect at the same time at boot
-        unsigned long reconnectDelay = 0;
-        unsigned int rebootAfterWiFiFailed;
-        unsigned int connectAttempt = 0;
-        std::function<void()> beforeWiFiReboot;
-
-        void resetReconnectDelay() {
-            connectAttempt = 0;
-            reconnectDelay = random(reconnectInterval, 2 * reconnectInterval);
-        }
-
-    public:
-        static String macAddress;
-
-        WifiUtils(const char* ssid, const char* password, static_ip_t staticIp, unsigned long reconnectInterval, unsigned int rebootAfterWiFiFailed, std::function<void()> beforeWiFiReboot = nullptr, const char* hostname = "", const char* hostnamePrefix = "netpins-") : 
-                reconnectInterval(reconnectInterval),
-                rebootAfterWiFiFailed(rebootAfterWiFiFailed),
-                beforeWiFiReboot(beforeWiFiReboot) {
+WifiUtils::WifiUtils(const char* ssid, const char* password, static_ip_t staticIp, unsigned long reconnectInterval, unsigned int rebootAfterWiFiFailed, std::function<void()> beforeWiFiReboot, const char* hostname, const char* hostnamePrefix) : 
+        reconnectInterval(reconnectInterval),
+        rebootAfterWiFiFailed(rebootAfterWiFiFailed),
+        beforeWiFiReboot(beforeWiFiReboot) {
 
             ssidString = ssid;
             uint8_t mac[6];
             WiFi.macAddress(mac);
             char macBuffer[18]; // "XX:XX:XX:XX:XX:XX\0" requires 18 characters
             sprintf(macBuffer, "%02X-%02X-%02X-%02X-%02X-%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-            WifiUtils::macAddress = String(macBuffer);
+            WifiUtils::macAddress = std::string(macBuffer);
 
             WiFi.setHostname(getHostname(hostname).c_str());
 
             if (ssid == nullptr || strlen(ssid) == 0 || ssid == "null") {
                 Log::infoln("Starting WiFi in AP mode.");
                 WiFi.mode(WIFI_AP);
-                String apSsid = "netpins-" + WifiUtils::macAddress;
-                WiFi.softAP(apSsid);
+                std::string apSsid = "netpins-" + WifiUtils::macAddress;
+                WiFi.softAP(apSsid.c_str());
                 Log::infoln("AP IP address: %s", WiFi.softAPIP().toString().c_str()); // default IP is 192.168.4.1
             } else {
                 WiFi.mode(WIFI_STA);
@@ -64,9 +38,9 @@ class WifiUtils {
             }
             randomSeed(micros());
             resetReconnectDelay();
-        }
+}
 
-        void tryReconnect(ON_WIFI_EXECUTION_CALLBACK_SIGNATURE) {
+void WifiUtils::tryReconnect(ON_WIFI_EXECUTION_CALLBACK_SIGNATURE) {
             unsigned long currentMillis = millis();
             // if WiFi is down, try reconnecting every CHECK_WIFI_TIME seconds
             if (currentMillis - previousMillis >= reconnectDelay) {
@@ -94,32 +68,29 @@ class WifiUtils {
                     resetReconnectDelay();
                 }
                 if (!connectedCallbackCalled && WiFi.status() == WL_CONNECTED) {
-                    wifiExecutionCallback(WiFi.localIP().toString());
+                    wifiExecutionCallback(std::string(WiFi.localIP().toString().c_str()));
                     connectedCallbackCalled = true;
                     resetReconnectDelay();                
                 }
                 previousMillis = currentMillis;
             }
-        }
+}
 
-        static String getHostname(String hostname, String hostnamePrefix = "netpins-") {
-            if (hostname != "") {
-                String hname = hostname;
-                // replace non alpha-numeric characters with '-'
-                for (int i = 0; i < hname.length(); i++) {
-                    if (!isalnum(hname[i])) {
-                        hname[i] = '-';
-                    }
-                }              
-                hname = hname.substring(0, 32);
-                return hname;
-            } else {
-                // mac based hostname
-                return hostnamePrefix + WifiUtils::macAddress;
+std::string WifiUtils::getHostname(const char* hostname, std::string hostnamePrefix) {
+    if (hostname != nullptr && strlen(hostname) > 0) {
+        std::string hname = hostname;
+        // replace non alpha-numeric characters with '-'
+        for (size_t i = 0; i < hname.length(); i++) {
+            if (!isalnum(hname[i])) {
+                hname[i] = '-';
             }
+        }              
+        if (hname.length() > 32) {
+            hname = hname.substr(0, 32);
         }
-};
-
-String WifiUtils::macAddress = "";
-
-#endif // WIFI_UTILS_CPP
+        return hname;
+    } else {
+        // mac based hostname
+        return hostnamePrefix + WifiUtils::macAddress;
+    }
+}
