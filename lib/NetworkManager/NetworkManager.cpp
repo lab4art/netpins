@@ -2,9 +2,9 @@
 #include <Log.h>
 #include <esp_wifi.h>
 
-NetworkManager::NetworkManager(Settings* settings, Scheduler* scheduler) 
+NetworkManager::NetworkManager(Settings* settings, Scheduler* scheduler, String firmwareVersion) 
     : udp(nullptr), wifi(nullptr), artnet(nullptr), mqtt(nullptr), 
-      heartbeatBroadcast(nullptr), settings(settings), scheduler(scheduler) {
+      heartbeatBroadcast(nullptr), settings(settings), scheduler(scheduler), firmwareVersion(firmwareVersion) {
 }
 
 NetworkManager::~NetworkManager() {
@@ -46,7 +46,7 @@ void NetworkManager::initializeWiFi(static_ip_config_t staticIpConfig, std::func
     Log::info((std::string("Wifi MAC: ") + WifiUtils::macAddress).c_str());
 }
 
-void NetworkManager::initializeArtnet(std::function<void(const uint8_t*, uint16_t, const ArtDmxMetadata&, const ArtNetRemoteInfo&)> onDmxFrame) {
+void NetworkManager::initializeArtnet(std::function<void(const uint8_t*, uint16_t, const ArtDmxMetadata&, const ArtNetRemoteInfo&)> onDmxFrame, const String& hostname, const std::set<uint16_t>& universes) {
     if (settings->disableArtnet) {
         Log::infoln("Artnet is disabled.");
         return;
@@ -56,6 +56,8 @@ void NetworkManager::initializeArtnet(std::function<void(const uint8_t*, uint16_
     artnet->begin();
     artnet->subscribeArtDmx(onDmxFrame);
     artnet->setArtPollReplyConfigShortName("NetPins");
+    
+    configureArtnetReply(hostname, firmwareVersion, universes);
 }
 
 void NetworkManager::configureArtnetReply(const String& hostname, const String& firmwareVersion, const std::set<uint16_t>& universes) {
@@ -92,7 +94,7 @@ void NetworkManager::initializeMqtt(String hostName, std::function<void(char*, b
     );
 }
 
-void NetworkManager::initializeHeartbeat(String firmwareVersion) {
+void NetworkManager::initializeHeartbeat() {
     if (settings->udpPort > 0 && settings->hbInt > 0) {
         if (heartbeatBroadcast == nullptr) {
             auto ip = WiFi.localIP();
@@ -112,6 +114,8 @@ void NetworkManager::initializeHeartbeat(String firmwareVersion) {
 }
 
 void NetworkManager::loop() {
+    tryReconnect();
+    
     if (artnet != nullptr) {
         artnet->parse();
     }
@@ -122,19 +126,16 @@ void NetworkManager::loop() {
     }
 }
 
-void NetworkManager::tryReconnect(std::function<void(std::string)> onWifiConnected) {
+void NetworkManager::tryReconnect() {
     if (wifi != nullptr) {
-        wifi->tryReconnect([this, onWifiConnected](std::string ip) {
+        wifi->tryReconnect([this](std::string ip) {
             Log::infoln("WiFi connected, IP address: %s.", ip.c_str());
             
             if (settings->disableWifiPowerSave) {
                 esp_wifi_set_ps(WIFI_PS_NONE);
             }
             
-            // Call the user callback
-            if (onWifiConnected) {
-                onWifiConnected(ip);
-            }
+            initializeHeartbeat();
         });
     }
 }

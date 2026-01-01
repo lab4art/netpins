@@ -6,7 +6,6 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <settings.h>
-#include <DmxManager.h>
 
 class SystemManager {
 private:
@@ -17,17 +16,17 @@ private:
     
     std::function<void()> onRebootCallback;
     
-public:
-    DmxManager* dmxManager;
+    void loadUptimeOffset();
     
-    SystemManager(SettingsManager<Settings>* settingsManager, DmxManager* dmxManager);
+public:
+    
+    SystemManager(SettingsManager<Settings>* settingsManager);
     ~SystemManager();
     
     // Initialization
     void initialize(bool forceReset, int factoryResetPin, const char* wifiSsid, const char* wifiPass);
     
     // Uptime management
-    void loadUptimeOffset();
     void saveUptimeBeforeReboot();
     unsigned long getVirtualUptime() const { return uptimeOffset + millis(); }
     unsigned long getUptimeOffset() const { return uptimeOffset; }

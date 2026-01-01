@@ -5,7 +5,9 @@
 #include <sensorEvents.h>
 
 HardwareManager::HardwareManager() 
-    : semaphore(NULL), commitNeoStipTask(NULL), numOfCreatedStrips(0) {
+    : ScheduledTask(20, "HardwareCommit"),
+      semaphore(NULL), commitNeoStipTask(NULL), numOfCreatedStrips(0) {
+    initNeoStipTask();
 }
 
 HardwareManager::~HardwareManager() {
@@ -163,8 +165,8 @@ std::vector<InitializedThingGroup<ThingGroupType>> HardwareManager::createStripT
     return groups;
 }
 
-std::vector<Switchabe*> HardwareManager::createThings(Settings& settings, DmxListener* dmxListener, Scheduler* scheduler) {
-    std::vector<Switchabe*> switchables;
+void HardwareManager::createThings(Settings& settings, DmxListener* dmxListener, Scheduler* scheduler) {
+    switchables.clear();
 
     // PWMS
     if (settings.pwms.size() > 0) {
@@ -212,7 +214,9 @@ std::vector<Switchabe*> HardwareManager::createThings(Settings& settings, DmxLis
         Log::error((std::string("ERR: configuring plugins. ") + e.what()).c_str());
     }
 
-    return switchables;
+    if (settings.lightsTest) {
+        runLightsTest();
+    }
 }
 
 void HardwareManager::initializeSensors(Settings& settings, SensorEvents* sensorEvents) {
@@ -257,28 +261,6 @@ void HardwareManager::initializeSensors(Settings& settings, SensorEvents* sensor
     }
 }
 
-DigitalReadSensor* HardwareManager::getDigitalReadSensor(int pin) {
-    if (digitalReadSensors.find(pin) != digitalReadSensors.end()) {
-        auto dReadSensor = digitalReadSensors[pin];
-        Log::infoln("Found digital sensor at pin %d.", pin);
-        return dReadSensor;
-    } else {
-        Log::traceln("Digital sensor at pin %d not found.", pin);
-        return nullptr;
-    }
-}
-
-AnalogReadSensor* HardwareManager::getAnalogReadSensor(int pin) {
-    if (analogReadSensors.find(pin) != analogReadSensors.end()) {
-        auto aReadSensor = analogReadSensors[pin];
-        Log::infoln("Found analog sensor at pin %d.", pin);
-        return aReadSensor;
-    } else {
-        Log::traceln("Analog sensor at pin %d not found.", pin);
-        return nullptr;
-    }
-}
-
 void HardwareManager::readAllSensors() {
     for (auto& humTempSensor : humTempSensors) {
         humTempSensor->read();
@@ -299,7 +281,13 @@ void HardwareManager::readAllSensors() {
     }
 }
 
-void HardwareManager::runLightsTest(std::vector<Switchabe*>& switchables) {
+void HardwareManager::turnOffAllSwitchables() {
+    for (auto& switchable : switchables) {
+        switchable->off();
+    }
+}
+
+void HardwareManager::runLightsTest() {
     Log::info("Starting lights test ...");
     for (auto& switchable : switchables) {
         switchable->on();
@@ -312,4 +300,8 @@ void HardwareManager::runLightsTest(std::vector<Switchabe*>& switchables) {
     }
     doCommitThings();
     Log::info("Lights test done.");
+}
+
+void HardwareManager::callback() {
+    commitNeoStip();
 }

@@ -27,13 +27,14 @@ class InitializedThingGroup {
             : group(group), dmxCfg(dmxCfg) {}
 };
 
-class HardwareManager {
+class HardwareManager : public ScheduledTask {
 private:
     // Hardware components
     std::map<int /* pin */, NeoPixelBus<NeoGrbwFeature, NeoEsp32RmtNSk6812Method>*> rgbwStrips;
     std::map<int /* pin */, NeoPixelBus<NeoGrbFeature, NeoEsp32RmtNWs2812xMethod>*> rgbStrips;
     std::vector<PwmThing*> pwms;
     std::vector<ServoThing*> servos;
+    std::vector<Switchabe*> switchables;
     
     // Sensors
     std::vector<HumTempSensor*> humTempSensors;
@@ -60,32 +61,34 @@ private:
     
     void doCommitThings();
     static void commitNeoStipTaskProcedure(void *arg);
+    void runLightsTest();
+    void initNeoStipTask();
     
 public:
     HardwareManager();
     ~HardwareManager();
     
     // Initialization
-    void initNeoStipTask();
-    std::vector<Switchabe*> createThings(Settings& settings, DmxListener* dmxListener, Scheduler* scheduler);
+    void createThings(Settings& settings, DmxListener* dmxListener, Scheduler* scheduler);
     void initializeSensors(Settings& settings, SensorEvents* sensorEvents);
     
     // Commit changes to hardware
     void commitNeoStip();
     
+    // ScheduledTask callback
+    void callback() override;
+    
     // Sensor accessors
-    DigitalReadSensor* getDigitalReadSensor(int pin);
-    AnalogReadSensor* getAnalogReadSensor(int pin);
     const std::vector<HumTempSensor*>& getHumTempSensors() const { return humTempSensors; }
-    const std::vector<TouchSensor*>& getTouchSensors() const { return touchSensors; }
-    const std::map<uint8_t, DigitalReadSensor*>& getDigitalReadSensors() const { return digitalReadSensors; }
-    const std::map<uint8_t, AnalogReadSensor*>& getAnalogReadSensors() const { return analogReadSensors; }
+    // const std::vector<TouchSensor*>& getTouchSensors() const { return touchSensors; }
+    // const std::map<uint8_t, DigitalReadSensor*>& getDigitalReadSensors() const { return digitalReadSensors; }
+    // const std::map<uint8_t, AnalogReadSensor*>& getAnalogReadSensors() const { return analogReadSensors; }
+    
+    // Switchables control
+    void turnOffAllSwitchables();
     
     // Sensor reading loop
     void readAllSensors();
-    
-    // Testing
-    void runLightsTest(std::vector<Switchabe*>& switchables);
 };
 
 #endif // HARDWARE_MANAGER_H

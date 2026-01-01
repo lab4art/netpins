@@ -3,10 +3,16 @@
 #include <Log.h>
 #include <vector>
 #include <set>
+#include <map>
+#include <array>
+#include <functional>
 #include <Things.h>
 #include <Preferences.h>
 #include <Log.h>
 #include <settings.h>
+#include <scheduler.h>
+#include <ArtnetWiFi.h>
+#include <Arduino.h>
 
 /**
  * Mapping between things and dmx universe / channel.
@@ -65,17 +71,26 @@ class UniverseStorage {
  * Dmx listener controls things, which are simple leds, pxiels on led stipes or group of pixels on led stripe.
  * Things has different number of channles.
  */
-class DmxListener {
+class DmxListener : public ScheduledTask {
     private:
         int dmxOffset; // dmx offset where this listener starts listening, 1 based (1-512)
         std::vector<DmxMapping*> dmxMappings;
         Preferences preferences;
         uint8_t lastStoreFlag = 0;
         std::set<uint16_t> dmxUniverses; // set of universes we listen to
+        
+        // From DmxManager
+        std::map<uint16_t /*universe*/, uint8_t /*lastSequence*/> lastDmxSequences;
+        std::map<uint16_t /*universe*/, std::array<uint8_t, 512> /*data*/> dmxData;
+        std::function<void()> onCommandReceived;
 
     public:
-        DmxListener(int dmxOffset):
-            dmxOffset(dmxOffset) {
+        DmxListener(Settings& settings, std::function<void()> onCommandReceived)
+            : ScheduledTask(20, "DmxProcess"),
+              dmxOffset(settings.dmxChOffset),
+              onCommandReceived(onCommandReceived) {
+            initializeDmxData(dmxData);
+            restoreDmxData(dmxData);
         }
 
         ~DmxListener() {
@@ -206,5 +221,41 @@ class DmxListener {
 
         std::set<uint16_t> getListeningUniverses() {
             return dmxUniverses;
+        }
+        
+        // From DmxManager - Art-Net frame handling
+        void onDmxFrame(const uint8_t *data, uint16_t size, const ArtDmxMetadata &metadata, const ArtNetRemoteInfo &remote) {
+            // process only if we listen to this universe
+            if (!isListeningToUniverse(metadata.universe)) {
+                return;
+            }
+            
+            if (onCommandReceived) {
+                onCommandReceived();
+            }
+            
+            // ignore old sequences unless counter flipped (per-universe tracking)
+            uint8_t lastSequence = lastDmxSequences[metadata.universe];
+            if (metadata.sequence < lastSequence && lastSequence - metadata.sequence < 10) {
+                Log::traceln("Ignoring old sequence %d for universe %d, last sequence: %d", metadata.sequence, metadata.universe, lastSequence);
+                return;
+            }
+            lastDmxSequences[metadata.universe] = metadata.sequence;
+
+            memcpy(dmxData[metadata.universe].data(), data, std::min(size, (uint16_t)512));
+            
+            // do not process the data here, leave IO callback as soon as possible
+        }
+        
+        // ScheduledTask callback
+        void callback() override {
+            for (auto& universeData : dmxData) {
+                processDmxData(universeData.first, universeData.second);
+            }
+        }
+        
+        // Accessor for dmxData
+        std::map<uint16_t, std::array<uint8_t, 512>>& getDmxData() {
+            return dmxData;
         }
 };

@@ -6,9 +6,10 @@
 #include <factoryReset.h>
 #include <firmware.h>
 
-SystemManager::SystemManager(SettingsManager<Settings>* settingsManager, DmxManager* dmxManager)
-    : settingsManager(settingsManager), dmxManager(dmxManager), 
+SystemManager::SystemManager(SettingsManager<Settings>* settingsManager)
+    : settingsManager(settingsManager), 
       uptimeOffset(0), lastCommandReceivedAt(0), maxIdleMillis(0) {
+    loadUptimeOffset();
 }
 
 SystemManager::~SystemManager() {

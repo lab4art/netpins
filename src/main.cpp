@@ -1,4 +1,3 @@
-#define _ENABLE_UDP_BROADCAST true
 #define _ENABLE_WEBSERVER true
 
 #include <config.h>
@@ -13,7 +12,7 @@
 #include <Log.h>
 #include <HardwareManager.h>
 #include <NetworkManager.h>
-#include <DmxManager.h>
+#include <DmxListener.h>
 #include <SystemManager.h>
 #include <nvs.h>
 #include <nvs_flash.h>
@@ -25,7 +24,6 @@
 #include <settings.h>
 #include "heartbeatBroadcast.h"
 #include <GeneralUtils.h>
-#include <LittleFS.h>
 #include <DmxListener.h>
 #include <webadmin.h>
 #include <factoryReset.h>
@@ -35,105 +33,22 @@
 #include <sensorEvents.h>
 #include <pluginFactory.h>
 #include <scheduler.h>
+#include <SystemCommandHandler.h>
 
 HardwareManager* hardwareManager;
 NetworkManager* networkManager;
-DmxManager* dmxManager;
+DmxListener* dmxListener;
 SystemManager* systemManager;
 
 SettingsManager<Settings>* settingsManager;
 
 SensorEvents* sensorEvents;
 WebAdmin* webAdmin;
-
-std::vector<Switchabe*> switchables;
+SystemCommandHandler* systemCommandHandler;
 
 Scheduler* scheduler = new Scheduler();
 
-WebAdmin::CommandResult onSystemCommand(JsonVariant &jsonVariant) {
-    systemManager->markCommandReceived();
-    FactoryReset::getInstance().resetCounter(true);
-
-    std::string command = jsonVariant["command"].as<std::string>();
-
-    if (command == "sys-config") {
-        settingsManager->fromJson(jsonVariant["data"].as<std::string>());
-        if (settingsManager->isDirty()) {
-            settingsManager->save();
-            // Apply log level immediately before reboot
-            Log::setLogLevel(settingsManager->getSettings().logLevel);
-            return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK_REBOOT, "Saved, rebooting ...", 3000};
-        } else {
-            return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, "No updates.", -1};
-        }
-    } else if (command == "sys-config-merge") {
-        settingsManager->mergeJson(jsonVariant["data"].as<std::string>());
-        if (settingsManager->isDirty()) {
-            settingsManager->save();
-            // Apply log level immediately before reboot
-            Log::setLogLevel(settingsManager->getSettings().logLevel);
-            return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK_REBOOT, "Saved, rebooting ...", 3000};
-        } else {
-            return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, "No updates.", -1};
-        }
-    } else if (command == "firmware-update" || command == "spiffs-update") {
-        FirmwareUpdateParams* params;
-
-        if (command == "firmware-update") {
-            params = new FirmwareUpdateParams{jsonVariant["data"]["url"].as<std::string>(), false};
-        } else {
-            params = new FirmwareUpdateParams{jsonVariant["data"]["url"].as<std::string>(), true};
-        }
-
-        xTaskCreate(
-            firmwareUpdateTask,   // Task function
-            "FirmwareUpdateTask", // Name of the task
-            10000,                // Stack size (in words)
-            params,               // Task input parameters
-            1,                    // Priority of the task
-            NULL                  // Task handle
-        );
-        // Wait for the result from the firmware update task
-        FirmwareUpdateResult* updateResult;
-        if (xQueueReceive(firmwareUpdateResultQueue, &updateResult, pdMS_TO_TICKS(90000)) != pdTRUE) {
-            Log::errorln("Failed to receive update result within 90 seconds.");
-            return WebAdmin::CommandResult{WebAdmin::CommandStatus::ERROR, "Update timed-out after 90 seconds.", 3000};
-        } else {
-            if (updateResult->status == FirmwareUpdateStatus::NO_UPDATES) {
-                return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, updateResult->message, -1};
-            } else if (updateResult->status == FirmwareUpdateStatus::STARTED) {
-                return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, updateResult->message, 30000};  // update takes ~20s
-            } else if (updateResult->status == FirmwareUpdateStatus::SUCCESS) {
-                return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK_REBOOT, updateResult->message, 3000};
-            } else {
-                return WebAdmin::CommandResult{WebAdmin::CommandStatus::ERROR, updateResult->message, -1};
-            }
-        }
-    } else if (command == "reboot") {
-        return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK_REBOOT, "Rebooting ...", 3000};
-    } else if (command == "save-dmx") {
-        auto updated = dmxManager->getDmxListener()->storeDmxData(dmxManager->getDmxData());
-        return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, updated ? "Saved." : "No updates.", -1};
-    } else if (command == "reset-dmx") {
-        dmxManager->getDmxListener()->clearDmxData();
-        return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, "DMX data cleared.", -1};
-    }
-    return WebAdmin::CommandResult{WebAdmin::CommandStatus::ERROR, "Unknown command.", -1};
-}
-
 HeartbeatBroadcast* heartbeatBroadcast;
-
-DigitalReadSensor* getDigitalReadSensor(int pin) {
-    return hardwareManager->getDigitalReadSensor(pin);
-}
-
-std::vector<Switchabe*> createThings(Settings& settings) {
-    return hardwareManager->createThings(settings, dmxManager->getDmxListener(), scheduler);
-}
-
-AnalogReadSensor* getAnalogReadSensor(int pin) {
-    return hardwareManager->getAnalogReadSensor(pin);
-}
 
 void setup() {
     Serial.begin(115200);
@@ -151,51 +66,46 @@ void setup() {
 
     settingsManager = new SettingsManager<Settings>("settings");
     hardwareManager = new HardwareManager();
-    systemManager = new SystemManager(settingsManager, nullptr);
-    dmxManager = new DmxManager(systemManager->getLastCommandReceivedAtPtr());
-    systemManager->dmxManager = dmxManager;
-    
-    systemManager->loadUptimeOffset();
+    systemManager = new SystemManager(settingsManager);
     systemManager->initialize(FORCE_RESET, FACTORY_REST_PIN, WIFI_SSID, WIFI_PASS);
     
     Settings settings = settingsManager->getSettings();
 
+    dmxListener = new DmxListener(settings, [](){
+        systemManager->markCommandReceived();
+    });
+
     try {
-        switchables = createThings(settings);
+        hardwareManager->createThings(settings, dmxListener, scheduler);
         Log::info("Things created.");
     } catch(const std::exception& e) {
         Log::error((std::string("ERR: creating things. ") + e.what()).c_str());
     }
 
-    Log::info("Mounting LittleFS ...");
-    if (!LittleFS.begin()) {
-        Log::error("An Error has occurred while mounting LittleFS.");
-    }
-
-    if (settings.lightsTest) {
-        hardwareManager->runLightsTest(switchables);
-    }
-
-    hardwareManager->initNeoStipTask();
     firmwareUpdateResultQueue = xQueueCreate(1, sizeof(int));
 
-    networkManager = new NetworkManager(&settings, scheduler);
+    networkManager = new NetworkManager(&settings, scheduler, FIRMWARE_VERSION);
     networkManager->initializeWiFi({ STATIC_IP, GATEWAY, SUBNET, DNS }, []() {
         systemManager->saveUptimeBeforeReboot();
     });
     
-    if (!settings.disableArtnet) {
-        networkManager->initializeArtnet([](const uint8_t *data, uint16_t size, const ArtDmxMetadata &metadata, const ArtNetRemoteInfo &remote) {
-            dmxManager->onDmxFrame(data, size, metadata, remote);
-        });
-        networkManager->configureArtnetReply(WiFi.getHostname(), FIRMWARE_VERSION, dmxManager->getListeningUniverses());
-    }
+    networkManager->initializeArtnet(
+        [](const uint8_t *data, uint16_t size, const ArtDmxMetadata &metadata, const ArtNetRemoteInfo &remote) {
+            dmxListener->onDmxFrame(data, size, metadata, remote);
+        },
+        WiFi.getHostname(),
+        dmxListener->getListeningUniverses()
+    );
+
+    systemCommandHandler = new SystemCommandHandler(settingsManager, systemManager, dmxListener);
 
     if (_ENABLE_WEBSERVER) {
         Log::infoln("Starting web server ...");
         webAdmin = new WebAdmin(
             settingsManager,
-            onSystemCommand,
+            [](JsonVariant &jsonVariant) {
+                return systemCommandHandler->handleCommand(jsonVariant);
+            },
             FIRMWARE_VERSION,
             FACTORY_REST_PIN
         );
@@ -207,14 +117,14 @@ void setup() {
 
     webAdmin->setPropertiesSupplier([](){
         std::map<std::string, std::string> props;
-        for (auto& humTempSensor : hardwareManager->getHumTempSensors()) {
+        for (auto& humTempSensor : hardwareManager->getHumTempSensors()) { // TODO is there a better way to get this data, eg. add some sensor mapping or read it from dmx if it is mapped ?
             props["temp-" + std::to_string(humTempSensor->getPin())] = std::to_string(humTempSensor->getValue().humidity);
             props["hum-" + std::to_string(humTempSensor->getPin())] = std::to_string(humTempSensor->getValue().temperature);
         }
 
         std::map<uint16_t /*universe*/, std::array<uint8_t, 512>> storedDmx;
-        dmxManager->getDmxListener()->initializeDmxData(storedDmx);
-        dmxManager->getDmxListener()->restoreDmxData(storedDmx);
+        dmxListener->initializeDmxData(storedDmx);
+        dmxListener->restoreDmxData(storedDmx);
         // convert dmxData to string
         std::string dmxDataStr = "";
         for (auto& universeData : storedDmx) {
@@ -241,11 +151,15 @@ void setup() {
         networkManager->getMqtt(),
         std::string("np/") + hostName + "/s/",
         settings.sensorMappings,
-        dmxManager->getDmxData()
+        dmxListener->getDmxData()
     );
 
     // Initialize sensors after sensorEvents is created
     hardwareManager->initializeSensors(settings, sensorEvents);
+
+    // Register managers with scheduler (20ms = 50fps)
+    scheduler->addTask(dmxListener);
+    scheduler->addTask(hardwareManager);
 
     Log::infoln("Running ...");
 }
@@ -264,16 +178,6 @@ void loop() {
 
     scheduler->loop();
 
-    dmxManager->processAndCommit(20, []() {
-        hardwareManager->commitNeoStip();
-    });
-
-    networkManager->tryReconnect([](std::string ip) {
-        if (_ENABLE_UDP_BROADCAST) {
-            networkManager->initializeHeartbeat(FIRMWARE_VERSION);
-        }
-    });
-    
     networkManager->loop();
 
     hardwareManager->readAllSensors();
@@ -293,9 +197,7 @@ void loop() {
         networkManager->shutdown();
 
         // turn off all switchables
-        for (auto& switchable : switchables) {
-            switchable->off();
-        }
+        hardwareManager->turnOffAllSwitchables();
         hardwareManager->commitNeoStip();
 
         esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);

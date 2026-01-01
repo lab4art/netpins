@@ -29,24 +29,26 @@ private:
     
     Settings* settings;
     Scheduler* scheduler;
+    String firmwareVersion;
     
     std::function<void()> beforeWiFiRebootCallback;
     std::function<void(char*, byte*, unsigned int)> onMqttMessageCallback;
     
+    void initializeHeartbeat();
+    void configureArtnetReply(const String& hostname, const String& firmwareVersion, const std::set<uint16_t>& universes);
+    void tryReconnect();
+    
 public:
-    NetworkManager(Settings* settings, Scheduler* scheduler);
+    NetworkManager(Settings* settings, Scheduler* scheduler, String firmwareVersion);
     ~NetworkManager();
     
     // Initialization
     void initializeWiFi(static_ip_config_t staticIpConfig, std::function<void()> beforeReboot);
-    void initializeArtnet(std::function<void(const uint8_t*, uint16_t, const ArtDmxMetadata&, const ArtNetRemoteInfo&)> onDmxFrame);
-    void configureArtnetReply(const String& hostname, const String& firmwareVersion, const std::set<uint16_t>& universes);
+    void initializeArtnet(std::function<void(const uint8_t*, uint16_t, const ArtDmxMetadata&, const ArtNetRemoteInfo&)> onDmxFrame, const String& hostname, const std::set<uint16_t>& universes);
     void initializeMqtt(String hostName, std::function<void(char*, byte*, unsigned int)> onMessage);
-    void initializeHeartbeat(String firmwareVersion);
     
     // Loop and reconnection
     void loop();
-    void tryReconnect(std::function<void(std::string)> onWifiConnected);
     
     // Accessors
     MqttUtils* getMqtt() { return mqtt; }

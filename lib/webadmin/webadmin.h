@@ -57,6 +57,11 @@ class WebAdmin {
                 firmwareVersion(firmwareVersion),
                 factoryResetPin(factoryResetPin) {
 
+            Log::info("Mounting LittleFS ...");
+            if (!LittleFS.begin()) {
+                Log::error("An Error has occurred while mounting LittleFS.");
+            }
+
             listFiles();
 
             webServer->on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
