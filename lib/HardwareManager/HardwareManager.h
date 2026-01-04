@@ -9,6 +9,7 @@
 #include <sensors.h>
 #include <settings.h>
 #include <DmxListener.h>
+#include <DmxOutput.h>
 #include <scheduler.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -16,6 +17,8 @@
 
 // Forward declaration
 class SensorEvents;
+class HardwareManager;
+class LedCommitTask;
 
 template<class ThingGroupType>
 class InitializedThingGroup {
@@ -27,7 +30,7 @@ class InitializedThingGroup {
             : group(group), dmxCfg(dmxCfg) {}
 };
 
-class HardwareManager : public ScheduledTask {
+class HardwareManager {
 private:
     // Hardware components
     std::map<int /* pin */, NeoPixelBus<NeoGrbwFeature, NeoEsp32RmtNSk6812Method>*> rgbwStrips;
@@ -35,16 +38,18 @@ private:
     std::vector<PwmThing*> pwms;
     std::vector<ServoThing*> servos;
     std::vector<Switchabe*> switchables;
-    
+    DmxOutput* dmxOutput;
+
     // Sensors
     std::vector<HumTempSensor*> humTempSensors;
     std::vector<TouchSensor*> touchSensors;
     std::map<uint8_t /* pin */, DigitalReadSensor*> digitalReadSensors;
     std::map<uint8_t /* pin */, AnalogReadSensor*> analogReadSensors;
     
-    // FreeRTOS task management
+    // FreeRTOS task management for LED commits
     xSemaphoreHandle semaphore;
     TaskHandle_t commitNeoStipTask;
+    LedCommitTask* ledCommitTask;
     
     // Strip creation counter
     int numOfCreatedStrips;
@@ -74,9 +79,6 @@ public:
     
     // Commit changes to hardware
     void commitNeoStip();
-    
-    // ScheduledTask callback
-    void callback() override;
     
     // Sensor accessors
     const std::vector<HumTempSensor*>& getHumTempSensors() const { return humTempSensors; }

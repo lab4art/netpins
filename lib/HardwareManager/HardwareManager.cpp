@@ -1,13 +1,14 @@
 #include "HardwareManager.h"
+#include "LedCommitTask.h"
 #include <Log.h>
 #include <pluginFactory.h>
 #include <Arduino.h>
 #include <sensorEvents.h>
 
 HardwareManager::HardwareManager() 
-    : ScheduledTask(20, "HardwareCommit"),
-      semaphore(NULL), commitNeoStipTask(NULL), numOfCreatedStrips(0) {
+    : semaphore(NULL), commitNeoStipTask(NULL), numOfCreatedStrips(0), dmxOutput(nullptr) {
     initNeoStipTask();
+    ledCommitTask = new LedCommitTask(this, 20);  // 20ms = 50Hz
 }
 
 HardwareManager::~HardwareManager() {
@@ -39,8 +40,16 @@ HardwareManager::~HardwareManager() {
     for (auto& pair : digitalReadSensors) {
         delete pair.second;
     }
+    
+    // Clean up LED commit task
+    delete ledCommitTask;
     for (auto& pair : analogReadSensors) {
         delete pair.second;
+    }
+    
+    // Clean up DMX output
+    if (dmxOutput != nullptr) {
+        delete dmxOutput;
     }
     
     // Clean up semaphore
@@ -214,6 +223,30 @@ void HardwareManager::createThings(Settings& settings, DmxListener* dmxListener,
         Log::error((std::string("ERR: configuring plugins. ") + e.what()).c_str());
     }
 
+    // DMX Output
+    if (settings.dmxOutput.enabled) {
+        Log::infoln("Creating DMX output on UART%d ...", settings.dmxOutput.uartPort);
+        dmxOutput = new DmxOutput(
+            settings.dmxOutput.uartPort,
+            settings.dmxOutput.txPin,
+            settings.dmxOutput.rxPin,
+            settings.dmxOutput.enablePin,
+            settings.dmxOutput.universe,
+            dmxListener->getDmxData()
+        );
+        if (dmxOutput->begin()) {
+            scheduler->addTask(dmxOutput);
+            Log::infoln("DMX output initialized successfully for universe %d", settings.dmxOutput.universe);
+        } else {
+            Log::errorln("Failed to initialize DMX output");
+            delete dmxOutput;
+            dmxOutput = nullptr;
+        }
+    }
+
+    // Register LED commit task with scheduler
+    scheduler->addTask(ledCommitTask);
+
     if (settings.lightsTest) {
         runLightsTest();
     }
@@ -300,8 +333,4 @@ void HardwareManager::runLightsTest() {
     }
     doCommitThings();
     Log::info("Lights test done.");
-}
-
-void HardwareManager::callback() {
-    commitNeoStip();
 }

@@ -518,6 +518,63 @@ struct PluginCfg {
     };
 };
 
+/**
+ * DMX Output Configuration for MAX485
+ * 
+ * Transmits DMX data (from sensor mappings) via RS-485 to control external DMX devices.
+ * Sensors are mapped to DMX channels using sensor_mappings, and this output
+ * physically transmits the specified universe's data.
+ * 
+ * dmx_output:
+ *   enabled: true
+ *   uart_port: 1
+ *   tx_pin: 17
+ *   rx_pin: 16  # can be -1 if not used
+ *   enable_pin: 4  # DE/RE pins on MAX485
+ *   universe: 0  # which universe to transmit (matches sensor_mappings universe)
+ */
+struct DmxOutputCfg {
+    bool enabled;
+    int uartPort;
+    int txPin;
+    int rxPin;
+    int enablePin;
+    uint16_t universe;
+
+    bool operator==(const DmxOutputCfg& other) const {
+        return enabled == other.enabled &&
+            uartPort == other.uartPort &&
+            txPin == other.txPin &&
+            rxPin == other.rxPin &&
+            enablePin == other.enablePin &&
+            universe == other.universe;
+    }
+
+    bool operator!=(const DmxOutputCfg& other) const {
+        return !(*this == other);
+    }
+
+    static DmxOutputCfg deserialize(JsonObject& json) {
+        DmxOutputCfg d;
+        d.enabled = json["enabled"].as<bool>();
+        d.uartPort = json["uart_port"].as<int>();
+        d.txPin = json["tx_pin"].as<int>();
+        d.rxPin = json["rx_pin"].as<int>();
+        d.enablePin = json["enable_pin"].as<int>();
+        d.universe = json["universe"].as<uint16_t>();
+        return d;
+    }
+
+    static void serialize(JsonObject& jsonDmxOut, const DmxOutputCfg& d) {
+        jsonDmxOut["enabled"] = d.enabled;
+        jsonDmxOut["uart_port"] = d.uartPort;
+        jsonDmxOut["tx_pin"] = d.txPin;
+        jsonDmxOut["rx_pin"] = d.rxPin;
+        jsonDmxOut["enable_pin"] = d.enablePin;
+        jsonDmxOut["universe"] = d.universe;
+    }
+};
+
 struct Settings {
     u_int8_t dmxChOffset;
     std::string wifiSsid;
@@ -548,6 +605,7 @@ struct Settings {
     int logLevel = 2; // default to INFO level (-1=SILENT, 0=ERROR, 1=WARNING, 2=INFO, 3=TRACE)
 
     MqttCfg mqtt;
+    DmxOutputCfg dmxOutput;
 
     bool operator==(const Settings& other) const {
         return
@@ -564,6 +622,7 @@ struct Settings {
             disableArtnet == other.disableArtnet &&
             logLevel == other.logLevel &&
             mqtt == other.mqtt &&
+            dmxOutput == other.dmxOutput &&
 
             pwms == other.pwms &&
             rgbwStrips == other.rgbwStrips &&
@@ -615,6 +674,12 @@ struct Settings {
             s.mqtt = MqttCfg::deserialize(jsonMqtt);
         } else {
             s.mqtt = MqttCfg();
+        }
+        if (json.containsKey("dmx_output")) {
+            JsonObject jsonDmxOut = json["dmx_output"].as<JsonObject>();
+            s.dmxOutput = DmxOutputCfg::deserialize(jsonDmxOut);
+        } else {
+            s.dmxOutput = DmxOutputCfg{false, 1, -1, -1, -1, 0};
         }
 
         // actuators
@@ -700,6 +765,11 @@ struct Settings {
         if (mqtt.server != "") {
             JsonObject jsonMqtt = json["mqtt"].to<JsonObject>();
             MqttCfg::serialize(jsonMqtt, mqtt);
+        }
+
+        if (dmxOutput.enabled) {
+            JsonObject jsonDmxOut = json["dmx_output"].to<JsonObject>();
+            DmxOutputCfg::serialize(jsonDmxOut, dmxOutput);
         }
 
         // actuators

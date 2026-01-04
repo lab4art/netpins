@@ -157,9 +157,8 @@ void setup() {
     // Initialize sensors after sensorEvents is created
     hardwareManager->initializeSensors(settings, sensorEvents);
 
-    // Register managers with scheduler (20ms = 50fps)
+    // Register tasks with scheduler
     scheduler->addTask(dmxListener);
-    scheduler->addTask(hardwareManager);
 
     Log::infoln("Running ...");
 }
