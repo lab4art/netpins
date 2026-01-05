@@ -1,6 +1,7 @@
 #pragma once
 
 #include <mqttUtils.h>
+#include <SensorEventProcessor.h>
 
 class SensorEvents {
     private:
@@ -8,42 +9,73 @@ class SensorEvents {
         std::string mqttTopicPreffix;
         
         std::map<uint16_t /*universe*/, std::array<uint8_t, 512> /*data*/>& dmxData;
-        std::map<std::string /*sensorName*/, SensorMappingCfg> sensorMappings;
+        const std::vector<SensorMappingCfg>& sensorMappings;
+        
+        // Optional event processor for conditional processing
+        SensorEventProcessor* eventProcessor;
     
     public:
         SensorEvents(
                     MqttUtils* mqtt, 
                     std::string mqttTopicPreffix,
-                    std::vector<SensorMappingCfg> sensorMappings,
-                    std::map<uint16_t, std::array<uint8_t, 512>>& dmxData):
+                    const std::vector<SensorMappingCfg>& sensorMappings,
+                    std::map<uint16_t, std::array<uint8_t, 512>>& dmxData,
+                    SensorEventProcessor* processor = nullptr):
                 mqtt(mqtt), 
                 mqttTopicPreffix(mqttTopicPreffix),
-                dmxData(dmxData) {
-            for (const auto& mapping : sensorMappings) {
-                this->sensorMappings[mapping.sensorName] = mapping;
-            }
+                sensorMappings(sensorMappings),
+                dmxData(dmxData),
+                eventProcessor(processor) {
         }
 
         void publish(std::string sensorName, int value, bool local) {
             std::string topic = mqttTopicPreffix + sensorName;
             mqtt->publish(topic.c_str(), std::to_string(value).c_str());
-            if (local) {
-                auto it = sensorMappings.find(sensorName);
-                if (it != sensorMappings.end()) {
-                    SensorMappingCfg& mapping = it->second;
-                    uint8_t dmxChannel = mapping.dmxCfg.get0BasedChannel();
+            
+            if (local && eventProcessor != nullptr) {
+                bool shouldProcess = eventProcessor->addEvent(sensorName, value);
+                if (shouldProcess) {
+                    ProcessingResult result = eventProcessor->process();
+                    if (result.shouldSetDmx) {
+                        applyProcessedValues(result.values);
+                    }
+                }
+            }
+        }
 
-                    // map value from sensor range to 0-255
-                    int mappedValue = map(value, mapping.valueRange.from, mapping.valueRange.to, 0, 255);
-                    if (mappedValue < 0) mappedValue = 0;
-                    if (mappedValue > 255) mappedValue = 255;
-                    dmxData[mapping.dmxCfg.universe][dmxChannel] = static_cast<uint8_t>(mappedValue);
-                    // Log.traceln("Published local sensor %s value %d to DMX %d@%d as value %d", 
-                    //     sensorName.c_str(), 
-                    //     value, 
-                    //     mapping.dmxCfg.channel, 
-                    //     mapping.dmxCfg.universe, 
-                    //     mappedValue);
+        /**
+         * Force processing of collected events (if using processor)
+         */
+        void forceProcess() {
+            if (eventProcessor != nullptr && eventProcessor->getEventCount() > 0) {
+                ProcessingResult result = eventProcessor->process();
+                if (result.shouldSetDmx) {
+                    applyProcessedValues(result.values);
+                }
+            }
+        }
+
+    private:
+        /**
+         * Apply processed values to DMX data
+         * Processor handles all value transformations
+         */
+        void applyProcessedValues(const std::map<std::string, int>& processedValues) {
+            for (auto it = processedValues.begin(); it != processedValues.end(); ++it) {
+                const std::string& sensorName = it->first;
+                int dmxValue = it->second;
+                
+                for (const auto& mapping : sensorMappings) {
+                    if (mapping.sensorName == sensorName) {
+                        uint8_t dmxChannel = mapping.dmxCfg.get0BasedChannel();
+                        
+                        // Clamp to DMX range
+                        if (dmxValue < 0) dmxValue = 0;
+                        if (dmxValue > 255) dmxValue = 255;
+                        
+                        dmxData[mapping.dmxCfg.universe][dmxChannel] = static_cast<uint8_t>(dmxValue);
+                        break;
+                    }
                 }
             }
         }

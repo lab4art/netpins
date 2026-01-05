@@ -164,6 +164,18 @@ servos:
 ```
 
 ### Experimental
+DmxOut sample configuration:
+```yaml
+dmxOutput:
+  enabled: true
+  uart_port: 1        # UART port number (0, 1, or 2). 0 is used by default for serial output
+  tx_pin: 17          # GPIO pin for DMX transmit
+  rx_pin: 18          # GPIO pin for DMX receive (can be -1 if not used)
+  enable_pin: 16      # GPIO pin for RS485 enable (can be -1 if not needed)
+  universe: 0         # Source (Artnet) DMX universe to output to DMX
+```
+
+
 
 ```yaml
 sensor_publish: # enable/disable sensor publishing over: mqtt, artnet, local

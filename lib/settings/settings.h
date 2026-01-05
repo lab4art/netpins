@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <map>
 #include <ArduinoJson.h>
 #include <Preferences.h>
 #include <Log.h>
@@ -409,6 +410,110 @@ struct SensorMappingCfg {
     };
 };
 
+/**
+ * Sensor event processor configuration
+ * processor:
+ *   name: averaging  # or: median, peak, ema, threshold, change, gesture, passthrough
+ *   max_events: 10
+ *   max_time_ms: 1000
+ *   min_events: 1
+ *   apply_value_mapping: true
+ *   params:  # Optional processor-specific parameters
+ *     threshold: 500      # For peak/threshold processors
+ *     alpha: 0.3          # For EMA processor
+ *     delta: 50           # For change detector
+ *     sequence:           # For gesture processor
+ *       - sensor1
+ *       - sensor2
+ */
+struct SensorProcessorCfg {
+    std::string name;  // Processor name: averaging, median, peak, ema, threshold, change, gesture, passthrough
+    size_t maxEvents = 10;
+    unsigned long maxTimeMs = 1000;
+    size_t minEvents = 1;
+    bool applyValueMapping = false;
+    
+    // Processor-specific parameters (stored as JSON)
+    std::map<std::string, std::string> params;
+
+    bool operator==(const SensorProcessorCfg& other) const {
+        return name == other.name &&
+            maxEvents == other.maxEvents &&
+            maxTimeMs == other.maxTimeMs &&
+            minEvents == other.minEvents &&
+            applyValueMapping == other.applyValueMapping &&
+            params == other.params;
+    };
+
+    bool operator!=(const SensorProcessorCfg& other) const {
+        return !(*this == other);
+    };
+
+    static SensorProcessorCfg deserialize(JsonObject& json) {
+        SensorProcessorCfg p;
+        p.name = json["name"].as<std::string>();
+        if (json.containsKey("max_events")) {
+            p.maxEvents = json["max_events"].as<size_t>();
+        }
+        if (json.containsKey("max_time_ms")) {
+            p.maxTimeMs = json["max_time_ms"].as<unsigned long>();
+        }
+        if (json.containsKey("min_events")) {
+            p.minEvents = json["min_events"].as<size_t>();
+        }
+        if (json.containsKey("apply_value_mapping")) {
+            p.applyValueMapping = json["apply_value_mapping"].as<bool>();
+        }
+        if (json.containsKey("params")) {
+            JsonObject paramsObj = json["params"].as<JsonObject>();
+            for (JsonPair kv : paramsObj) {
+                // Store as string, will be parsed by factory
+                if (kv.value().is<int>()) {
+                    p.params[kv.key().c_str()] = std::to_string(kv.value().as<int>());
+                } else if (kv.value().is<float>()) {
+                    p.params[kv.key().c_str()] = std::to_string(kv.value().as<float>());
+                } else if (kv.value().is<JsonArray>()) {
+                    // For arrays like gesture sequence, serialize as JSON
+                    String arrayStr;
+                    serializeJson(kv.value(), arrayStr);
+                    p.params[kv.key().c_str()] = arrayStr.c_str();
+                } else {
+                    p.params[kv.key().c_str()] = kv.value().as<std::string>();
+                }
+            }
+        }
+        return p;
+    };
+
+    static void serialize(JsonObject& json, const SensorProcessorCfg& p) {
+        json["name"] = p.name;
+        json["max_events"] = p.maxEvents;
+        json["max_time_ms"] = p.maxTimeMs;
+        json["min_events"] = p.minEvents;
+        json["apply_value_mapping"] = p.applyValueMapping;
+        if (!p.params.empty()) {
+            JsonObject paramsObj = json["params"].to<JsonObject>();
+            for (auto it = p.params.begin(); it != p.params.end(); ++it) {
+                const std::string& key = it->first;
+                const std::string& value = it->second;
+                // Try to parse as number, otherwise store as string
+                char* endPtr;
+                int intVal = strtol(value.c_str(), &endPtr, 10);
+                if (*endPtr == '\0') {
+                    paramsObj[key] = intVal;
+                } else {
+                    float floatVal = strtof(value.c_str(), &endPtr);
+                    if (*endPtr == '\0') {
+                        paramsObj[key] = floatVal;
+                    } else {
+                        paramsObj[key] = value;
+                    }
+                }
+            }
+        }
+    };
+};
+
 struct MqttCfg {
     std::string server;
     std::uint16_t port;
@@ -652,6 +757,7 @@ struct Settings {
     std::vector<AnalogReadSensorCfg> analogReadSensors;
     
     std::vector<SensorMappingCfg> sensorMappings; // sensor to dmx local mappings
+    SensorProcessorCfg sensorProcessor;  // Optional: sensor event processor config
 
     std::vector<PluginCfg> plugins;
 
@@ -697,6 +803,7 @@ struct Settings {
             analogReadSensors == other.analogReadSensors &&
 
             sensorMappings == other.sensorMappings &&
+            sensorProcessor == other.sensorProcessor &&
 
             plugins == other.plugins;
             
@@ -813,6 +920,12 @@ struct Settings {
             s.sensorMappings.push_back(SensorMappingCfg::deserialize(jsonSensorMapping));
         }
 
+        // sensor processor
+        if (json.containsKey("sensor_processor")) {
+            JsonObject jsonProcessor = json["sensor_processor"].as<JsonObject>();
+            s.sensorProcessor = SensorProcessorCfg::deserialize(jsonProcessor);
+        }
+
         // plugins
         JsonArray pluginsArray = json["plugins"].as<JsonArray>();
         for (JsonVariant v : pluginsArray) {
@@ -925,6 +1038,12 @@ struct Settings {
                 JsonObject jsonSensorMapping = sensorMappings.add<JsonObject>();
                 SensorMappingCfg::serialize(jsonSensorMapping, sensorMapping);
             }
+        }
+
+        // sensor processor
+        if (!sensorProcessor.name.empty()) {
+            JsonObject jsonProcessor = json["sensor_processor"].to<JsonObject>();
+            SensorProcessorCfg::serialize(jsonProcessor, sensorProcessor);
         }
 
         Log::info((std::string("Serializing ") + std::to_string(plugins.size()) + " plugins").c_str());

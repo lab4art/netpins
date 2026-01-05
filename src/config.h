@@ -30,5 +30,6 @@ REGISTER_ANIMATION_FACTORY(WaveEffectFactory);
 
 //#define DISABLE_LOGGING // uncomment to disable logging completely
 #define LOG_LEVEL LOG_LEVEL_INFO
+// #define LOG_LEVEL LOG_LEVEL_TRACE
 
 #define PRINT_EXECUTION_STAT false
