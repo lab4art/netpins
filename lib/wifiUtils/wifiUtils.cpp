@@ -56,7 +56,7 @@ void WifiUtils::tryReconnect(ON_WIFI_EXECUTION_CALLBACK_SIGNATURE) {
     if (currentMillis - previousMillis >= reconnectDelay) {
         // no reconnect if AP mode
         if (WiFi.getMode() == WIFI_STA && WiFi.status() != WL_CONNECTED) {
-            // Only reconnect if not disabled or if this is the first attempt
+            // Only reconnect if not disabled or if this is the first attempt. Note that the attempts are reset on successful connection.
             if (!disableReconnect || connectAttempt == 0) {
                 reconnectDelay = reconnectInterval + reconnectInterval * connectAttempt; // progressive back-off
                 if (reconnectDelay > reconnectInterval * 10) {
@@ -81,7 +81,10 @@ void WifiUtils::tryReconnect(ON_WIFI_EXECUTION_CALLBACK_SIGNATURE) {
             resetReconnectDelay();
         }
         if (!connectedCallbackCalled && WiFi.status() == WL_CONNECTED) {
-            wifiExecutionCallback(std::string(WiFi.localIP().toString().c_str()));
+            IPAddress ip = WiFi.localIP();
+            char ipStr[16];
+            snprintf(ipStr, sizeof(ipStr), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+            wifiExecutionCallback(std::string(ipStr));
             connectedCallbackCalled = true;
             resetReconnectDelay();                
         }

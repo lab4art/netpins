@@ -179,14 +179,14 @@ std::vector<InitializedThingGroup<ThingGroupType>> HardwareManager::createStripT
     return groups;
 }
 
-void HardwareManager::createThings(Settings& settings, DmxListener* dmxListener, Scheduler* scheduler, std::function<void()> onCommandReceived) {
+void HardwareManager::createThings(Settings* settings, DmxListener* dmxListener, Scheduler* scheduler, std::function<void()> onCommandReceived) {
     switchables.clear();
 
     // PWMS
-    if (settings.pwms.size() > 0) {
+    if (settings->pwms.size() > 0) {
         analogWriteResolution(14);
         PwmThing::set8bitTo14BitMapping();
-        for (auto& pwmCfg : settings.pwms) {
+        for (auto& pwmCfg : settings->pwms) {
             // initialize pwm Things
             auto pwmThing = new PwmThing(pwmCfg.pin, pwmCfg.name);
             dmxListener->addMapping(pwmThing, pwmCfg.dmxCfg);
@@ -197,21 +197,21 @@ void HardwareManager::createThings(Settings& settings, DmxListener* dmxListener,
     }
 
     Log::infoln("Creating RGBW strips ...");
-    std::vector<InitializedThingGroup<RgbwThingGroup>> rgbwThingGroups = createStripThings<NeoGrbwFeature, NeoEsp32RmtNSk6812Method, RgbwThing, RgbwThingGroup>(rgbwStrips, settings.rgbwStrips);
+    std::vector<InitializedThingGroup<RgbwThingGroup>> rgbwThingGroups = createStripThings<NeoGrbwFeature, NeoEsp32RmtNSk6812Method, RgbwThing, RgbwThingGroup>(rgbwStrips, settings->rgbwStrips);
     for (auto& rgbwThingGroup : rgbwThingGroups) {
         dmxListener->addMapping(rgbwThingGroup.group, rgbwThingGroup.dmxCfg);
         switchables.push_back(rgbwThingGroup.group);
     }
 
     Log::infoln("Creating RGB strips ...");
-    std::vector<InitializedThingGroup<RgbThingGroup>> rgbThingsGroups = createStripThings<NeoGrbFeature, NeoEsp32RmtNWs2812xMethod, RgbThing, RgbThingGroup>(rgbStrips, settings.rgbStrips);
+    std::vector<InitializedThingGroup<RgbThingGroup>> rgbThingsGroups = createStripThings<NeoGrbFeature, NeoEsp32RmtNWs2812xMethod, RgbThing, RgbThingGroup>(rgbStrips, settings->rgbStrips);
     for (auto& rgbThingGroup : rgbThingsGroups) {
         dmxListener->addMapping(rgbThingGroup.group, rgbThingGroup.dmxCfg);
         switchables.push_back(rgbThingGroup.group);
     }
 
     Log::infoln("Creating servos ...");
-    for (auto& servoCfg : settings.servos) {
+    for (auto& servoCfg : settings->servos) {
         auto minPulseWidth = servoCfg.minPulseWidth == 0 ? 500 : servoCfg.minPulseWidth;
         auto maxPulseWidth = servoCfg.maxPulseWidth == 0 ? 2500 : servoCfg.maxPulseWidth;
         auto thing = new ServoThing(servoCfg.pin, servoCfg.maxAngle, minPulseWidth, maxPulseWidth);
@@ -222,72 +222,75 @@ void HardwareManager::createThings(Settings& settings, DmxListener* dmxListener,
     // Plugins
     try {
         int createdAnimations = PluginFactory::getInstance().createAnimationsFromPlugins(
-            scheduler, settings.plugins, dmxListener);
+            scheduler, settings->plugins, dmxListener);
         Log::infoln("Created %d animations from plugins", createdAnimations);
     } catch (const std::exception& e) {
         Log::error((std::string("ERR: configuring plugins. ") + e.what()).c_str());
     }
 
     // DMX Output
-    if (settings.dmxOutput.enabled) {
-        Log::infoln("Creating DMX output on UART%d ...", settings.dmxOutput.uartPort);
+    if (settings->dmxOutput.enabled) {
+        Log::infoln("Creating DMX output on UART%d ...", settings->dmxOutput.uartPort);
         dmxOutput = new DmxOutput(
-            settings.dmxOutput.uartPort,
-            settings.dmxOutput.txPin,
-            settings.dmxOutput.rxPin,
-            settings.dmxOutput.enablePin,
-            settings.dmxOutput.universe,
+            settings->dmxOutput.uartPort,
+            settings->dmxOutput.txPin,
+            settings->dmxOutput.rxPin,
+            settings->dmxOutput.enablePin,
+            settings->dmxOutput.universe,
             dmxListener->getDmxData()
         );
         if (dmxOutput->begin()) {
             scheduler->addTask(dmxOutput);
-            Log::infoln("DMX output initialized successfully for universe %d", settings.dmxOutput.universe);
+            Log::infoln("DMX output initialized successfully for universe %d", settings->dmxOutput.universe);
         } else {
             Log::errorln("Failed to initialize DMX output");
             delete dmxOutput;
             dmxOutput = nullptr;
         }
+    } else {
+        Log::info("DMX output disabled in settings.");
     }
 
     // DMX Input
-    if (settings.dmxInput.enabled) {
-        Log::infoln("Creating DMX input on UART%d ...", settings.dmxInput.uartPort);
+    if (settings->dmxInput.enabled) {
+        Log::infoln("Creating DMX input on UART%d ...", settings->dmxInput.uartPort);
         dmxInput = new DmxInput(
-            settings.dmxInput.uartPort,
-            settings.dmxInput.txPin,
-            settings.dmxInput.rxPin,
-            settings.dmxInput.enablePin,
-            settings.dmxInput.universe,
+            settings->dmxInput.uartPort,
+            settings->dmxInput.txPin,
+            settings->dmxInput.rxPin,
+            settings->dmxInput.enablePin,
+            settings->dmxInput.universe,
             dmxListener->getDmxData(),
             onCommandReceived
         );
         if (dmxInput->begin()) {
             scheduler->addTask(dmxInput);
-            Log::infoln("DMX input initialized successfully for universe %d", settings.dmxInput.universe);
+            Log::infoln("DMX input initialized successfully for universe %d", settings->dmxInput.universe);
         } else {
             Log::errorln("Failed to initialize DMX input");
             delete dmxInput;
             dmxInput = nullptr;
         }
+    } else {
+        Log::info("DMX input disabled in settings.");
     }
 
-    // Register LED commit task with scheduler
-    scheduler->addTask(ledCommitTask);
-
-    if (settings.lightsTest) {
+    if (settings->lightsTest) {
         runLightsTest();
     }
+
+    scheduler->addTask(ledCommitTask);
 }
 
-void HardwareManager::initializeSensors(Settings& settings, SensorEvents* sensorEvents) {
+void HardwareManager::initializeSensors(Settings* settings, SensorEvents* sensorEvents) {
     Log::infoln("Creating Hum/Temp sensor ...");
-    for (auto& humTempCfg : settings.humTemps) {
+    for (auto& humTempCfg : settings->humTemps) {
         auto humTempSensor = new HumTempSensor(humTempCfg.pin, humTempCfg.readMs);
         humTempSensors.push_back(humTempSensor);
     }
 
     Log::infoln("Creating touch sensors ...");
-    for (auto& touch : settings.touchSensors) {
+    for (auto& touch : settings->touchSensors) {
         auto touchSensor = new TouchSensor(touch.pin, 200, touch.threshold);
         std::string sensorName = touch.sensorName;
         touchSensor->addOnChangeListener([sensorEvents, sensorName](bool touched) {
@@ -297,7 +300,7 @@ void HardwareManager::initializeSensors(Settings& settings, SensorEvents* sensor
     }
 
     Log::infoln("Creating digital read sensors ...");
-    for (auto& dreadCfg : settings.digitalReadSensors) {
+    for (auto& dreadCfg : settings->digitalReadSensors) {
         auto digitalReadSensor = new DigitalReadSensor(dreadCfg.pin, dreadCfg.readMs, INPUT_PULLUP);
         digitalReadSensor->addOnChangeListener([sensorEvents, dreadCfg](bool value) {
             sensorEvents->publish(dreadCfg.sensorName, value ? 1 : 0, true);
@@ -311,7 +314,7 @@ void HardwareManager::initializeSensors(Settings& settings, SensorEvents* sensor
     }
 
     Log::infoln("Creating analog read sensors ...");
-    for (auto& areadCfg : settings.analogReadSensors) {
+    for (auto& areadCfg : settings->analogReadSensors) {
         auto analogReadSensor = new AnalogReadSensor(areadCfg.pin, areadCfg.readMs);
         analogReadSensor->addOnChangeListener([sensorEvents, areadCfg](uint16_t value) {
             sensorEvents->publish(areadCfg.sensorName, value, true);

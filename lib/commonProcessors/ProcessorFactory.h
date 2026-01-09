@@ -28,7 +28,7 @@ class ProcessorFactory {
             
             // If no processor specified, create default direct mapping processor
             if (cfg.name.empty()) {
-                Log.traceln("No processor configured, using direct mapping");
+                Log::traceln("No processor configured, using direct mapping");
                 auto* processor = createDirectMappingProcessor(config, sensorMappings);
                 return {config, processor};
             }

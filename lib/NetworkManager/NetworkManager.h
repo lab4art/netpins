@@ -34,7 +34,10 @@ private:
     std::function<void()> beforeWiFiRebootCallback;
     std::function<void(char*, byte*, unsigned int)> onMqttMessageCallback;
     
+    unsigned long wifiConnectedTime;
+    
     void initializeHeartbeat();
+    void handleWifiConnected();
     void configureArtnetReply(const String& hostname, const String& firmwareVersion, const std::set<uint16_t>& universes);
     void tryReconnect();
     

@@ -85,9 +85,9 @@ class DmxListener : public ScheduledTask {
         std::function<void()> onCommandReceived;
 
     public:
-        DmxListener(Settings& settings, std::function<void()> onCommandReceived)
+        DmxListener(Settings* settings, std::function<void()> onCommandReceived)
             : ScheduledTask(20, "DmxProcess"),
-              dmxOffset(settings.dmxChOffset),
+              dmxOffset(settings->dmxChOffset),
               onCommandReceived(onCommandReceived) {
             initializeDmxData(dmxData);
             restoreDmxData(dmxData);

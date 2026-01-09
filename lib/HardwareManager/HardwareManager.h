@@ -76,8 +76,8 @@ public:
     ~HardwareManager();
     
     // Initialization
-    void createThings(Settings& settings, DmxListener* dmxListener, Scheduler* scheduler, std::function<void()> onCommandReceived = nullptr);
-    void initializeSensors(Settings& settings, SensorEvents* sensorEvents);
+    void createThings(Settings* settings, DmxListener* dmxListener, Scheduler* scheduler, std::function<void()> onCommandReceived = nullptr);
+    void initializeSensors(Settings* settings, SensorEvents* sensorEvents);
     
     // Commit changes to hardware
     void commitNeoStip();

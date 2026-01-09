@@ -45,6 +45,7 @@ DmxListener* dmxListener;
 SystemManager* systemManager;
 
 SettingsManager<Settings>* settingsManager;
+Settings* settings;
 
 SensorEvents* sensorEvents;
 WebAdmin* webAdmin;
@@ -75,7 +76,8 @@ void setup() {
     systemManager = new SystemManager(settingsManager);
     systemManager->initialize(FORCE_RESET, FACTORY_REST_PIN, WIFI_SSID, WIFI_PASS);
     
-    Settings settings = settingsManager->getSettings();
+    // Allocate settings on heap to avoid stack lifetime issues
+    settings = new Settings(settingsManager->getSettings());
 
     dmxListener = new DmxListener(settings, [](){
         systemManager->markCommandReceived();
@@ -92,7 +94,7 @@ void setup() {
 
     firmwareUpdateResultQueue = xQueueCreate(1, sizeof(int));
 
-    networkManager = new NetworkManager(&settings, scheduler, FIRMWARE_VERSION);
+    networkManager = new NetworkManager(settings, scheduler, FIRMWARE_VERSION);
     networkManager->initializeWiFi({ STATIC_IP, GATEWAY, SUBNET, DNS }, []() {
         systemManager->saveUptimeBeforeReboot();
     });
@@ -120,7 +122,8 @@ void setup() {
         webAdmin->setOnReceivedCallback([](){
             systemManager->markCommandReceived();
         });
-        Log::infoln("Web server listening on %s", WiFi.localIP().toString().c_str());
+        IPAddress ip = WiFi.localIP();
+        Log::infoln("Web server listening on %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
     }
 
     webAdmin->setPropertiesSupplier([](){
@@ -149,7 +152,7 @@ void setup() {
         return props;
     });
 
-    std::string hostName = WifiUtils::getHostname(settings.hostname.c_str());
+    std::string hostName = WifiUtils::getHostname(settings->hostname.c_str());
     
     networkManager->initializeMqtt(String(hostName.c_str()), [](char* topic, byte* payload, unsigned int length) {
         Log::infoln("MQTT message received: %s, %s", topic, payload);
@@ -158,7 +161,7 @@ void setup() {
     sensorEvents = new SensorEvents(
         networkManager->getMqtt(),
         std::string("np/") + hostName + "/s/",
-        settings.sensorMappings,
+        settings->sensorMappings,
         dmxListener->getDmxData()
     );
 

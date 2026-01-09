@@ -2,9 +2,16 @@
 #include <Log.h>
 #include <esp_wifi.h>
 
-NetworkManager::NetworkManager(Settings* settings, Scheduler* scheduler, String firmwareVersion) 
-    : udp(nullptr), wifi(nullptr), artnet(nullptr), mqtt(nullptr), 
-      heartbeatBroadcast(nullptr), settings(settings), scheduler(scheduler), firmwareVersion(firmwareVersion) {
+NetworkManager::NetworkManager(Settings* settings, Scheduler* scheduler, String firmwareVersion): 
+        udp(nullptr),
+        wifi(nullptr),
+        artnet(nullptr), 
+        mqtt(nullptr), 
+        heartbeatBroadcast(nullptr),
+        settings(settings),
+        scheduler(scheduler),
+        firmwareVersion(firmwareVersion),
+        wifiConnectedTime(0) {
 }
 
 NetworkManager::~NetworkManager() {
@@ -48,7 +55,10 @@ void NetworkManager::initializeWiFi(static_ip_config_t staticIpConfig, std::func
     Log::info((std::string("Wifi MAC: ") + WifiUtils::macAddress).c_str());
 }
 
-void NetworkManager::initializeArtnet(std::function<void(const uint8_t*, uint16_t, const ArtDmxMetadata&, const ArtNetRemoteInfo&)> onDmxFrame, const String& hostname, const std::set<uint16_t>& universes) {
+void NetworkManager::initializeArtnet(
+        std::function<void(const uint8_t*, uint16_t, const ArtDmxMetadata&, const ArtNetRemoteInfo&)> onDmxFrame,
+        const String& hostname,
+        const std::set<uint16_t>& universes) {
     if (settings->disableArtnet) {
         Log::infoln("Artnet is disabled.");
         return;
@@ -118,6 +128,12 @@ void NetworkManager::initializeHeartbeat() {
 void NetworkManager::loop() {
     tryReconnect();
     
+    // Handle WiFi post-connection setup after WiFi has stabilized
+    if (wifiConnectedTime > 0 && millis() - wifiConnectedTime >= 50) {
+        wifiConnectedTime = 0;
+        handleWifiConnected();
+    }
+    
     if (artnet != nullptr) {
         artnet->parse();
     }
@@ -132,14 +148,18 @@ void NetworkManager::tryReconnect() {
     if (wifi != nullptr) {
         wifi->tryReconnect([this](std::string ip) {
             Log::infoln("WiFi connected, IP address: %s.", ip.c_str());
-            
-            if (settings->disableWifiPowerSave) {
-                esp_wifi_set_ps(WIFI_PS_NONE);
-            }
-            
-            initializeHeartbeat();
+            wifiConnectedTime = millis();
         });
     }
+}
+
+void NetworkManager::handleWifiConnected() {
+    if (settings->disableWifiPowerSave) {
+        esp_wifi_set_ps(WIFI_PS_NONE);
+        Log::infoln("WiFi power save disabled");
+    }
+    
+    initializeHeartbeat();
 }
 
 void NetworkManager::shutdown() {
