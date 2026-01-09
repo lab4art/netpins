@@ -10,6 +10,7 @@
 #include <settings.h>
 #include <DmxListener.h>
 #include <DmxOutput.h>
+#include <DmxInput.h>
 #include <scheduler.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -39,6 +40,7 @@ private:
     std::vector<ServoThing*> servos;
     std::vector<Switchabe*> switchables;
     DmxOutput* dmxOutput;
+    DmxInput* dmxInput;
 
     // Sensors
     std::vector<HumTempSensor*> humTempSensors;
@@ -74,7 +76,7 @@ public:
     ~HardwareManager();
     
     // Initialization
-    void createThings(Settings& settings, DmxListener* dmxListener, Scheduler* scheduler);
+    void createThings(Settings& settings, DmxListener* dmxListener, Scheduler* scheduler, std::function<void()> onCommandReceived = nullptr);
     void initializeSensors(Settings& settings, SensorEvents* sensorEvents);
     
     // Commit changes to hardware

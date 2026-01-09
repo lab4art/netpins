@@ -22,8 +22,6 @@ WebAdmin::CommandResult SystemCommandHandler::handleCommand(JsonVariant &jsonVar
         settingsManager->fromJson(jsonVariant["data"].as<std::string>());
         if (settingsManager->isDirty()) {
             settingsManager->save();
-            // Apply log level immediately before reboot
-            Log::setLogLevel(settingsManager->getSettings().logLevel);
             return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK_REBOOT, "Saved, rebooting ...", 3000};
         } else {
             return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, "No updates.", -1};
@@ -32,8 +30,6 @@ WebAdmin::CommandResult SystemCommandHandler::handleCommand(JsonVariant &jsonVar
         settingsManager->mergeJson(jsonVariant["data"].as<std::string>());
         if (settingsManager->isDirty()) {
             settingsManager->save();
-            // Apply log level immediately before reboot
-            Log::setLogLevel(settingsManager->getSettings().logLevel);
             return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK_REBOOT, "Saved, rebooting ...", 3000};
         } else {
             return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, "No updates.", -1};

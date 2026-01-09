@@ -35,6 +35,10 @@
 #include <scheduler.h>
 #include <SystemCommandHandler.h>
 
+#ifndef GIT_VERSION
+#define GIT_VERSION "unknown"
+#endif
+
 HardwareManager* hardwareManager;
 NetworkManager* networkManager;
 DmxListener* dmxListener;
@@ -63,6 +67,8 @@ void setup() {
     }
 
     Log::info("Booting ...");
+    Log::infoln("Firmware: %s", FIRMWARE_VERSION);
+    Log::infoln("Git: %s", GIT_VERSION);
 
     settingsManager = new SettingsManager<Settings>("settings");
     hardwareManager = new HardwareManager();
@@ -76,7 +82,9 @@ void setup() {
     });
 
     try {
-        hardwareManager->createThings(settings, dmxListener, scheduler);
+        hardwareManager->createThings(settings, dmxListener, scheduler, [](){
+            systemManager->markCommandReceived();
+        });
         Log::info("Things created.");
     } catch(const std::exception& e) {
         Log::error((std::string("ERR: creating things. ") + e.what()).c_str());
@@ -106,7 +114,7 @@ void setup() {
             [](JsonVariant &jsonVariant) {
                 return systemCommandHandler->handleCommand(jsonVariant);
             },
-            FIRMWARE_VERSION,
+            FIRMWARE_VERSION + std::string(" (") + GIT_VERSION + ")",
             FACTORY_REST_PIN
         );
         webAdmin->setOnReceivedCallback([](){

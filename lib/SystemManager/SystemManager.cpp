@@ -43,9 +43,13 @@ void SystemManager::initialize(bool forceReset, int factoryResetPin, const char*
     Settings settings = settingsManager->getSettings();
     Log::info((std::string("Loaded settings: ") + settings.asJson()).c_str());
     
-    // Apply log level from settings
-    Log::setLogLevel(settings.logLevel);
-    Log::infoln("Log level set to %d", settings.logLevel);
+    // Apply log level from settings (only if >= 0)
+    if (settings.logLevel >= 0) {
+        Log::setLogLevel(settings.logLevel);
+        Log::infoln("Log level set to %d", settings.logLevel);
+    } else {
+        Log::infoln("Using default log level %d", Log::getLogLevel());
+    }
     
     if (settings.maxIdle > 0) {
         maxIdleMillis = settings.maxIdle * 60000;

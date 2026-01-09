@@ -41,7 +41,9 @@ void NetworkManager::initializeWiFi(static_ip_config_t staticIpConfig, std::func
         5000,
         settings->rebootAfterWifiFailed,
         beforeReboot,
-        settings->hostname.c_str());
+        settings->hostname.c_str(),
+        "netpins-",
+        settings->disableWifiReconnect);
     
     Log::info((std::string("Wifi MAC: ") + WifiUtils::macAddress).c_str());
 }

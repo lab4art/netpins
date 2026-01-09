@@ -4,7 +4,9 @@ NetPins is an Arduino project that allows you to manage various peripherals like
 
 ## Features
 
-- **DMX (Artnet) Control**: Control your peripherals using the DMX protocol over Artnet.
+- **DMX Control**: Control your peripherals using the DMX protocol via:
+  - **ArtNet** (DMX over network/WiFi)
+  - **DMX Input** (Direct DMX512 via RS-485/MAX485) - Alternative to ArtNet
 - **Mapping DMX Channels to Pin Functionality**: Easily map DMX channels to specific pins on your microcontroller to control LEDs, RGB strips, servos, and more.
 - **Web UI Configuration**: Configure your device settings through a web interface.
 - **Over-the-Air (OTA) Updates**: Update your firmware wirelessly without the need for physical connections.
@@ -29,9 +31,9 @@ You also need a [git scm](https://git-scm.com/) installed.
     git fetch --tags
     ```
 
-1. checkout the latest release, eg. 1.1.2
+1. checkout the latest release, eg. 2.0.0
     ```
-    git checkout 1.1.2
+    git checkout 2.0.0
     ```
 
 1. **Upload the firmaware** by following the [quick start instructions](https://docs.platformio.org/en/latest/integration/ide/vscode.html#quick-start) for PlatformIO for VSCode. The only difference is that you need to open the existing `netpins` project instead of creating a "New Project" and you don't need to edit any source code.
@@ -58,16 +60,6 @@ You also need a [git scm](https://git-scm.com/) installed.
    - Once connected to the Admin console, you can configure your microcontroller (see the example configuration below).
    - It's recommended to set a meaningful hostname for each of your microcontrollers.
 
-## DMX Channels
-
-- Configure the first DMX channel and the universe in the Admin console.
-- Next DMX channels are mapped without gaps depending on how many channels the function takes:
-  - LEDs: 1 channel per pin
-  - RGBW strips: 4 channels per slice (5 if dimmer is enabled)
-  - RGB strips: 3 channels per slice (4 if dimmer is enabled)
-  - Servos: 1 channel per pin
-  - Waves: 7 channels per wave (2 x RGB + fade) (8 if dimmer is enabled)
-
 ## Factory Reset
 
 To clear all settings and reset the device to factory defaults, a power cycle is required.
@@ -82,6 +74,54 @@ Power cycle sequence:
 - Wait 5-10 seconds
 - *Repeat 3 more times*
 
+## DMX Output
+Transmit DMX data (from sensor mappings) via RS-485 to control external DMX devices:
+
+```yaml
+dmx_output:
+  enabled: true
+  uart_port: 2        # UART port number (0, 1, or 2). 0 is used by default for serial output
+  tx_pin: 17          # GPIO pin for DMX transmit
+  rx_pin: 18          # GPIO pin for DMX receive (can be -1 if not used)
+  enable_pin: 16      # GPIO pin for RS485 enable (DE/RE on MAX485)
+  universe: 0         # Source (ArtNet) DMX universe to output to DMX
+```
+
+**Hardware Requirements:**
+- MAX485 or similar RS-485 transceiver
+- Connections:
+  - TX pin → DI (Driver Input) on MAX485
+  - RX pin → RO (Receiver Output) on MAX485 (optional)
+  - Enable pin → DE/RE pins on MAX485
+  - A and B terminals → DMX+ and DMX- on XLR cable
+
+## DMX Input (Alternative to ArtNet)
+Receive DMX data via RS-485 from an external DMX source (like a lighting console). This provides an alternative to ArtNet for receiving DMX control data:
+
+```yaml
+dmx_input:
+  enabled: true
+  uart_port: 2        # UART port number (0, 1, or 2). Use different port than output
+  tx_pin: 17          # GPIO pin for DMX transmit
+  rx_pin: 18          # GPIO pin for DMX receive
+  enable_pin: 4       # GPIO pin for RS485 enable (DE/RE on MAX485)
+  universe: 0         # Which universe this input represents
+```
+
+**Hardware Requirements:**
+- MAX485 or similar RS-485 transceiver
+- Connections:
+  - TX pin → DI (Driver Input) on MAX485 (optional, can be -1)
+  - RX pin → RO (Receiver Output) on MAX485
+  - Enable pin → DE/RE pins on MAX485
+  - A and B terminals → DMX+ and DMX- from DMX source
+
+**Notes:**
+- DMX input can be used **instead of** or **alongside** ArtNet
+- To disable ArtNet and use only DMX input, set `disable_artnet: true`
+- Both ArtNet and DMX input can feed different universes simultaneously
+- Universe mapping follows the same rules as ArtNet input
+
 
 ## Sample Configuration
 
@@ -95,9 +135,13 @@ lights_test: true # power on all at boot for 2 seconds
 max_idle: 120 # power off microcontroller when no network activity for N minutes
 reboot_after_wifi_failed: 15 # reboot after 15 failed wifi connections, 0 means no reboot
 disable_wifi_power_save: false # disable WiFi power save to prevent led flicering on "poor" power connection
-leds:
-  - 13
-  - 14
+pwms:
+  - pin: 13
+    name: pwm-13
+    dmx: 1@0 # channel@universe
+  - pin: 14
+    name: pwm-14
+    dmx: 2@0
 rgbw_strips: []
 rgb_strips:
   - pin: 13
@@ -120,15 +164,8 @@ servos:
 ```
 
 ### Experimental
-```yaml
-pwms:
-  - pin: 13
-    name: pwm-13
-    dmx: 1@1 # channel@universe
-  - pin: 14
-    name: pwm-14
-    dmx: 2@1
 
+```yaml
 sensor_publish: # enable/disable sensor publishing over: mqtt, artnet, local
   - mqtt
   - artnet

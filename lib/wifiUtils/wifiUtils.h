@@ -25,6 +25,7 @@ class WifiUtils {
         unsigned long reconnectDelay = 0;
         unsigned int rebootAfterWiFiFailed;
         unsigned int connectAttempt = 0;
+        bool disableReconnect = false;
         std::function<void()> beforeWiFiReboot;
 
         void resetReconnectDelay();
@@ -35,7 +36,8 @@ class WifiUtils {
         WifiUtils(const char* ssid, const char* password, static_ip_t staticIp, 
                   unsigned long reconnectInterval, unsigned int rebootAfterWiFiFailed, 
                   std::function<void()> beforeWiFiReboot = nullptr, 
-                  const char* hostname = "", const char* hostnamePrefix = "netpins-");
+                  const char* hostname = "", const char* hostnamePrefix = "netpins-",
+                  bool disableReconnect = false);
 
         void tryReconnect(ON_WIFI_EXECUTION_CALLBACK_SIGNATURE);
 

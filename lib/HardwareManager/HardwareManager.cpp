@@ -6,7 +6,7 @@
 #include <sensorEvents.h>
 
 HardwareManager::HardwareManager() 
-    : semaphore(NULL), commitNeoStipTask(NULL), numOfCreatedStrips(0), dmxOutput(nullptr) {
+    : semaphore(NULL), commitNeoStipTask(NULL), numOfCreatedStrips(0), dmxOutput(nullptr), dmxInput(nullptr) {
     initNeoStipTask();
     ledCommitTask = new LedCommitTask(this, 20);  // 20ms = 50Hz
 }
@@ -50,6 +50,11 @@ HardwareManager::~HardwareManager() {
     // Clean up DMX output
     if (dmxOutput != nullptr) {
         delete dmxOutput;
+    }
+    
+    // Clean up DMX input
+    if (dmxInput != nullptr) {
+        delete dmxInput;
     }
     
     // Clean up semaphore
@@ -174,7 +179,7 @@ std::vector<InitializedThingGroup<ThingGroupType>> HardwareManager::createStripT
     return groups;
 }
 
-void HardwareManager::createThings(Settings& settings, DmxListener* dmxListener, Scheduler* scheduler) {
+void HardwareManager::createThings(Settings& settings, DmxListener* dmxListener, Scheduler* scheduler, std::function<void()> onCommandReceived) {
     switchables.clear();
 
     // PWMS
@@ -241,6 +246,28 @@ void HardwareManager::createThings(Settings& settings, DmxListener* dmxListener,
             Log::errorln("Failed to initialize DMX output");
             delete dmxOutput;
             dmxOutput = nullptr;
+        }
+    }
+
+    // DMX Input
+    if (settings.dmxInput.enabled) {
+        Log::infoln("Creating DMX input on UART%d ...", settings.dmxInput.uartPort);
+        dmxInput = new DmxInput(
+            settings.dmxInput.uartPort,
+            settings.dmxInput.txPin,
+            settings.dmxInput.rxPin,
+            settings.dmxInput.enablePin,
+            settings.dmxInput.universe,
+            dmxListener->getDmxData(),
+            onCommandReceived
+        );
+        if (dmxInput->begin()) {
+            scheduler->addTask(dmxInput);
+            Log::infoln("DMX input initialized successfully for universe %d", settings.dmxInput.universe);
+        } else {
+            Log::errorln("Failed to initialize DMX input");
+            delete dmxInput;
+            dmxInput = nullptr;
         }
     }
 

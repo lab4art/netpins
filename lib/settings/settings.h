@@ -65,7 +65,7 @@ struct DmxCfg {
         return std::to_string(d.channel) + "@" + std::to_string(d.universe);
     }
 
-    uint16_t get0BasedChannel() {
+    uint16_t get0BasedChannel() const {
         if (channel > 512) {
             throw std::invalid_argument("DMX channel must be between 1 and 512");
         }
@@ -575,6 +575,64 @@ struct DmxOutputCfg {
     }
 };
 
+/**
+ * DMX Input Configuration for MAX485
+ * 
+ * Receives DMX data via RS-485 from an external DMX source (like a lighting console).
+ * This provides an alternative to ArtNet for receiving DMX control data.
+ * The received data is mapped to the specified universe and processed by DmxListener.
+ * 
+ * dmx_input:
+ *   enabled: true
+ *   uart_port: 2
+ *   tx_pin: -1  # can be -1 if not used for transmit
+ *   rx_pin: 16  # RX pin for receiving DMX data
+ *   enable_pin: 4  # DE/RE pins on MAX485
+ *   enable_pin: 4  # DE/RE pins on MAX485
+ *   universe: 0  # which universe this input represents
+ */
+struct DmxInputCfg {
+    bool enabled;
+    int uartPort;
+    int txPin;
+    int rxPin;
+    int enablePin;
+    uint16_t universe;
+
+    bool operator==(const DmxInputCfg& other) const {
+        return enabled == other.enabled &&
+            uartPort == other.uartPort &&
+            txPin == other.txPin &&
+            rxPin == other.rxPin &&
+            enablePin == other.enablePin &&
+            universe == other.universe;
+    }
+
+    bool operator!=(const DmxInputCfg& other) const {
+        return !(*this == other);
+    }
+
+    static DmxInputCfg deserialize(JsonObject& json) {
+        DmxInputCfg d;
+        d.enabled = json["enabled"].as<bool>();
+        d.uartPort = json["uart_port"].as<int>();
+        d.txPin = json["tx_pin"].as<int>();
+        d.rxPin = json["rx_pin"].as<int>();
+        d.enablePin = json["enable_pin"].as<int>();
+        d.universe = json["universe"].as<uint16_t>();
+        return d;
+    }
+
+    static void serialize(JsonObject& jsonDmxIn, const DmxInputCfg& d) {
+        jsonDmxIn["enabled"] = d.enabled;
+        jsonDmxIn["uart_port"] = d.uartPort;
+        jsonDmxIn["tx_pin"] = d.txPin;
+        jsonDmxIn["rx_pin"] = d.rxPin;
+        jsonDmxIn["enable_pin"] = d.enablePin;
+        jsonDmxIn["universe"] = d.universe;
+    }
+};
+
 struct Settings {
     u_int8_t dmxChOffset;
     std::string wifiSsid;
@@ -600,12 +658,14 @@ struct Settings {
     bool lightsTest;
     std::uint16_t maxIdle; // max idle time in min, 0 means no sleep
     unsigned int rebootAfterWifiFailed = 15; // reboot after 15 failed wifi connections, 0 means no reboot
-    bool disableWifiPowerSave;
+    bool disableWifiPowerSave = false;
+    bool disableWifiReconnect = false; // if true, only try to connect once at startup
     bool disableArtnet = false;
-    int logLevel = 2; // default to INFO level (-1=SILENT, 0=ERROR, 1=WARNING, 2=INFO, 3=TRACE)
+    int logLevel = -1; // default to not apply (-1=don't apply, 0=SILENT, 1=ERROR, 2=WARNING, 3=INFO, 4=TRACE)
 
     MqttCfg mqtt;
     DmxOutputCfg dmxOutput;
+    DmxInputCfg dmxInput;
 
     bool operator==(const Settings& other) const {
         return
@@ -619,10 +679,12 @@ struct Settings {
             maxIdle == other.maxIdle &&
             rebootAfterWifiFailed == other.rebootAfterWifiFailed &&
             disableWifiPowerSave == other.disableWifiPowerSave &&
+            disableWifiReconnect == other.disableWifiReconnect &&
             disableArtnet == other.disableArtnet &&
             logLevel == other.logLevel &&
             mqtt == other.mqtt &&
             dmxOutput == other.dmxOutput &&
+            dmxInput == other.dmxInput &&
 
             pwms == other.pwms &&
             rgbwStrips == other.rgbwStrips &&
@@ -659,6 +721,11 @@ struct Settings {
         } else {
             s.disableWifiPowerSave = false;
         }
+        if (json.containsKey("disable_wifi_reconnect")) {
+            s.disableWifiReconnect = json["disable_wifi_reconnect"].as<bool>();
+        } else {
+            s.disableWifiReconnect = false;
+        }
         if (json.containsKey("disable_artnet")) {
             s.disableArtnet = json["disable_artnet"].as<bool>();
         } else {
@@ -667,7 +734,7 @@ struct Settings {
         if (json.containsKey("log_level")) {
             s.logLevel = json["log_level"].as<int>();
         } else {
-            s.logLevel = 2; // default to INFO
+            s.logLevel = -1; // default to not apply
         }
         if (json.containsKey("mqtt")) {
             JsonObject jsonMqtt = json["mqtt"].as<JsonObject>();
@@ -680,6 +747,12 @@ struct Settings {
             s.dmxOutput = DmxOutputCfg::deserialize(jsonDmxOut);
         } else {
             s.dmxOutput = DmxOutputCfg{false, 1, -1, -1, -1, 0};
+        }
+        if (json.containsKey("dmx_input")) {
+            JsonObject jsonDmxIn = json["dmx_input"].as<JsonObject>();
+            s.dmxInput = DmxInputCfg::deserialize(jsonDmxIn);
+        } else {
+            s.dmxInput = DmxInputCfg{false, 2, -1, -1, -1, 0};
         }
 
         // actuators
@@ -759,6 +832,7 @@ struct Settings {
         json["max_idle"] = maxIdle;
         json["reboot_after_wifi_failed"] = rebootAfterWifiFailed;
         json["disable_wifi_power_save"] = disableWifiPowerSave;
+        json["disable_wifi_reconnect"] = disableWifiReconnect;
         json["disable_artnet"] = disableArtnet;
         json["log_level"] = logLevel;
 
@@ -770,6 +844,11 @@ struct Settings {
         if (dmxOutput.enabled) {
             JsonObject jsonDmxOut = json["dmx_output"].to<JsonObject>();
             DmxOutputCfg::serialize(jsonDmxOut, dmxOutput);
+        }
+
+        if (dmxInput.enabled) {
+            JsonObject jsonDmxIn = json["dmx_input"].to<JsonObject>();
+            DmxInputCfg::serialize(jsonDmxIn, dmxInput);
         }
 
         // actuators

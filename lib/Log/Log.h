@@ -9,11 +9,11 @@
  * - Timestamp and log level prefixes
  * 
  * Log Levels:
- *   -1 - SILENT:  No logging output (can be set at runtime)
- *   0 - ERROR:   Critical errors only
- *   1 - WARNING: Errors and warnings
- *   2 - INFO:    Errors, warnings, and informational messages
- *   3 - TRACE:   Errors, warnings, info, and trace/debug messages (most verbose)
+ *   0 - SILENT:  No logging output (can be set at runtime)
+ *   1 - ERROR:   Critical errors only
+ *   2 - WARNING: Errors and warnings
+ *   3 - INFO:    Errors, warnings, and informational messages
+ *   4 - TRACE:   Errors, warnings, info, and trace/debug messages (most verbose)
  * 
  * Usage:
  *   Log::errorln("Failed to connect: %s", error);
@@ -43,11 +43,11 @@
 #endif
 
 // Log level definitions
-#define LOG_LEVEL_SILENT -1
-#define LOG_LEVEL_ERROR 0
-#define LOG_LEVEL_WARNING 1
-#define LOG_LEVEL_INFO 2
-#define LOG_LEVEL_TRACE 3
+#define LOG_LEVEL_SILENT 0
+#define LOG_LEVEL_ERROR 1
+#define LOG_LEVEL_WARNING 2
+#define LOG_LEVEL_INFO 3
+#define LOG_LEVEL_TRACE 4
 
 class Log {
 private:
