@@ -239,6 +239,7 @@ void HardwareManager::createThings(Settings* settings, DmxListener* dmxListener,
             settings->dmxOutput.universe,
             dmxListener->getDmxData()
         );
+        dmxListener->addUniverse(settings->dmxOutput.universe);
         if (dmxOutput->begin()) {
             scheduler->addTask(dmxOutput);
             Log::infoln("DMX output initialized successfully for universe %d", settings->dmxOutput.universe);
@@ -263,6 +264,7 @@ void HardwareManager::createThings(Settings* settings, DmxListener* dmxListener,
             dmxListener->getDmxData(),
             onCommandReceived
         );
+        dmxListener->addUniverse(settings->dmxInput.universe);
         if (dmxInput->begin()) {
             scheduler->addTask(dmxInput);
             Log::infoln("DMX input initialized successfully for universe %d", settings->dmxInput.universe);

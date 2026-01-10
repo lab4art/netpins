@@ -100,7 +100,24 @@ class DmxListener : public ScheduledTask {
         void addMapping(Thing* thing, DmxCfg dmxCfg) {
             Log::infoln("Adding mapping for thing '%s' on universe %d channel %d", thing->getName().c_str(), dmxCfg.universe, dmxCfg.channel);
             dmxMappings.push_back(new DmxMapping(thing, dmxCfg));
-            dmxUniverses.insert(dmxCfg.universe);
+            addUniverse(dmxCfg.universe);
+        }
+
+        /**
+         * Add a universe to the list of universes we listen to.
+         * This ensures the DMX data map is properly initialized for this universe.
+         * 
+         * @param universe The universe number to add
+         */
+        void addUniverse(uint16_t universe) {
+            if (dmxUniverses.find(universe) == dmxUniverses.end()) {
+                Log::infoln("Adding universe %d to DmxListener", universe);
+                dmxUniverses.insert(universe);
+                // Initialize the dmx data for this universe if not already present
+                if (dmxData.find(universe) == dmxData.end()) {
+                    dmxData[universe] = std::array<uint8_t, 512>{};
+                }
+            }
         }
 
         void removeMappingForThing(std::string thingName) {

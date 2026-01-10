@@ -67,6 +67,11 @@ void DmxOutput::callback() {
     if (dmxDataRef != nullptr) {
         auto it = dmxDataRef->find(outputUniverse);
         if (it != dmxDataRef->end()) {
+            // log the first 10 channels every  for debugging
+            // Log::infoln("DMX Output: Transmitting universe %d data (first 10 channels):", outputUniverse);
+            // for (int i = 0; i < 10; ++i) {
+            //     Log::infoln("  Channel %d: %d", i + 1, it->second[i]);
+            // }
             dmx_write(dmxPort, it->second.data(), DMX_PACKET_SIZE);
             dmx_send(dmxPort);
             dmx_wait_sent(dmxPort, DMX_TIMEOUT_TICK);
