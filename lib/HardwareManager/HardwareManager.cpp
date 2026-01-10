@@ -3,7 +3,7 @@
 #include <Log.h>
 #include <pluginFactory.h>
 #include <Arduino.h>
-#include <sensorEvents.h>
+#include <ConfigurablePipelineManager.h>
 
 HardwareManager::HardwareManager() 
     : semaphore(NULL), commitNeoStipTask(NULL), numOfCreatedStrips(0), dmxOutput(nullptr), dmxInput(nullptr) {
@@ -282,28 +282,43 @@ void HardwareManager::createThings(Settings* settings, DmxListener* dmxListener,
     scheduler->addTask(ledCommitTask);
 }
 
-void HardwareManager::initializeSensors(Settings* settings, SensorEvents* sensorEvents) {
+void HardwareManager::initializeSensors(Settings* settings, ConfigurablePipelineManager* pipelineManager) {
+    if (!pipelineManager) {
+        Log::warning("Pipeline manager is null, sensors will not be processed");
+        return;
+    }
+    
     Log::infoln("Creating Hum/Temp sensor ...");
-    for (auto& humTempCfg : settings->humTemps) {
-        auto humTempSensor = new HumTempSensor(humTempCfg.pin, humTempCfg.readMs);
-        humTempSensors.push_back(humTempSensor);
-    }
+    for (size_t i = 0; i < settings->humTemps.size(); i++) {
+        auto& humTempCfg = settings->humTemps[i];
+        std::string tempSensorName = "temperature_" + std::to_string(i + 1);
+        std::string humSensorName = "humidity_" + std::to_string(i + 1);
+        
+    auto humTempSensor = new HumTempSensor(humTempCfg.pin, humTempCfg.readMs);
+    humTempSensor->addOnChangeListener([pipelineManager, tempSensorName, humSensorName](HumTemp data) {
+        pipelineManager->processSensorValue(tempSensorName, data.temperature);
+        pipelineManager->processSensorValue(humSensorName, data.humidity);
+    });
+    humTempSensors.push_back(humTempSensor);
+}
 
-    Log::infoln("Creating touch sensors ...");
-    for (auto& touch : settings->touchSensors) {
-        auto touchSensor = new TouchSensor(touch.pin, 200, touch.threshold);
-        std::string sensorName = touch.sensorName;
-        touchSensor->addOnChangeListener([sensorEvents, sensorName](bool touched) {
-            sensorEvents->publish(sensorName, touched ? 1 : 0, false);
-        });
-        touchSensors.push_back(touchSensor);
-    }
+Log::infoln("Creating touch sensors ...");
+for (auto& touch : settings->touchSensors) {
+    auto touchSensor = new TouchSensor(touch.pin, 200, touch.threshold);
+    std::string sensorName = touch.sensorName;
+    touchSensor->addOnChangeListener([pipelineManager, sensorName](bool touched) {
+        float value = touched ? 1.0f : 0.0f;
+        pipelineManager->processSensorValue(sensorName, value);
+    });
+    touchSensors.push_back(touchSensor);
+}
 
     Log::infoln("Creating digital read sensors ...");
     for (auto& dreadCfg : settings->digitalReadSensors) {
         auto digitalReadSensor = new DigitalReadSensor(dreadCfg.pin, dreadCfg.readMs, INPUT_PULLUP);
-        digitalReadSensor->addOnChangeListener([sensorEvents, dreadCfg](bool value) {
-            sensorEvents->publish(dreadCfg.sensorName, value ? 1 : 0, true);
+        digitalReadSensor->addOnChangeListener([pipelineManager, dreadCfg](bool value) {
+            float floatValue = value ? 1.0f : 0.0f;
+            pipelineManager->processSensorValue(dreadCfg.sensorName, floatValue);
         });
 
         digitalReadSensor->addOnChangeListener([](bool value) {
@@ -316,8 +331,9 @@ void HardwareManager::initializeSensors(Settings* settings, SensorEvents* sensor
     Log::infoln("Creating analog read sensors ...");
     for (auto& areadCfg : settings->analogReadSensors) {
         auto analogReadSensor = new AnalogReadSensor(areadCfg.pin, areadCfg.readMs);
-        analogReadSensor->addOnChangeListener([sensorEvents, areadCfg](uint16_t value) {
-            sensorEvents->publish(areadCfg.sensorName, value, true);
+        analogReadSensor->addOnChangeListener([pipelineManager, areadCfg](uint16_t value) {
+            float floatValue = static_cast<float>(value);
+            pipelineManager->processSensorValue(areadCfg.sensorName, floatValue);
         });
         Log::infoln("Analog read sensor created. Pin: %d, readMs: %d", areadCfg.pin, areadCfg.readMs);
         analogReadSensors[areadCfg.pin] = analogReadSensor;

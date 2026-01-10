@@ -30,10 +30,10 @@
 #include <Things.h>
 #include <sensors.h>
 #include <mqttUtils.h>
-#include <sensorEvents.h>
 #include <pluginFactory.h>
 #include <scheduler.h>
 #include <SystemCommandHandler.h>
+#include <ConfigurablePipelineManager.h>
 
 #ifndef GIT_VERSION
 #define GIT_VERSION "unknown"
@@ -47,9 +47,9 @@ SystemManager* systemManager;
 SettingsManager<Settings>* settingsManager;
 Settings* settings;
 
-SensorEvents* sensorEvents;
 WebAdmin* webAdmin;
 SystemCommandHandler* systemCommandHandler;
+ConfigurablePipelineManager* pipelineManager = nullptr;
 
 Scheduler* scheduler = new Scheduler();
 
@@ -157,16 +157,19 @@ void setup() {
     networkManager->initializeMqtt(String(hostName.c_str()), [](char* topic, byte* payload, unsigned int length) {
         Log::infoln("MQTT message received: %s, %s", topic, payload);
     });
-    
-    sensorEvents = new SensorEvents(
-        networkManager->getMqtt(),
-        std::string("np/") + hostName + "/s/",
-        settings->sensorMappings,
-        dmxListener->getDmxData()
-    );
 
-    // Initialize sensors after sensorEvents is created
-    hardwareManager->initializeSensors(settings, sensorEvents);
+    // Initialize pipeline manager for sensor processing with MQTT support
+    pipelineManager = new ConfigurablePipelineManager(
+        dmxListener->getDmxData(),
+        *settings,
+        networkManager->getMqtt()->getClient(),
+        std::string("np/") + hostName + "/s/"
+    );
+    pipelineManager->initialize();
+    Log::infoln("Pipeline manager initialized with %d pipelines", settings->sensorPipelines.size());
+
+    // Initialize sensors with pipelineManager
+    hardwareManager->initializeSensors(settings, pipelineManager);
 
     // Register tasks with scheduler
     scheduler->addTask(dmxListener);

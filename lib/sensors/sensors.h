@@ -74,24 +74,20 @@ class SensorBase {
 
         /*
          * Read the sensor and set the value.
-         * Return true if the value has changed, false otherwise.
-        */
-        virtual bool doRead() = 0;
+     * Always triggers listeners - change detection should be handled by pipeline processors.
+     * Returns true for compatibility.
+    */
+    virtual bool doRead() = 0;
 
-        bool setValue(VALUE_TYPE value) {
-            if (this->value == value) {
-                return false;
-            } else {
-                this->value = value;
-                for (auto& listener : onChangeListeners) {
-                    //Log.traceln("Invoking on change with value: %d", value);
-                    listener(value);
-                }
-                return true;
-            }
+    bool setValue(VALUE_TYPE value) {
+        this->value = value;
+        for (auto& listener : onChangeListeners) {
+            listener(value);
         }
+        return true;
+    }
 
-    public:
+public:
         SensorBase(uint8_t pin, unsigned long pullMillis): 
                 pin(pin),
                 pullMillis(pullMillis) {

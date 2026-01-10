@@ -17,7 +17,7 @@
 #include <freertos/semphr.h>
 
 // Forward declaration
-class SensorEvents;
+class ConfigurablePipelineManager;
 class HardwareManager;
 class LedCommitTask;
 
@@ -77,7 +77,7 @@ public:
     
     // Initialization
     void createThings(Settings* settings, DmxListener* dmxListener, Scheduler* scheduler, std::function<void()> onCommandReceived = nullptr);
-    void initializeSensors(Settings* settings, SensorEvents* sensorEvents);
+    void initializeSensors(Settings* settings, ConfigurablePipelineManager* pipelineManager);
     
     // Commit changes to hardware
     void commitNeoStip();

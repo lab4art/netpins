@@ -75,38 +75,6 @@ struct DmxCfg {
 };
 
 /**
- * value_range: # map read value range to dmx value 0-255
- *   from: 0
- *   to: 1023
- */
-struct ValueRange {
-    int from;
-    int to;
-
-    bool operator==(const ValueRange& other) const {
-        return from == other.from &&
-            to == other.to;
-    }
-
-    bool operator!=(const ValueRange& other) const {
-        return !(*this == other);
-    }
-
-    static ValueRange deserialize(JsonObject& json) {
-        ValueRange vr;
-        vr.from = json["from"].as<int>();
-        vr.to = json["to"].as<int>();
-        return vr;
-    }
-
-    static void serialize(JsonObject& jsonVr, const ValueRange& vr) {
-        jsonVr["from"] = vr.from;
-        jsonVr["to"] = vr.to;
-    }
-};
-
-
-/**
  * - pin: 13
  * name: pwm-13
  * dmx: 0@1 # channel@universe
@@ -374,74 +342,18 @@ struct TouchSensorCfg {
     };
 };
 
-struct SensorMappingCfg {
-    std::string sensorName;
-    DmxCfg dmxCfg;
-    ValueRange valueRange;
-
-    bool operator==(const SensorMappingCfg& other) const {
-        return sensorName == other.sensorName &&
-            dmxCfg == other.dmxCfg &&
-            valueRange == other.valueRange;
-    };
-
-    bool operator!=(const SensorMappingCfg& other) const {
-        return !(*this == other);
-    };
-
-    static SensorMappingCfg deserialize(JsonObject& json) {
-        SensorMappingCfg l;
-        l.sensorName = json["sensor"].as<std::string>();
-        if (json.containsKey("dmx")) {
-            l.dmxCfg = DmxCfg::deserialize(json["dmx"].as<std::string>());
-        }
-        if (json.containsKey("value_range")) {
-            JsonObject jsonVr = json["value_range"].as<JsonObject>();
-            l.valueRange = ValueRange::deserialize(jsonVr);
-        }
-        return l;
-    };
-
-    static void serialize(JsonObject& json, const SensorMappingCfg& l) {
-        json["sensor"] = l.sensorName;
-        json["dmx"] = DmxCfg::serialize(l.dmxCfg);
-        JsonObject jsonVr = json["value_range"].to<JsonObject>();
-        ValueRange::serialize(jsonVr, l.valueRange);
-    };
-};
-
 /**
- * Sensor event processor configuration
- * processor:
- *   name: averaging  # or: median, peak, ema, threshold, change, gesture, passthrough
- *   max_events: 10
- *   max_time_ms: 1000
- *   min_events: 1
- *   apply_value_mapping: true
- *   params:  # Optional processor-specific parameters
- *     threshold: 500      # For peak/threshold processors
- *     alpha: 0.3          # For EMA processor
- *     delta: 50           # For change detector
- *     sequence:           # For gesture processor
- *       - sensor1
- *       - sensor2
+ * Pipeline processor configuration (used within SensorPipelineCfg)
+ * Internal structure for individual processors in a pipeline
  */
 struct SensorProcessorCfg {
     std::string name;  // Processor name: averaging, median, peak, ema, threshold, change, gesture, passthrough
-    size_t maxEvents = 10;
-    unsigned long maxTimeMs = 1000;
-    size_t minEvents = 1;
-    bool applyValueMapping = false;
     
     // Processor-specific parameters (stored as JSON)
     std::map<std::string, std::string> params;
 
     bool operator==(const SensorProcessorCfg& other) const {
         return name == other.name &&
-            maxEvents == other.maxEvents &&
-            maxTimeMs == other.maxTimeMs &&
-            minEvents == other.minEvents &&
-            applyValueMapping == other.applyValueMapping &&
             params == other.params;
     };
 
@@ -452,18 +364,6 @@ struct SensorProcessorCfg {
     static SensorProcessorCfg deserialize(JsonObject& json) {
         SensorProcessorCfg p;
         p.name = json["name"].as<std::string>();
-        if (json.containsKey("max_events")) {
-            p.maxEvents = json["max_events"].as<size_t>();
-        }
-        if (json.containsKey("max_time_ms")) {
-            p.maxTimeMs = json["max_time_ms"].as<unsigned long>();
-        }
-        if (json.containsKey("min_events")) {
-            p.minEvents = json["min_events"].as<size_t>();
-        }
-        if (json.containsKey("apply_value_mapping")) {
-            p.applyValueMapping = json["apply_value_mapping"].as<bool>();
-        }
         if (json.containsKey("params")) {
             JsonObject paramsObj = json["params"].as<JsonObject>();
             for (JsonPair kv : paramsObj) {
@@ -487,10 +387,6 @@ struct SensorProcessorCfg {
 
     static void serialize(JsonObject& json, const SensorProcessorCfg& p) {
         json["name"] = p.name;
-        json["max_events"] = p.maxEvents;
-        json["max_time_ms"] = p.maxTimeMs;
-        json["min_events"] = p.minEvents;
-        json["apply_value_mapping"] = p.applyValueMapping;
         if (!p.params.empty()) {
             JsonObject paramsObj = json["params"].to<JsonObject>();
             for (auto it = p.params.begin(); it != p.params.end(); ++it) {
@@ -510,6 +406,139 @@ struct SensorProcessorCfg {
                     }
                 }
             }
+        }
+    };
+};
+
+/**
+ * Pipeline-based sensor processor configuration
+ * 
+ * Example YAML:
+ * sensor_pipelines:
+ *   - sensor: temperature_1
+ *     pipeline:
+ *       - type: range_mapping
+ *         input_min: -40.0
+ *         input_max: 100.0
+ *         output_min: 0.0
+ *         output_max: 255.0
+ *       - type: debounce
+ *         duration_ms: 500
+ *       - type: moving_average
+ *         window_size: 5
+ *     dmx: 10@1  # channel 10, universe 1 (optional)
+ *     mqtt: temperature  # MQTT topic suffix (optional, full topic: prefix + suffix)
+ */
+struct SensorPipelineCfg {
+    std::string sensorName;
+    std::vector<SensorProcessorCfg> processors;
+    DmxCfg dmxCfg = {0, 0};
+    std::string mqttTopic = "";  // MQTT topic suffix (empty = don't publish)
+
+    bool operator==(const SensorPipelineCfg& other) const {
+        return sensorName == other.sensorName &&
+            processors == other.processors &&
+            dmxCfg == other.dmxCfg &&
+            mqttTopic == other.mqttTopic;
+    };
+
+    bool operator!=(const SensorPipelineCfg& other) const {
+        return !(*this == other);
+    };
+
+    static SensorPipelineCfg deserialize(JsonObject& json) {
+        SensorPipelineCfg cfg;
+        cfg.sensorName = json["sensor"].as<std::string>();
+        
+        // Parse pipeline processors
+        if (json.containsKey("pipeline")) {
+            JsonArray pipelineArray = json["pipeline"].as<JsonArray>();
+            for (JsonVariant v : pipelineArray) {
+                JsonObject procJson = v.as<JsonObject>();
+                SensorProcessorCfg proc;
+                
+                // The 'type' field maps to the processor name
+                if (procJson.containsKey("type")) {
+                    proc.name = procJson["type"].as<std::string>();
+                }
+                
+                // All other fields go into params
+                for (JsonPair kv : procJson) {
+                    std::string key(kv.key().c_str());
+                    if (key != "type") {
+                        if (kv.value().is<int>()) {
+                            proc.params[key] = std::to_string(kv.value().as<int>());
+                        } else if (kv.value().is<float>()) {
+                            proc.params[key] = std::to_string(kv.value().as<float>());
+                        } else if (kv.value().is<bool>()) {
+                            proc.params[key] = kv.value().as<bool>() ? "true" : "false";
+                        } else if (kv.value().is<JsonArray>() || kv.value().is<JsonObject>()) {
+                            String jsonStr;
+                            serializeJson(kv.value(), jsonStr);
+                            proc.params[key] = jsonStr.c_str();
+                        } else {
+                            proc.params[key] = kv.value().as<std::string>();
+                        }
+                    }
+                }
+                
+                cfg.processors.push_back(proc);
+            }
+        }
+        
+        // Parse DMX configuration
+        if (json.containsKey("dmx")) {
+            cfg.dmxCfg = DmxCfg::deserialize(json["dmx"].as<std::string>());
+        }
+        
+        // Parse MQTT topic suffix
+        if (json.containsKey("mqtt")) {
+            cfg.mqttTopic = json["mqtt"].as<std::string>();
+        }
+        
+        return cfg;
+    };
+
+    static void serialize(JsonObject& json, const SensorPipelineCfg& cfg) {
+        json["sensor"] = cfg.sensorName;
+        
+        // Serialize pipeline
+        if (!cfg.processors.empty()) {
+            JsonArray pipelineArray = json["pipeline"].to<JsonArray>();
+            for (const auto& proc : cfg.processors) {
+            JsonObject procJson = pipelineArray.add<JsonObject>();
+            procJson["type"] = proc.name;
+            
+            // Serialize all params
+            for (const auto& param : proc.params) {
+                const std::string& key = param.first;
+                const std::string& value = param.second;
+                
+                // Try to parse as number
+                char* endPtr;
+                int intVal = strtol(value.c_str(), &endPtr, 10);
+                if (*endPtr == '\0') {
+                    procJson[key] = intVal;
+                } else {
+                    float floatVal = strtof(value.c_str(), &endPtr);
+                    if (*endPtr == '\0') {
+                        procJson[key] = floatVal;
+                    } else if (value == "true" || value == "false") {
+                        procJson[key] = (value == "true");
+                    } else {
+                        procJson[key] = value;
+                    }
+                }
+            }
+            }
+        }
+        
+        // Serialize DMX
+        json["dmx"] = DmxCfg::serialize(cfg.dmxCfg);
+        
+        // Serialize MQTT topic
+        if (!cfg.mqttTopic.empty()) {
+            json["mqtt"] = cfg.mqttTopic;
         }
     };
 };
@@ -626,8 +655,8 @@ struct PluginCfg {
 /**
  * DMX Output Configuration for MAX485
  * 
- * Transmits DMX data (from sensor mappings) via RS-485 to control external DMX devices.
- * Sensors are mapped to DMX channels using sensor_mappings, and this output
+ * Transmits DMX data via RS-485 to control external DMX devices.
+ * Sensors are mapped to DMX channels using sensor_pipelines, and this output
  * physically transmits the specified universe's data.
  * 
  * dmx_output:
@@ -636,7 +665,7 @@ struct PluginCfg {
  *   tx_pin: 17
  *   rx_pin: 16  # can be -1 if not used
  *   enable_pin: 4  # DE/RE pins on MAX485
- *   universe: 0  # which universe to transmit (matches sensor_mappings universe)
+ *   universe: 0  # which universe to transmit (matches sensor_pipelines universe)
  */
 struct DmxOutputCfg {
     bool enabled;
@@ -756,8 +785,7 @@ struct Settings {
     std::vector<DigitalReadSensorCfg> digitalReadSensors;
     std::vector<AnalogReadSensorCfg> analogReadSensors;
     
-    std::vector<SensorMappingCfg> sensorMappings; // sensor to dmx local mappings
-    SensorProcessorCfg sensorProcessor;  // Optional: sensor event processor config
+    std::vector<SensorPipelineCfg> sensorPipelines; // Pipeline-based sensor processing
 
     std::vector<PluginCfg> plugins;
 
@@ -802,8 +830,7 @@ struct Settings {
             digitalReadSensors == other.digitalReadSensors &&
             analogReadSensors == other.analogReadSensors &&
 
-            sensorMappings == other.sensorMappings &&
-            sensorProcessor == other.sensorProcessor &&
+            sensorPipelines == other.sensorPipelines &&
 
             plugins == other.plugins;
             
@@ -913,19 +940,16 @@ struct Settings {
             s.touchSensors.push_back(TouchSensorCfg::deserialize(jsonTouchSensor));
         }
 
-        // sensor mappings
-        JsonArray sensorMappingsArray = json["sensor_mappings"].as<JsonArray>();
-        for (JsonVariant v : sensorMappingsArray) {
-            JsonObject jsonSensorMapping = v.as<JsonObject>();
-            s.sensorMappings.push_back(SensorMappingCfg::deserialize(jsonSensorMapping));
+        // sensor pipelines
+        if (json.containsKey("sensor_pipelines")) {
+            JsonArray pipelinesArray = json["sensor_pipelines"].as<JsonArray>();
+            for (JsonVariant v : pipelinesArray) {
+                JsonObject jsonPipeline = v.as<JsonObject>();
+                s.sensorPipelines.push_back(SensorPipelineCfg::deserialize(jsonPipeline));
+            }
         }
 
-        // sensor processor
-        if (json.containsKey("sensor_processor")) {
-            JsonObject jsonProcessor = json["sensor_processor"].as<JsonObject>();
-            s.sensorProcessor = SensorProcessorCfg::deserialize(jsonProcessor);
-        }
-
+        // 
         // plugins
         JsonArray pluginsArray = json["plugins"].as<JsonArray>();
         for (JsonVariant v : pluginsArray) {
@@ -1031,19 +1055,13 @@ struct Settings {
             }
         }
 
-        // sensor mappings
-        if (sensorMappings.size() > 0) {
-            JsonArray sensorMappings = json["sensor_mappings"].to<JsonArray>();
-            for (auto sensorMapping : this->sensorMappings) {
-                JsonObject jsonSensorMapping = sensorMappings.add<JsonObject>();
-                SensorMappingCfg::serialize(jsonSensorMapping, sensorMapping);
+        // sensor pipelines
+        if (sensorPipelines.size() > 0) {
+            JsonArray pipelinesArray = json["sensor_pipelines"].to<JsonArray>();
+            for (auto& pipeline : this->sensorPipelines) {
+                JsonObject jsonPipeline = pipelinesArray.add<JsonObject>();
+                SensorPipelineCfg::serialize(jsonPipeline, pipeline);
             }
-        }
-
-        // sensor processor
-        if (!sensorProcessor.name.empty()) {
-            JsonObject jsonProcessor = json["sensor_processor"].to<JsonObject>();
-            SensorProcessorCfg::serialize(jsonProcessor, sensorProcessor);
         }
 
         Log::info((std::string("Serializing ") + std::to_string(plugins.size()) + " plugins").c_str());

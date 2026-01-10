@@ -81,6 +81,10 @@ class MqttUtils {
                 mqttClient->publish(topic, payload);
             }
         }
+        
+        PubSubClient* getClient() {
+            return mqttClient;
+        }
 };
 
 // class MqttLogTarget : public Print {
