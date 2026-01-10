@@ -12,7 +12,7 @@
  * DmxInput handles DMX reception using MAX485 (RS-485 transceiver)
  * 
  * This class receives DMX512 data from an external DMX source (like a lighting console)
- * and feeds it into the DmxListener for processing. It provides an alternative to
+ * and feeds it into the DmxManager for processing. It provides an alternative to
  * ArtNet input for receiving DMX data directly via wired RS-485 connection.
  * 
  * Hardware Requirements:

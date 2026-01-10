@@ -5,14 +5,14 @@
 #include <webadmin.h>
 #include <settings.h>
 #include <SystemManager.h>
-#include <DmxListener.h>
+#include <DmxManager.h>
 
 class SystemCommandHandler {
 public:
     SystemCommandHandler(
         SettingsManager<Settings>* settingsManager,
         SystemManager* systemManager,
-        DmxListener* dmxListener
+        DmxManager* dmxManager
     );
 
     WebAdmin::CommandResult handleCommand(JsonVariant &jsonVariant);
@@ -20,7 +20,7 @@ public:
 private:
     SettingsManager<Settings>* settingsManager;
     SystemManager* systemManager;
-    DmxListener* dmxListener;
+    DmxManager* dmxManager;
 };
 
 #endif // SYSTEM_COMMAND_HANDLER_H

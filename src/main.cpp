@@ -12,7 +12,7 @@
 #include <Log.h>
 #include <HardwareManager.h>
 #include <NetworkManager.h>
-#include <DmxListener.h>
+#include <DmxManager.h>
 #include <SystemManager.h>
 #include <nvs.h>
 #include <nvs_flash.h>
@@ -24,7 +24,6 @@
 #include <settings.h>
 #include "heartbeatBroadcast.h"
 #include <GeneralUtils.h>
-#include <DmxListener.h>
 #include <webadmin.h>
 #include <factoryReset.h>
 #include <Things.h>
@@ -41,7 +40,7 @@
 
 HardwareManager* hardwareManager;
 NetworkManager* networkManager;
-DmxListener* dmxListener;
+DmxManager* dmxManager;
 SystemManager* systemManager;
 
 SettingsManager<Settings>* settingsManager;
@@ -79,12 +78,12 @@ void setup() {
     // Allocate settings on heap to avoid stack lifetime issues
     settings = new Settings(settingsManager->getSettings());
 
-    dmxListener = new DmxListener(settings, [](){
+    dmxManager = new DmxManager(settings, [](){
         systemManager->markCommandReceived();
     });
 
     try {
-        hardwareManager->createThings(settings, dmxListener, scheduler, [](){
+        hardwareManager->createThings(settings, dmxManager, scheduler, [](){
             systemManager->markCommandReceived();
         });
         Log::info("Things created.");
@@ -101,13 +100,13 @@ void setup() {
     
     networkManager->initializeArtnet(
         [](const uint8_t *data, uint16_t size, const ArtDmxMetadata &metadata, const ArtNetRemoteInfo &remote) {
-            dmxListener->onDmxFrame(data, size, metadata, remote);
+            dmxManager->onDmxFrame(data, size, metadata, remote);
         },
         WiFi.getHostname(),
-        dmxListener->getListeningUniverses()
+        dmxManager->getListeningUniverses()
     );
 
-    systemCommandHandler = new SystemCommandHandler(settingsManager, systemManager, dmxListener);
+    systemCommandHandler = new SystemCommandHandler(settingsManager, systemManager, dmxManager);
 
     if (_ENABLE_WEBSERVER) {
         Log::infoln("Starting web server ...");
@@ -134,8 +133,8 @@ void setup() {
         }
 
         std::map<uint16_t /*universe*/, std::array<uint8_t, 512>> storedDmx;
-        dmxListener->initializeDmxData(storedDmx);
-        dmxListener->restoreDmxData(storedDmx);
+        dmxManager->initializeDmxData(storedDmx);
+        dmxManager->restoreDmxData(storedDmx);
         // convert dmxData to string
         std::string dmxDataStr = "";
         for (auto& universeData : storedDmx) {
@@ -160,7 +159,7 @@ void setup() {
 
     // Initialize pipeline manager for sensor processing with MQTT support
     pipelineManager = new ConfigurablePipelineManager(
-        dmxListener->getDmxData(),
+        dmxManager->getDmxData(),
         *settings,
         networkManager->getMqtt()->getClient(),
         std::string("np/") + hostName + "/s/"
@@ -172,7 +171,7 @@ void setup() {
     hardwareManager->initializeSensors(settings, pipelineManager);
 
     // Register tasks with scheduler
-    scheduler->addTask(dmxListener);
+    scheduler->addTask(dmxManager);
 
     Log::infoln("Running ...");
 }

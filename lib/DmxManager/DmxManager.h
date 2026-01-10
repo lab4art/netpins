@@ -66,12 +66,12 @@ class UniverseStorage {
 };
 
 /**
- * Each controller has one DmxListener instance to handle DMX data.
+ * Each controller has one DmxManager instance to handle DMX data.
  * 
- * Dmx listener controls things, which are simple leds, pxiels on led stipes or group of pixels on led stripe.
- * Things has different number of channles.
+ * DmxManager controls things, which are simple leds, pixels on led strips or group of pixels on led strip.
+ * Things has different number of channels.
  */
-class DmxListener : public ScheduledTask {
+class DmxManager : public ScheduledTask {
     private:
         int dmxOffset; // dmx offset where this listener starts listening, 1 based (1-512)
         std::vector<DmxMapping*> dmxMappings;
@@ -85,7 +85,7 @@ class DmxListener : public ScheduledTask {
         std::function<void()> onCommandReceived;
 
     public:
-        DmxListener(Settings* settings, std::function<void()> onCommandReceived)
+        DmxManager(Settings* settings, std::function<void()> onCommandReceived)
             : ScheduledTask(20, "DmxProcess"),
               dmxOffset(settings->dmxChOffset),
               onCommandReceived(onCommandReceived) {
@@ -93,7 +93,7 @@ class DmxListener : public ScheduledTask {
             restoreDmxData(dmxData);
         }
 
-        ~DmxListener() {
+        ~DmxManager() {
             clearMappings();
         }
 
@@ -111,7 +111,7 @@ class DmxListener : public ScheduledTask {
          */
         void addUniverse(uint16_t universe) {
             if (dmxUniverses.find(universe) == dmxUniverses.end()) {
-                Log::infoln("Adding universe %d to DmxListener", universe);
+                Log::infoln("Adding universe %d to DmxManager", universe);
                 dmxUniverses.insert(universe);
                 // Initialize the dmx data for this universe if not already present
                 if (dmxData.find(universe) == dmxData.end()) {

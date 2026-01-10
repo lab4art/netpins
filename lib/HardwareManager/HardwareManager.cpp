@@ -179,7 +179,7 @@ std::vector<InitializedThingGroup<ThingGroupType>> HardwareManager::createStripT
     return groups;
 }
 
-void HardwareManager::createThings(Settings* settings, DmxListener* dmxListener, Scheduler* scheduler, std::function<void()> onCommandReceived) {
+void HardwareManager::createThings(Settings* settings, DmxManager* dmxManager, Scheduler* scheduler, std::function<void()> onCommandReceived) {
     switchables.clear();
 
     // PWMS
@@ -189,7 +189,7 @@ void HardwareManager::createThings(Settings* settings, DmxListener* dmxListener,
         for (auto& pwmCfg : settings->pwms) {
             // initialize pwm Things
             auto pwmThing = new PwmThing(pwmCfg.pin, pwmCfg.name);
-            dmxListener->addMapping(pwmThing, pwmCfg.dmxCfg);
+            dmxManager->addMapping(pwmThing, pwmCfg.dmxCfg);
             switchables.push_back(pwmThing);
             pwms.push_back(pwmThing);
         }
@@ -199,14 +199,14 @@ void HardwareManager::createThings(Settings* settings, DmxListener* dmxListener,
     Log::infoln("Creating RGBW strips ...");
     std::vector<InitializedThingGroup<RgbwThingGroup>> rgbwThingGroups = createStripThings<NeoGrbwFeature, NeoEsp32RmtNSk6812Method, RgbwThing, RgbwThingGroup>(rgbwStrips, settings->rgbwStrips);
     for (auto& rgbwThingGroup : rgbwThingGroups) {
-        dmxListener->addMapping(rgbwThingGroup.group, rgbwThingGroup.dmxCfg);
+        dmxManager->addMapping(rgbwThingGroup.group, rgbwThingGroup.dmxCfg);
         switchables.push_back(rgbwThingGroup.group);
     }
 
     Log::infoln("Creating RGB strips ...");
     std::vector<InitializedThingGroup<RgbThingGroup>> rgbThingsGroups = createStripThings<NeoGrbFeature, NeoEsp32RmtNWs2812xMethod, RgbThing, RgbThingGroup>(rgbStrips, settings->rgbStrips);
     for (auto& rgbThingGroup : rgbThingsGroups) {
-        dmxListener->addMapping(rgbThingGroup.group, rgbThingGroup.dmxCfg);
+        dmxManager->addMapping(rgbThingGroup.group, rgbThingGroup.dmxCfg);
         switchables.push_back(rgbThingGroup.group);
     }
 
@@ -215,14 +215,14 @@ void HardwareManager::createThings(Settings* settings, DmxListener* dmxListener,
         auto minPulseWidth = servoCfg.minPulseWidth == 0 ? 500 : servoCfg.minPulseWidth;
         auto maxPulseWidth = servoCfg.maxPulseWidth == 0 ? 2500 : servoCfg.maxPulseWidth;
         auto thing = new ServoThing(servoCfg.pin, servoCfg.maxAngle, minPulseWidth, maxPulseWidth);
-        dmxListener->addMapping(thing, servoCfg.dmxCfg);
+        dmxManager->addMapping(thing, servoCfg.dmxCfg);
         servos.push_back(thing);
     }
 
     // Plugins
     try {
         int createdAnimations = PluginFactory::getInstance().createAnimationsFromPlugins(
-            scheduler, settings->plugins, dmxListener);
+            scheduler, settings->plugins, dmxManager);
         Log::infoln("Created %d animations from plugins", createdAnimations);
     } catch (const std::exception& e) {
         Log::error((std::string("ERR: configuring plugins. ") + e.what()).c_str());
@@ -237,9 +237,9 @@ void HardwareManager::createThings(Settings* settings, DmxListener* dmxListener,
             settings->dmxOutput.rxPin,
             settings->dmxOutput.enablePin,
             settings->dmxOutput.universe,
-            dmxListener->getDmxData()
+            dmxManager->getDmxData()
         );
-        dmxListener->addUniverse(settings->dmxOutput.universe);
+        dmxManager->addUniverse(settings->dmxOutput.universe);
         if (dmxOutput->begin()) {
             scheduler->addTask(dmxOutput);
             Log::infoln("DMX output initialized successfully for universe %d", settings->dmxOutput.universe);
@@ -261,10 +261,10 @@ void HardwareManager::createThings(Settings* settings, DmxListener* dmxListener,
             settings->dmxInput.rxPin,
             settings->dmxInput.enablePin,
             settings->dmxInput.universe,
-            dmxListener->getDmxData(),
+            dmxManager->getDmxData(),
             onCommandReceived
         );
-        dmxListener->addUniverse(settings->dmxInput.universe);
+        dmxManager->addUniverse(settings->dmxInput.universe);
         if (dmxInput->begin()) {
             scheduler->addTask(dmxInput);
             Log::infoln("DMX input initialized successfully for universe %d", settings->dmxInput.universe);

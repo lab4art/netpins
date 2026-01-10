@@ -1,7 +1,7 @@
 #include <tailAnimation.h>
 #include <pluginFactory.h>
 #include <Log.h>
-#include <DmxListener.h>
+#include <DmxManager.h>
 #include <Things.h>
 
 class TailAnimationFactory : public AnimationFactory {
@@ -13,11 +13,11 @@ public:
         return "tail-animation";
     }
 
-    bool createAnimation(Scheduler* scheduler, const std::string& config, DmxListener* dmxListener) override {
+    bool createAnimation(Scheduler* scheduler, const std::string& config, DmxManager* dmxManager) override {
         try {
             TailAnimationCfg cfg = TailAnimationCfg::deserialize(config);
             
-            Thing* thing = dmxListener->getThing(cfg.rgbStripName);
+            Thing* thing = dmxManager->getThing(cfg.rgbStripName);
             if (thing == nullptr) {
                 Log::error((std::string("RGB thing '") + cfg.rgbStripName + "' not found").c_str());
                 return false;
@@ -36,11 +36,11 @@ public:
             animation->setName(std::string("TA ") + cfg.rgbStripName.c_str());
             animation->setDuration(cfg.maxDuration);
             
-            dmxListener->removeMappingForThing(rgbThing->getName());
+            dmxManager->removeMappingForThing(rgbThing->getName());
             
             TailAnimationThing* tailAnimationThing = new TailAnimationThing(animation, cfg.maxDuration);
             tailAnimationThing->setName("TA Thing " + cfg.rgbStripName);
-            dmxListener->addMapping(tailAnimationThing, cfg.dmxCfg);
+            dmxManager->addMapping(tailAnimationThing, cfg.dmxCfg);
             
             animation->schedule(scheduler);
             animation->restart();

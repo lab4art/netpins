@@ -7,13 +7,13 @@
 #include <ArduinoJson.h>
 #include <settings.h>
 
-class DmxListener;
+class DmxManager;
 class Scheduler;
 
 class AnimationFactory { // TODO what's the difference between this and PluginFactory?
 public:
     virtual ~AnimationFactory() = default;
-    virtual bool createAnimation(Scheduler* scheduler, const std::string& config, DmxListener* dmxListener) = 0;
+    virtual bool createAnimation(Scheduler* scheduler, const std::string& config, DmxManager* dmxManager) = 0;
     virtual std::string getType() const = 0;
 };
 
@@ -26,8 +26,8 @@ private:
 public:
     static PluginFactory& getInstance();
     void registerFactory(std::unique_ptr<AnimationFactory> factory);
-    int createAnimationsFromPlugins(Scheduler* scheduler, const std::vector<PluginCfg>& plugins, DmxListener* dmxListener);
-    bool createAnimationFromPlugin(Scheduler* scheduler, const PluginCfg& plugin, DmxListener* dmxListener);
+    int createAnimationsFromPlugins(Scheduler* scheduler, const std::vector<PluginCfg>& plugins, DmxManager* dmxManager);
+    bool createAnimationFromPlugin(Scheduler* scheduler, const PluginCfg& plugin, DmxManager* dmxManager);
 };
 
 template<typename FactoryType>

@@ -714,7 +714,7 @@ struct DmxOutputCfg {
  * 
  * Receives DMX data via RS-485 from an external DMX source (like a lighting console).
  * This provides an alternative to ArtNet for receiving DMX control data.
- * The received data is mapped to the specified universe and processed by DmxListener.
+ * The received data is mapped to the specified universe and processed by DmxManager.
  * 
  * dmx_input:
  *   enabled: true

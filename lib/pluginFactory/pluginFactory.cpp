@@ -29,12 +29,12 @@ void PluginFactory::registerFactory(std::unique_ptr<AnimationFactory> factory) {
 int PluginFactory::createAnimationsFromPlugins(
     Scheduler* scheduler,
     const std::vector<PluginCfg>& plugins,
-    DmxListener* dmxListener) {
+    DmxManager* dmxManager) {
     
     int createdCount = 0;
     
     for (const auto& plugin : plugins) {
-        if (createAnimationFromPlugin(scheduler, plugin, dmxListener)) {
+        if (createAnimationFromPlugin(scheduler, plugin, dmxManager)) {
             createdCount++;
         }
     }
@@ -45,7 +45,7 @@ int PluginFactory::createAnimationsFromPlugins(
 bool PluginFactory::createAnimationFromPlugin(
     Scheduler* scheduler,
     const PluginCfg& plugin,
-    DmxListener* dmxListener) {
+    DmxManager* dmxManager) {
     
     if (plugin.type.empty()) {
         Log::errorln("Plugin has empty type, skipping");
@@ -59,7 +59,7 @@ bool PluginFactory::createAnimationFromPlugin(
     }
     
     try {
-        return factoryIt->second->createAnimation(scheduler, plugin.config, dmxListener);
+        return factoryIt->second->createAnimation(scheduler, plugin.config, dmxManager);
     } catch (const std::exception& e) {
         Log::errorln("Exception creating animation %s: %s", plugin.name.c_str(), e.what());
         return false;

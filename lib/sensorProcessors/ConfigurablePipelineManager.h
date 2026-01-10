@@ -45,7 +45,7 @@ private:
 public:
     /**
      * Constructor
-     * @param dmxData Reference to DMX data structure (from DmxListener)
+     * @param dmxData Reference to DMX data structure (from DmxManager)
      * @param settings Reference to Settings object containing pipeline configurations
      * @param mqttClient Pointer to MQTT client for publishing (optional, can be nullptr)
      * @param mqttTopicPrefix MQTT topic prefix (e.g., "np/hostname/s/")

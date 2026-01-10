@@ -1,7 +1,7 @@
 #include <waveEffect.h>
 #include <pluginFactory.h>
 #include <Log.h>
-#include <DmxListener.h>
+#include <DmxManager.h>
 #include <Things.h>
 
 class WaveEffectFactory : public AnimationFactory {
@@ -12,11 +12,11 @@ public:
         return "wave-effect";
     }
 
-    bool createAnimation(Scheduler* scheduler, const std::string& config, DmxListener* dmxListener) override {
+    bool createAnimation(Scheduler* scheduler, const std::string& config, DmxManager* dmxManager) override {
         try {
             WaveEffectCfg cfg = WaveEffectCfg::deserialize(config);
             
-            Thing* thing = dmxListener->getThing(cfg.rgbStripName);
+            Thing* thing = dmxManager->getThing(cfg.rgbStripName);
             if (thing == nullptr) {
                 Log::error((std::string("RGB thing '") + cfg.rgbStripName + "' not found").c_str());
                 return false;
@@ -40,8 +40,8 @@ public:
             waveEffect->setName("WA " + cfg.rgbStripName);
             waveEffect->setMaxFadeTime(cfg.maxFadeTime);
             
-            dmxListener->removeMappingForThing(rgbThingGroup->getName());
-            dmxListener->addMapping(waveEffect, cfg.dmxCfg);
+            dmxManager->removeMappingForThing(rgbThingGroup->getName());
+            dmxManager->addMapping(waveEffect, cfg.dmxCfg);
 
             // waveEffects.push_back(waveEffect);
             waveEffect->schedule(scheduler);

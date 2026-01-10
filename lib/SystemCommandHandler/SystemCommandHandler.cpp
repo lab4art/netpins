@@ -6,10 +6,10 @@
 SystemCommandHandler::SystemCommandHandler(
     SettingsManager<Settings>* settingsManager,
     SystemManager* systemManager,
-    DmxListener* dmxListener
+    DmxManager* dmxManager
 ) : settingsManager(settingsManager),
     systemManager(systemManager),
-    dmxListener(dmxListener) {
+    dmxManager(dmxManager) {
 }
 
 WebAdmin::CommandResult SystemCommandHandler::handleCommand(JsonVariant &jsonVariant) {
@@ -70,10 +70,10 @@ WebAdmin::CommandResult SystemCommandHandler::handleCommand(JsonVariant &jsonVar
     } else if (command == "reboot") {
         return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK_REBOOT, "Rebooting ...", 3000};
     } else if (command == "save-dmx") {
-        auto updated = dmxListener->storeDmxData(dmxListener->getDmxData());
+        auto updated = dmxManager->storeDmxData(dmxManager->getDmxData());
         return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, updated ? "Saved." : "No updates.", -1};
     } else if (command == "reset-dmx") {
-        dmxListener->clearDmxData();
+        dmxManager->clearDmxData();
         return WebAdmin::CommandResult{WebAdmin::CommandStatus::OK, "DMX data cleared.", -1};
     }
     return WebAdmin::CommandResult{WebAdmin::CommandStatus::ERROR, "Unknown command.", -1};

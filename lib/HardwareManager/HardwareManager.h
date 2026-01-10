@@ -8,7 +8,7 @@
 #include <Things.h>
 #include <sensors.h>
 #include <settings.h>
-#include <DmxListener.h>
+#include <DmxManager.h>
 #include <DmxOutput.h>
 #include <DmxInput.h>
 #include <scheduler.h>
@@ -76,7 +76,7 @@ public:
     ~HardwareManager();
     
     // Initialization
-    void createThings(Settings* settings, DmxListener* dmxListener, Scheduler* scheduler, std::function<void()> onCommandReceived = nullptr);
+    void createThings(Settings* settings, DmxManager* dmxManager, Scheduler* scheduler, std::function<void()> onCommandReceived = nullptr);
     void initializeSensors(Settings* settings, ConfigurablePipelineManager* pipelineManager);
     
     // Commit changes to hardware
