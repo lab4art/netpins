@@ -126,6 +126,7 @@ dmx_input:
 ## Sample Configuration
 
 ```yaml
+dmx_offset: 0
 wifi_ssid: your-ssid
 wifi_pass: your-secret-password
 hostname: tower
@@ -135,6 +136,9 @@ lights_test: true # power on all at boot for 2 seconds
 max_idle: 120 # power off microcontroller when no network activity for N minutes
 reboot_after_wifi_failed: 15 # reboot after 15 failed wifi connections, 0 means no reboot
 disable_wifi_power_save: false # disable WiFi power save to prevent led flicering on "poor" power connection
+disable_wifi_reconnect: false # try to connect once only (repeat in case a successful connection is lost)
+disable_artnet: false
+log_level: -1 # -1=no-affects-from-this-settging, 0=no logs, 1=error, 2=warning, 3=info, 4=debug, 5=trace
 pwms:
   - pin: 13
     name: pwm-13
@@ -161,6 +165,20 @@ servos:
     max_pulse_width: 2500
   - pin: 13
     max_angle: 90
+dmx_input:
+  enabled: true
+  uart_port: 1
+  tx_pin: 13
+  rx_pin: 14
+  enable_pin: 15
+  universe: 0 # universe to set from DMX input
+dmx_output:
+  enabled: true
+  uart_port: 2
+  tx_pin: 17
+  rx_pin: 18
+  enable_pin: 16
+  universe: 0 # universe to output to DMX
 ```
 
 ### Experimental
