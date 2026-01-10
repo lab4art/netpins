@@ -183,29 +183,9 @@ int maxExecutionTime = 0;
 uint32_t minFreeHeap = UINT32_MAX;
 uint32_t minFreePsram = UINT32_MAX;
 
-// DMX test variables
-unsigned long lastDmxToggle = 0;
-bool dmxTestValue = false;
-
 void loop() {
     unsigned long loopStartTime = micros();
     
-    // DMX test: toggle channel 1 between 0 and 255 every second
-    // if (millis() - lastDmxToggle >= 1000) {
-    //     lastDmxToggle = millis();
-    //     dmxTestValue = !dmxTestValue;
-    //     uint8_t value1 = dmxTestValue ? 128 : 0;
-    //     uint8_t value2 = dmxTestValue ? 0 : 128;
-        
-    //     // Set channel 1 (index 0) in universe 0
-    //     auto& dmxData = dmxListener->getDmxData();
-    //     if (dmxData.find(0) != dmxData.end()) {
-    //         dmxData[0][0] = value1;
-    //         dmxData[0][1] = value2;
-    //         Log::infoln("DMX Test: Set channel 1 to %d, channel 2 to %d", value1, value2);
-    //     }
-    // }
-
     FactoryReset::getInstance().resetCounter();
 
     scheduler->loop();
