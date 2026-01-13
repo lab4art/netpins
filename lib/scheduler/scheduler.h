@@ -23,13 +23,19 @@ class ScheduledTask {
         virtual void callback() {}
 
         void loop() {
-            if (!enabled || interval == 0) {
+            if (!enabled) {
+                // Log::traceln("Task %s skipped: enabled=%d, interval=%lu", name.c_str(), enabled, interval);
+                return;
+            }
+            // Usefull for non-blocking tasks
+            if (interval == 0) {
+                callback();
                 return;
             }
             // Log::traceln("Checking task: %s, interval: %lu, lastExecution: %lu, currentMillis: %lu", name.c_str(), interval, lastExecution, millis());
             if (millis() - lastExecution >= interval) {
-                lastExecution = millis();
                 // Log::traceln("Executing task: %s", name.c_str());
+                lastExecution = millis();
                 callback();
             }
         }

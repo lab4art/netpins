@@ -89,8 +89,6 @@ class DmxManager : public ScheduledTask {
             : ScheduledTask(20, "DmxProcess"),
               dmxOffset(settings->dmxChOffset),
               onCommandReceived(onCommandReceived) {
-            initializeDmxData(dmxData);
-            restoreDmxData(dmxData);
         }
 
         ~DmxManager() {
@@ -151,7 +149,7 @@ class DmxManager : public ScheduledTask {
                 // Log.traceln("Checking mapping for thing %s on universe %d channel %d", mapping->thing->getName().c_str(), mapping->dmxCfg.universe, mapping->dmxCfg.channel);
                 if (mapping->dmxCfg.universe == universe) {
                     int channel = mapping->dmxCfg.get0BasedChannel();
-                    // Log.traceln("Setting data for thing %s on universe %d channel %d", mapping->thing->getName().c_str(), universe, channel + 1);
+                    // Log::traceln("Setting data for thing %s on universe %d channel %d", mapping->thing->getName().c_str(), universe, channel + 1);
                     mapping->thing->setData(&data[channel]);
                 }
             }

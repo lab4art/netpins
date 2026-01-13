@@ -3,7 +3,7 @@
 DmxInput::DmxInput(int dmxPort, int txPin, int rxPin, int enablePin,
                    uint16_t universe, std::map<uint16_t, std::array<uint8_t, 512>>& dmxData,
                    std::function<void()> onDataReceived)
-    : ScheduledTask(25, "DmxInput"),  // 25ms = 40Hz refresh rate
+    : ScheduledTask(0, "DmxInput"),  // 0 = always run, it's non-blocking
       dmxPort(dmxPort),
       txPin(txPin),
       rxPin(rxPin),
@@ -62,9 +62,9 @@ void DmxInput::end() {
 
 void DmxInput::callback() {
     if (!enabled) {
+        Log::warningln("DmxInput callback: enabled is FALSE, returning early");
         return;
     }
-    
     // Receive DMX data
     if (dmxDataRef != nullptr) {
         dmx_packet_t packet;
@@ -79,22 +79,17 @@ void DmxInput::callback() {
                 
                 // Copy to our shared dmxData for the specified universe
                 auto& universeData = (*dmxDataRef)[inputUniverse];
-                memcpy(universeData.data(), data, DMX_PACKET_SIZE);
+
+                // copy data without the first byte (start code)
+                memcpy(universeData.data(), &data[1], 512);
                 
                 // Trigger callback if provided
                 if (onDataReceived) {
                     onDataReceived();
                 }
-                // Log::traceln("DMX Input: Received packet for universe %d, first 3 channels: %d, %d, %d",
-                //             inputUniverse, data[0], data[1], data[2]);
-                // }
+                // Log::infoln("DMX Input: Received uni %d, first 3 channels: %d, %d, %d", inputUniverse, data[1], data[2], data[3]);
             } else {
-                // Log error occasionally
-                static int errorLogCounter = 0;
-                if (++errorLogCounter >= 100) {
-                    Log::warningln("DMX Input: Received packet with error");
-                    errorLogCounter = 0;
-                }
+                Log::errorln("DMX Input: Error receiving DMX packet, err code: %d", packet.err);
             }
         }
     }

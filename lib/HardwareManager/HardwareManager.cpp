@@ -266,13 +266,14 @@ void HardwareManager::createThings(Settings* settings, DmxManager* dmxManager, S
         );
         dmxManager->addUniverse(settings->dmxInput.universe);
         if (dmxInput->begin()) {
+            Log::infoln("Adding DmxInput to shcheduler task.");
             scheduler->addTask(dmxInput);
-            Log::infoln("DMX input initialized successfully for universe %d", settings->dmxInput.universe);
         } else {
             Log::errorln("Failed to initialize DMX input");
             delete dmxInput;
             dmxInput = nullptr;
         }
+        dmxManager->initializeDmxData(dmxManager->getDmxData());
     } else {
         Log::info("DMX input disabled in settings.");
     }
