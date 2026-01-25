@@ -117,10 +117,10 @@ private:
         const char* levelStr;
         switch (logLevel) {
             default:
-            case 0: levelStr = "ERROR "; break;
-            case 1: levelStr = "WARNING "; break;
-            case 2: levelStr = "INFO "; break;
-            case 3: levelStr = "TRACE "; break;
+            case LOG_LEVEL_ERROR: levelStr = "ERROR "; break;
+            case LOG_LEVEL_WARNING: levelStr = "WARNING "; break;
+            case LOG_LEVEL_INFO: levelStr = "INFO "; break;
+            case LOG_LEVEL_TRACE: levelStr = "TRACE "; break;
         }
         output(levelStr);
     }
@@ -190,44 +190,44 @@ public:
     }
 
     // Convenience methods
-    static void error(const char* msg) { log(0, msg); }
-    static void error(const std::string& msg) { log(0, msg); }
+    static void error(const char* msg) { log(LOG_LEVEL_ERROR, msg); }
+    static void error(const std::string& msg) { log(LOG_LEVEL_ERROR, msg); }
     
-    static void warning(const char* msg) { log(1, msg); }
-    static void warning(const std::string& msg) { log(1, msg); }
+    static void warning(const char* msg) { log(LOG_LEVEL_WARNING, msg); }
+    static void warning(const std::string& msg) { log(LOG_LEVEL_WARNING, msg); }
     
-    static void info(const char* msg) { log(2, msg); }
-    static void info(const std::string& msg) { log(2, msg); }
+    static void info(const char* msg) { log(LOG_LEVEL_INFO, msg); }
+    static void info(const std::string& msg) { log(LOG_LEVEL_INFO, msg); }
     
-    static void trace(const char* msg) { log(3, msg); }
-    static void trace(const std::string& msg) { log(3, msg); }
+    static void trace(const char* msg) { log(LOG_LEVEL_TRACE, msg); }
+    static void trace(const std::string& msg) { log(LOG_LEVEL_TRACE, msg); }
 
     // Format string variants (printf-style)
     static void errorln(const char* format, ...) {
         va_list args;
         va_start(args, format);
-        formatAndLog(0, format, args);
+        formatAndLog(LOG_LEVEL_ERROR, format, args);
         va_end(args);
     }
 
     static void warningln(const char* format, ...) {
         va_list args;
         va_start(args, format);
-        formatAndLog(1, format, args);
+        formatAndLog(LOG_LEVEL_WARNING, format, args);
         va_end(args);
     }
 
     static void infoln(const char* format, ...) {
         va_list args;
         va_start(args, format);
-        formatAndLog(2, format, args);
+        formatAndLog(LOG_LEVEL_INFO, format, args);
         va_end(args);
     }
 
     static void traceln(const char* format, ...) {
         va_list args;
         va_start(args, format);
-        formatAndLog(3, format, args);
+        formatAndLog(LOG_LEVEL_TRACE, format, args);
         va_end(args);
     }
 
