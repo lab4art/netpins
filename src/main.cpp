@@ -33,6 +33,7 @@
 #include <scheduler.h>
 #include <SystemCommandHandler.h>
 #include <ConfigurablePipelineManager.h>
+#include <dmxProcessors.h>
 
 #ifndef GIT_VERSION
 #define GIT_VERSION "unknown"
@@ -49,6 +50,7 @@ Settings* settings;
 WebAdmin* webAdmin;
 SystemCommandHandler* systemCommandHandler;
 ConfigurablePipelineManager* pipelineManager = nullptr;
+DmxProcessorManager* dmxProcessorManager = nullptr;
 
 Scheduler* scheduler = new Scheduler();
 
@@ -169,6 +171,14 @@ void setup() {
 
     // Initialize sensors with pipelineManager
     hardwareManager->initializeSensors(settings, pipelineManager);
+    
+    // Initialize DMX processors
+    if (!settings->dmxProcessors.empty()) {
+        Log::infoln("Creating DMX processor manager ...");
+        dmxProcessorManager = new DmxProcessorManager(dmxManager, scheduler, 20);
+        dmxProcessorManager->initialize(*settings);
+        scheduler->addTask(dmxProcessorManager);
+    }
 
     // Register tasks with scheduler
     scheduler->addTask(dmxManager);

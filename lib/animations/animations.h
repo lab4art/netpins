@@ -33,11 +33,6 @@ class Animation {
     unsigned long frames = 0; // total number of frames for the animation
     unsigned long remainingFrames = 0;
     
-    /**
-     * Duration is set before the animation starts.
-     * It must be constant during the animation because it is used to calculate the number of frames (progress).
-     */
-    // unsigned int nextDuration = 0;
     std::function<void()> onEnd = []() {};
     std::function<void()> onStart = []() {};
     bool onEndCalled = false;
@@ -67,7 +62,11 @@ class Animation {
         if (frames == 0) {
             return 1.0f;
         }
-        float delta = 1.0f / ((float)frames - 1.0f); // one frame less to caltulate delta, to get a value between 0 and 1
+        if (frames == 1) {
+            // Single frame: instant transition, always return 1.0
+            return 1.0f;
+        }
+        float delta = 1.0f / ((float)frames - 1.0f); // one frame less to calculate delta, to get a value between 0 and 1
         return 1.0f - (float)remainingFrames * delta + delta; 
     }
 
@@ -76,6 +75,7 @@ class Animation {
     }
 
   public:
+
     Animation(bool repeat = true, unsigned int frameRate = 50/*Hz*/):
             repeat(repeat),
             frameRate(frameRate) {
@@ -120,8 +120,24 @@ class Animation {
         //         name.c_str(), frameRate, frames, remainingFrames, repeat);
     }
 
+    void cancel(bool callOnEnd = false) {
+        remainingFrames = 0;
+        if (task) {
+            task->disable();
+        }
+        if (callOnEnd && !onEndCalled) {
+            onEndCalled = true;
+            onEnd();
+        } else {
+            onEndCalled = true;
+        }
+    }
+
     void setDuration(unsigned int duration) {
         frames = duration * frameRate / 1000;
+        if (frames == 0) {
+            frames = 1;  // Always have at least one frame for instant transitions
+        }
     }
 
     bool isRunning() {
@@ -148,7 +164,7 @@ class Animation {
     }
 };
 
-class FadeAnimation: public Animation {
+class FadeAnimation: public Animation { // TODO reimplement using GenericFadeAnimation
 
   private:
     RgbThing* line;
@@ -209,3 +225,66 @@ class FadeAnimation: public Animation {
         this->firstColor = firstColor;
     }
 };
+
+/**
+ * Generic multi-channel fade animation
+ * 
+ * Fades arbitrary numeric values (uint8_t) from start to target values.
+ * Each channel is identified by a template key type (e.g., int, DmxCfg, string).
+ * 
+ * Example usage:
+ *   GenericFadeAnimation<int> fade(50, false); // 50 fps, non-repeating
+ *   fade.setChannels({{1, 0, 255}, {2, 100, 200}}); // channel 1: 0->255, channel 2: 100->200
+ *   fade.setCallback([](int ch, uint8_t val) { dmxData[ch] = val; });
+ *   fade.schedule(scheduler);
+ *   fade.setDuration(1000);
+ *   fade.restart();
+ */
+template<typename ChannelKey>
+class GenericFadeAnimation: public Animation {
+  public:
+    struct ChannelFade {
+        ChannelKey key;
+        uint8_t startValue;
+        uint8_t targetValue;
+    };
+    
+  private:
+    std::vector<ChannelFade> channels;
+    std::function<void(const ChannelKey&, uint8_t)> callback;
+
+  public:
+    GenericFadeAnimation(unsigned int frameRate = 50, bool repeat = false):
+          Animation(repeat, frameRate),
+          callback([](const ChannelKey&, uint8_t) {}) {
+    }
+    
+    void animate() override {
+        float progress = getProgress();
+        
+        for (const auto& ch : channels) {
+            // Linear interpolation
+            int diff = (int)ch.targetValue - (int)ch.startValue;
+            uint8_t currentValue = ch.startValue + (uint8_t)(diff * progress);
+            
+            callback(ch.key, currentValue);
+        }
+    }
+    
+    /**
+     * Set the channels to fade
+     * @param channelData Vector of channel fade data
+     */
+    void setChannels(const std::vector<ChannelFade>& channelData) {
+        channels = channelData;
+    }
+    
+    /**
+     * Set callback to apply faded values
+     * @param cb Callback function(channelKey, value)
+     */
+    void setCallback(std::function<void(const ChannelKey&, uint8_t)> cb) {
+        this->callback = cb;
+    }
+};
+

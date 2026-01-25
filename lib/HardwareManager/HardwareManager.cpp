@@ -325,7 +325,8 @@ for (auto& touch : settings->touchSensors) {
         });
 
         digitalReadSensor->addOnChangeListener([](bool value) {
-            Log::infoln("Digital read sensor value changed to: %d", value);
+            // TODO fix, on change called also when there is no change
+            // Log::traceln("Digital read sensor value changed to: %d", value); // TODO uncommment
         });
         Log::infoln("Digital read sensor %d created.", dreadCfg.pin);
         digitalReadSensors[dreadCfg.pin] = digitalReadSensor;

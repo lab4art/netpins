@@ -49,6 +49,11 @@ struct DmxCfg {
         return !(*this == other);
     }
 
+    bool operator<(const DmxCfg& other) const {
+        if (universe != other.universe) return universe < other.universe;
+        return channel < other.channel;
+    }
+
     static DmxCfg deserialize(const std::string& dmx) {
         DmxCfg d;
         auto atPos = dmx.find('@');
@@ -543,6 +548,148 @@ struct SensorPipelineCfg {
     };
 };
 
+/**
+ * DMX Processor Configuration
+ * 
+ * Example YAML:
+ * dmx_processors:
+ *   - type: cue_list
+ *     name: scene_player
+ *     loop: true
+ *     control_channel: 100@0  # Optional: control via DMX channel
+ *     enable_threshold: 2.0   # Enable when channel >= 2
+ *     disable_threshold: 1.5  # Disable when channel < 1.5 (hysteresis)
+ *     scenes:
+ *       - channels:
+ *           1@0: 255  # channel@universe: value
+ *           2@0: 200
+ *           3@0: 100
+ *         fade_in_ms: 2000
+ *         hold_ms: 5000
+ *       - channels:
+ *           1@0: 0
+ *           2@0: 100
+ *           3@0: 255
+ *         fade_in_ms: 1000
+ *         hold_ms: 3000
+ */
+struct DmxProcessorCfg {
+    std::string type;     // Processor type: cue_list, etc.
+    std::string name;     // Optional name for identification
+    DmxCfg controlChannel;  // DMX channel to control enable/disable (0,0 = always on)
+    float enableThreshold;   // Threshold for enabling (default: -1 = always on)
+    float disableThreshold;  // Threshold for disabling (default: same as enable = no hysteresis)
+    std::map<std::string, std::string> params;  // Type-specific parameters
+
+    bool operator==(const DmxProcessorCfg& other) const {
+        return type == other.type &&
+            name == other.name &&
+            controlChannel == other.controlChannel &&
+            enableThreshold == other.enableThreshold &&
+            disableThreshold == other.disableThreshold &&
+            params == other.params;
+    }
+
+    bool operator!=(const DmxProcessorCfg& other) const {
+        return !(*this == other);
+    }
+
+    static DmxProcessorCfg deserialize(JsonObject& json) {
+        DmxProcessorCfg cfg;
+        cfg.type = json["type"].as<std::string>();
+        
+        if (json.containsKey("name")) {
+            cfg.name = json["name"].as<std::string>();
+        }
+        
+        // Parse control channel
+        if (json.containsKey("control_channel")) {
+            cfg.controlChannel = DmxCfg::deserialize(json["control_channel"].as<std::string>());
+        } else {
+            cfg.controlChannel = {0, 0};  // 0,0 = always on
+        }
+        
+        // Parse thresholds
+        cfg.enableThreshold = json["enable_threshold"] | -1.0f;  // -1 = always on
+        cfg.disableThreshold = json["disable_threshold"] | cfg.enableThreshold;  // Default to same as enable
+        
+        // Store all other fields as params
+        for (JsonPair kv : json) {
+            std::string key(kv.key().c_str());
+            if (key != "type" && key != "name" && 
+                key != "control_channel" && key != "enable_threshold" && key != "disable_threshold") {
+                if (kv.value().is<int>()) {
+                    cfg.params[key] = std::to_string(kv.value().as<int>());
+                } else if (kv.value().is<float>()) {
+                    cfg.params[key] = std::to_string(kv.value().as<float>());
+                } else if (kv.value().is<bool>()) {
+                    cfg.params[key] = kv.value().as<bool>() ? "true" : "false";
+                } else if (kv.value().is<JsonArray>() || kv.value().is<JsonObject>()) {
+                    String jsonStr;
+                    serializeJson(kv.value(), jsonStr);
+                    cfg.params[key] = jsonStr.c_str();
+                } else {
+                    cfg.params[key] = kv.value().as<std::string>();
+                }
+            }
+        }
+        
+        return cfg;
+    }
+
+    static void serialize(JsonObject& json, const DmxProcessorCfg& cfg) {
+        json["type"] = cfg.type;
+        
+        if (!cfg.name.empty()) {
+            json["name"] = cfg.name;
+        }
+        
+        // Serialize control channel
+        if (cfg.controlChannel.channel != 0 || cfg.controlChannel.universe != 0) {
+            json["control_channel"] = DmxCfg::serialize(cfg.controlChannel);
+        }
+        
+        // Serialize thresholds (only if not default)
+        if (cfg.enableThreshold >= 0.0f) {
+            json["enable_threshold"] = cfg.enableThreshold;
+        }
+        if (cfg.disableThreshold != cfg.enableThreshold) {
+            json["disable_threshold"] = cfg.disableThreshold;
+        }
+        
+        // Serialize all params
+        for (const auto& param : cfg.params) {
+            const std::string& key = param.first;
+            const std::string& value = param.second;
+            
+            // Try to parse as number or bool
+            char* endPtr;
+            int intVal = strtol(value.c_str(), &endPtr, 10);
+            if (*endPtr == '\0') {
+                json[key] = intVal;
+            } else {
+                float floatVal = strtof(value.c_str(), &endPtr);
+                if (*endPtr == '\0') {
+                    json[key] = floatVal;
+                } else if (value == "true" || value == "false") {
+                    json[key] = (value == "true");
+                } else if (value[0] == '{' || value[0] == '[') {
+                    // Try to parse as JSON
+                    JsonDocument subDoc;
+                    DeserializationError error = deserializeJson(subDoc, value);
+                    if (!error) {
+                        json[key] = subDoc.as<JsonVariant>();
+                    } else {
+                        json[key] = value;
+                    }
+                } else {
+                    json[key] = value;
+                }
+            }
+        }
+    }
+};
+
 struct MqttCfg {
     std::string server;
     std::uint16_t port;
@@ -786,6 +933,7 @@ struct Settings {
     std::vector<AnalogReadSensorCfg> analogReadSensors;
     
     std::vector<SensorPipelineCfg> sensorPipelines; // Pipeline-based sensor processing
+    std::vector<DmxProcessorCfg> dmxProcessors;     // DMX effect processors
 
     std::vector<PluginCfg> plugins;
 
@@ -831,6 +979,7 @@ struct Settings {
             analogReadSensors == other.analogReadSensors &&
 
             sensorPipelines == other.sensorPipelines &&
+            dmxProcessors == other.dmxProcessors &&
 
             plugins == other.plugins;
             
@@ -949,6 +1098,15 @@ struct Settings {
             }
         }
 
+        // dmx processors
+        if (json.containsKey("dmx_processors")) {
+            JsonArray processorsArray = json["dmx_processors"].as<JsonArray>();
+            for (JsonVariant v : processorsArray) {
+                JsonObject jsonProc = v.as<JsonObject>();
+                s.dmxProcessors.push_back(DmxProcessorCfg::deserialize(jsonProc));
+            }
+        }
+
         // 
         // plugins
         JsonArray pluginsArray = json["plugins"].as<JsonArray>();
@@ -1061,6 +1219,15 @@ struct Settings {
             for (auto& pipeline : this->sensorPipelines) {
                 JsonObject jsonPipeline = pipelinesArray.add<JsonObject>();
                 SensorPipelineCfg::serialize(jsonPipeline, pipeline);
+            }
+        }
+
+        // dmx processors
+        if (dmxProcessors.size() > 0) {
+            JsonArray processorsArray = json["dmx_processors"].to<JsonArray>();
+            for (auto& processor : this->dmxProcessors) {
+                JsonObject jsonProc = processorsArray.add<JsonObject>();
+                DmxProcessorCfg::serialize(jsonProc, processor);
             }
         }
 

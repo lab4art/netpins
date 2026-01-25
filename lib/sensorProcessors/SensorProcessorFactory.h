@@ -5,6 +5,7 @@
 #include "TimeBasedProcessors.h"
 #include "ThresholdProcessors.h"
 #include "SmoothingProcessors.h"
+#include "MotionStateProcessor.h"
 #include <ArduinoJson.h>
 #include <map>
 #include <string>
@@ -125,6 +126,13 @@ class SensorProcessorFactory {
             if (type == "delay") {
                 unsigned long delayMs = config.getInt("delay_ms", 1000);
                 return std::make_shared<DelayProcessor>(delayMs);
+            }
+            
+            if (type == "motion_state") {
+                unsigned long persistMs = config.getInt("persist_ms", 30000);
+                unsigned long noMotionMs = config.getInt("no_motion_ms", 30000);
+                float threshold = config.getFloat("threshold", 0.0f);
+                return std::make_shared<MotionStateProcessor>(persistMs, noMotionMs, threshold);
             }
             
             // Threshold processors

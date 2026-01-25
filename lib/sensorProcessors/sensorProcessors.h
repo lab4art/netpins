@@ -38,7 +38,4 @@
 // Configuration-based pipeline management
 #include "ConfigurablePipelineManager.h"
 
-// Version
-#define SENSOR_PROCESSOR_VERSION "1.0.0"
-
 #endif // SENSORPROCESSORS_H

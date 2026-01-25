@@ -50,6 +50,44 @@ class ScheduledTask {
 
 };
 
+/**
+ * One-shot task that executes after a delay and then disables itself
+ */
+class OneShotTask : public ScheduledTask {
+private:
+    std::function<void()> func;
+    unsigned long executeAt;
+    bool fired;
+    
+public:
+    OneShotTask(unsigned long delayMs, std::function<void()> callback)
+        : ScheduledTask(0, "OneShot", false),
+          func(callback),
+          executeAt(0),
+          fired(false) {
+    }
+    
+    void arm(unsigned long delayMs) {
+        executeAt = millis() + delayMs;
+        fired = false;
+        enable();
+    }
+    
+    void cancel() {
+        disable();
+        fired = true;
+    }
+    
+    void callback() override {
+        if (fired) return;
+        if (millis() >= executeAt) {
+            fired = true;
+            disable();
+            func();
+        }
+    }
+};
+
 class Scheduler {
     private:
         std::vector<ScheduledTask*> tasks;

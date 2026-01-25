@@ -104,6 +104,17 @@ Delay output by duration
   delay_ms: 1000
 ```
 
+#### motion_state
+Motion detection with state tracking (replaces old strobe processor)
+```yaml
+- type: motion_state
+  persist_ms: 30000    # Time before entering persisted state (default: 30000)
+  no_motion_ms: 30000      # Timeout for no motion (default: 30000)
+  threshold: 0.0           # Motion threshold (default: 0.0)
+```
+**Use case:** Motion detection with different output values for different states. Use with DMX transformer for strobe effects.
+**Output:** `low` when no motion, `normal` during motion, `persisted` after motion persists ≥ persistence_ms
+
 ### Threshold
 
 #### threshold

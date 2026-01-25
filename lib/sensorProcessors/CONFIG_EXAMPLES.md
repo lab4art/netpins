@@ -295,6 +295,65 @@ sensor_pipelines:
         interval_ms: 500
 ```
 
+## Example 11: Motion Sensor with Strobe Effect
+
+**Use Case**: Security light - motion turns on light at 255, after 30s of continuous motion starts strobe effect, turns off after 30s of no motion
+
+```yaml
+sensor_pipelines:
+  # For DMX channels 1-3 (RGB strip or 3 separate lights)
+  - name: "motion_strobe_ch1"
+    sensor: "pir_motion"
+    dmx: "1@0"
+    processors:
+      # Convert motion (0/1) to DMX range (0/255)
+      - type: "scale"
+        factor: 255.0
+        offset: 0.0
+      
+      # Strobe processor handles all states:
+      # - Motion detected: output 255
+      # - Motion persists 30s: strobe effect (200ms on/off)
+      # - No motion 30s: output 0
+      - type: "strobe"
+        persistence_ms: 30000      # 30 seconds before strobe
+        no_motion_ms: 30000        # 30 seconds timeout
+        strobe_interval_ms: 200    # 5Hz strobe (fast)
+        threshold: 0.0
+        high: 255.0
+        low: 0.0
+  
+  - name: "motion_strobe_ch2"
+    sensor: "pir_motion"
+    dmx: "2@0"
+    processors:
+      - type: "scale"
+        factor: 255.0
+      - type: "strobe"
+        persistence_ms: 30000
+        no_motion_ms: 30000
+        strobe_interval_ms: 200
+        threshold: 0.0
+        high: 255.0
+        low: 0.0
+  
+  - name: "motion_strobe_ch3"
+    sensor: "pir_motion"
+    dmx: "3@0"
+    processors:
+      - type: "scale"
+        factor: 255.0
+      - type: "strobe"
+        persistence_ms: 30000
+        no_motion_ms: 30000
+        strobe_interval_ms: 200
+        threshold: 0.0
+        high: 255.0
+        low: 0.0
+```
+
+**Note**: See [STROBE_PROCESSOR.md](STROBE_PROCESSOR.md) for detailed documentation and safety considerations.
+
 ## Processor Order Matters
 
 Arrange processors in logical order:
