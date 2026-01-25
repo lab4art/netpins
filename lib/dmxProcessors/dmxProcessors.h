@@ -8,9 +8,9 @@
  * operate on DMX universe data to apply effects, transitions, and patterns.
  * 
  * Use cases:
- * - Cue lists and scene management
+ * - Cue lists and cue management
  * - Smooth fades and transitions
- * - Strobe effects (using fast scene transitions)
+ * - Strobe effects (using fast cue transitions)
  * - Color mixing and effects
  * - Pattern generation
  * - Value limiting and scaling
@@ -19,16 +19,16 @@
  *   #include <dmxProcessors.h>
  * 
  * Quick Start:
- *   auto cueList = new DmxCueListProcessor();
- *   cueList->addScene(0, {{1, 255}, {2, 255}}, 1000, 5000);
- *   cueList->process(dmxData, millis());
+ *   auto sequence = new DmxSequenceProcessor();
+ *   sequence->addCue(0, {{1, 255}, {2, 255}}, 1000, 5000);
+ *   sequence->process(dmxData, millis());
  */
 
 // Base class
 #include "DmxProcessor.h"
 
 // Effect processors
-#include "DmxCueListProcessor.h"
+#include "DmxSequenceProcessor.h"
 
 // Factory for creating processors from config
 #include "DmxProcessorFactory.h"

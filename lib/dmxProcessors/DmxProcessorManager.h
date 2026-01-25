@@ -18,7 +18,7 @@
  * 
  * Use cases:
  * - Enable strobe when motion state reaches 2
- * - Switch scenes based on temperature thresholds
+ * - Switch cues based on temperature thresholds
  * - Control effects via sensor-driven DMX channels
  * 
  * Example:
@@ -69,6 +69,8 @@ public:
     /**
      * Initialize processors from configuration
      * Creates processors using DmxProcessorFactory and adds them to the manager
+     * Sequences with names are automatically registered as templates for includes.
+     * Only sequences with valid control channels (threshold >= 0) are added to the manager.
      * 
      * @param settings Settings containing dmxProcessors configuration
      */
@@ -80,7 +82,7 @@ public:
         
         Log::infoln("Initializing DMX processors ...");
         
-        // Create processors from configuration
+        // Create all processors (templates registered automatically by factory)
         for (const auto& procCfg : settings.dmxProcessors) {
             Log::infoln("Creating DMX processor: type=%s, name=%s", 
                         procCfg.type.c_str(), 
@@ -99,10 +101,15 @@ public:
                 dmxManager->addUniverse(universe);
             }
             
-            processors.emplace_back(processor, procCfg.controlChannel, procCfg.enableThreshold, procCfg.disableThreshold);
+            // Only add to managed processors if it has a valid control channel
+            if (procCfg.enableThreshold >= 0.0f) {
+                processors.emplace_back(processor, procCfg.controlChannel, procCfg.enableThreshold, procCfg.disableThreshold);
+            }
+            // Note: Processors without control channels are templates only,
+            // controlled by parent sequences via includes
         }
         
-        Log::infoln("DMX processor manager initialized with %d processors", processors.size());
+        Log::infoln("DMX processor manager initialized with %d active processors", processors.size());
     }
 
     

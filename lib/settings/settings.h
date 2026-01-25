@@ -553,13 +553,13 @@ struct SensorPipelineCfg {
  * 
  * Example YAML:
  * dmx_processors:
- *   - type: cue_list
- *     name: scene_player
+ *   - type: sequence
+ *     name: cue_player
  *     loop: true
  *     control_channel: 100@0  # Optional: control via DMX channel
  *     enable_threshold: 2.0   # Enable when channel >= 2
  *     disable_threshold: 1.5  # Disable when channel < 1.5 (hysteresis)
- *     scenes:
+ *     sequence:
  *       - channels:
  *           1@0: 255  # channel@universe: value
  *           2@0: 200
@@ -574,7 +574,7 @@ struct SensorPipelineCfg {
  *         hold_ms: 3000
  */
 struct DmxProcessorCfg {
-    std::string type;     // Processor type: cue_list, etc.
+    std::string type;     // Processor type: sequence, etc.
     std::string name;     // Optional name for identification
     DmxCfg controlChannel;  // DMX channel to control enable/disable (0,0 = always on)
     float enableThreshold;   // Threshold for enabling (default: -1 = always on)

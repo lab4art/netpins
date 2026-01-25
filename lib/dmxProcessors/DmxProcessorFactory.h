@@ -1,7 +1,7 @@
 #pragma once
 
 #include "DmxProcessor.h"
-#include "DmxCueListProcessor.h"
+#include "DmxSequenceProcessor.h"
 #include "settings.h"
 #include "scheduler.h"
 #include "DmxManager.h"
@@ -29,8 +29,8 @@ public:
     static DmxProcessor* createProcessor(const DmxProcessorCfg& config, Scheduler* scheduler, DmxManager* dmxManager) {
         const std::string& type = config.type;
         
-        if (type == "cue_list") {
-            return createCueListProcessor(config, scheduler, dmxManager);
+        if (type == "sequence") {
+            return createSequenceProcessor(config, scheduler, dmxManager);
         }
         
         // Unknown processor type
@@ -41,8 +41,8 @@ private:
     /**
      * Create a cue list processor from configuration
      */
-    static DmxProcessor* createCueListProcessor(const DmxProcessorCfg& config, Scheduler* scheduler, DmxManager* dmxManager) {
-        auto processor = new DmxCueListProcessor(scheduler, dmxManager);
+    static DmxSequenceProcessor* createSequenceProcessor(const DmxProcessorCfg& config, Scheduler* scheduler, DmxManager* dmxManager) {
+        auto processor = new DmxSequenceProcessor(scheduler, dmxManager);
               
         // Parse loop
         auto loopIt = config.params.find("loop");
@@ -50,26 +50,31 @@ private:
             processor->setLoop(loopIt->second == "true");
         }
         
-        // Parse scenes array
-        auto scenesIt = config.params.find("scenes");
-        if (scenesIt != config.params.end()) {
+        // Parse sequence array
+        auto sequenceIt = config.params.find("sequence");
+        if (sequenceIt != config.params.end()) {
             JsonDocument doc;
-            DeserializationError error = deserializeJson(doc, scenesIt->second);
+            DeserializationError error = deserializeJson(doc, sequenceIt->second);
             if (!error && doc.is<JsonArray>()) {
-                JsonArray scenesArray = doc.as<JsonArray>();
+                JsonArray sequenceArray = doc.as<JsonArray>();
                 
-                for (JsonVariant sceneVariant : scenesArray) {
-                    if (!sceneVariant.is<JsonObject>()) continue;
-                    JsonObject sceneObj = sceneVariant.as<JsonObject>();
+                for (JsonVariant cueVariant : sequenceArray) {
+                    if (!cueVariant.is<JsonObject>()) continue;
+                    JsonObject cueObj = cueVariant.as<JsonObject>();
                     
-                    // Parse scene parameters
-                    unsigned long fadeInMs = sceneObj["fade_in_ms"] | 1000;
-                    unsigned long holdMs = sceneObj["hold_ms"] | 5000;
+                    // Parse cue parameters
+                    unsigned long fadeInMs = cueObj["fade_in_ms"] | 1000;
+                    unsigned long holdMs = cueObj["hold_ms"] | 5000;
                     
-                    // Parse channels map
-                    std::map<DmxCfg, uint8_t> channels;
-                    if (sceneObj.containsKey("channels")) {
-                        JsonObject channelsObj = sceneObj["channels"].as<JsonObject>();
+                    // Check if this is an include cue
+                    if (cueObj.containsKey("include")) {
+                        std::string includeName = cueObj["include"].as<std::string>();
+                        processor->addIncludeCue(includeName, fadeInMs, holdMs);
+                    }
+                    // Regular channel cue
+                    else if (cueObj.containsKey("channels")) {
+                        JsonObject channelsObj = cueObj["channels"].as<JsonObject>();
+                        std::map<DmxCfg, uint8_t> channels;
                         for (JsonPair kv : channelsObj) {
                             // Key format: "channel@universe" (e.g., "1@0")
                             std::string key = kv.key().c_str();
@@ -77,14 +82,19 @@ private:
                             uint8_t value = kv.value().as<uint8_t>();
                             channels[dmxCfg] = value;
                         }
-                    }
-                    
-                    // Add scene to processor
-                    if (!channels.empty()) {
-                        processor->addScene(channels, fadeInMs, holdMs);
+                        
+                        // Add cue to processor
+                        if (!channels.empty()) {
+                            processor->addCue(channels, fadeInMs, holdMs);
+                        }
                     }
                 }
             }
+        }
+        
+        // Register as template if it has a name (for includes)
+        if (!config.name.empty()) {
+            processor->registerAsTemplate(config.name);
         }
         
         return processor;

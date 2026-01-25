@@ -193,6 +193,110 @@ dmxOutput:
   universe: 0         # Source (Artnet) DMX universe to output to DMX
 ```
 
+motion_state processor with dmx sequences example configuration:
+```yaml
+dmx_offset: 0
+wifi_ssid: 
+wifi_pass: 
+hostname: 
+hb_int: 5000
+udp_port: 5824
+lights_test: true
+max_idle: 0
+reboot_after_wifi_failed: 15
+disable_wifi_power_save: false
+disable_wifi_reconnect: false
+disable_artnet: false
+log_level: -1
+rgbw_strips:
+  - pin: 13
+    name: rgb-strip-1
+    size: 2
+    dimmer: none
+    slices:
+      - 0
+    dmx: 1@0
+digital_reads:
+  - pin: 5
+    name: motion_sensor
+    read_ms: 100
+sensor_pipelines:
+  - sensor: motion_sensor
+    pipeline:
+      - type: motion_state
+        no_motion_ms: 5000
+        persist_ms: 5000
+        threshold: 0.5
+    dmx: 1@100
+dmx_processors:
+  - type: sequence
+    name: strobe_effect
+    sequence:
+      - channels:
+          1@0: 0
+          2@0: 50
+          3@0: 50
+          4@0: 0
+        fade_in_ms: 0
+        hold_ms: 20
+      - channels:
+          1@0: 0
+          2@0: 0
+          3@0: 0
+          4@0: 0
+        fade_in_ms: 0
+        hold_ms: 50
+  - type: sequence
+    name: steady_cyan
+    loop: false
+    sequence:
+      - channels:
+          1@0: 0
+          2@0: 50
+          3@0: 50
+          4@0: 0
+        fade_in_ms: 0
+        hold_ms: 0
+  - type: sequence
+    name: steady_cyan_fade
+    control_channel: 1@100
+    enable_threshold: 1
+    disable_threshold: 0.5
+    loop: false
+    sequence:
+      - channels:
+          1@0: 0
+          2@0: 50
+          3@0: 50
+          4@0: 0
+        fade_in_ms: 3000
+        hold_ms: 0
+  - type: sequence
+    name: strobe_runner
+    control_channel: 1@100
+    enable_threshold: 2
+    disable_threshold: 1.5
+    loop: true
+    sequence:
+      - include: steady_cyan
+        hold_ms: 10000
+      - include: strobe_effect
+        hold_ms: 5000
+  - type: sequence
+    name: fade_to_black
+    control_channel: 1@100
+    enable_threshold: 0
+    disable_threshold: 0.5
+    loop: false
+    sequence:
+      - channels:
+          1@0: 0
+          2@0: 0
+          3@0: 0
+          4@0: 0
+        fade_in_ms: 5000
+        hold_ms: 0
+```
 
 
 ```yaml
