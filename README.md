@@ -260,8 +260,8 @@ dmx_processors:
   - type: sequence
     name: steady_cyan_fade
     control_channel: 1@100
-    enable_threshold: 1
-    disable_threshold: 0.5
+    min_value: 1
+    max_value: 1
     loop: false
     sequence:
       - channels:
@@ -274,8 +274,8 @@ dmx_processors:
   - type: sequence
     name: strobe_runner
     control_channel: 1@100
-    enable_threshold: 2
-    disable_threshold: 1.5
+    min_value: 2
+    max_value: 2
     loop: true
     sequence:
       - include: steady_cyan
@@ -285,8 +285,8 @@ dmx_processors:
   - type: sequence
     name: fade_to_black
     control_channel: 1@100
-    enable_threshold: 0
-    disable_threshold: 0.5
+    min_value: 0
+    max_value: 0
     loop: false
     sequence:
       - channels:

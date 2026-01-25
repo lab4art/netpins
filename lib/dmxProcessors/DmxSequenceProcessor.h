@@ -309,10 +309,7 @@ class DmxSequenceProcessor : public DmxProcessor {
         }
         
         // no-op process since fading is handled by animation task
-        void process(
-            std::map<uint16_t, std::array<uint8_t, 512>>& dmxData,
-            unsigned long currentTime
-        ) override {
+        void process(unsigned long currentTime) override {
             // No processing needed here - fading handled by animation task
         }
 

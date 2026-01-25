@@ -577,16 +577,16 @@ struct DmxProcessorCfg {
     std::string type;     // Processor type: sequence, etc.
     std::string name;     // Optional name for identification
     DmxCfg controlChannel;  // DMX channel to control enable/disable (0,0 = always on)
-    float enableThreshold;   // Threshold for enabling (default: -1 = always on)
-    float disableThreshold;  // Threshold for disabling (default: same as enable = no hysteresis)
+    int minValue;         // Minimum DMX value for range (inclusive, default: -1 = always on)
+    int maxValue;         // Maximum DMX value for range (inclusive, default: 255)
     std::map<std::string, std::string> params;  // Type-specific parameters
 
     bool operator==(const DmxProcessorCfg& other) const {
         return type == other.type &&
             name == other.name &&
             controlChannel == other.controlChannel &&
-            enableThreshold == other.enableThreshold &&
-            disableThreshold == other.disableThreshold &&
+            minValue == other.minValue &&
+            maxValue == other.maxValue &&
             params == other.params;
     }
 
@@ -609,15 +609,15 @@ struct DmxProcessorCfg {
             cfg.controlChannel = {0, 0};  // 0,0 = always on
         }
         
-        // Parse thresholds
-        cfg.enableThreshold = json["enable_threshold"] | -1.0f;  // -1 = always on
-        cfg.disableThreshold = json["disable_threshold"] | cfg.enableThreshold;  // Default to same as enable
+        // Parse range values
+        cfg.minValue = json["min_value"] | -1;  // -1 = always on
+        cfg.maxValue = json["max_value"] | 255;  // Default to full DMX range
         
         // Store all other fields as params
         for (JsonPair kv : json) {
             std::string key(kv.key().c_str());
             if (key != "type" && key != "name" && 
-                key != "control_channel" && key != "enable_threshold" && key != "disable_threshold") {
+                key != "control_channel" && key != "min_value" && key != "max_value") {
                 if (kv.value().is<int>()) {
                     cfg.params[key] = std::to_string(kv.value().as<int>());
                 } else if (kv.value().is<float>()) {
@@ -649,13 +649,8 @@ struct DmxProcessorCfg {
             json["control_channel"] = DmxCfg::serialize(cfg.controlChannel);
         }
         
-        // Serialize thresholds (only if not default)
-        if (cfg.enableThreshold >= 0.0f) {
-            json["enable_threshold"] = cfg.enableThreshold;
-        }
-        if (cfg.disableThreshold != cfg.enableThreshold) {
-            json["disable_threshold"] = cfg.disableThreshold;
-        }
+        json["min_value"] = cfg.minValue;
+        json["max_value"] = cfg.maxValue;
         
         // Serialize all params
         for (const auto& param : cfg.params) {

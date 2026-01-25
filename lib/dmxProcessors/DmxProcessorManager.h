@@ -23,22 +23,20 @@
  * 
  * Example:
  *   auto manager = new DmxProcessorManager(dmxManager);
- *   manager->addProcessorWithHysteresis(strobeProcessor, {0, 100}, 2.0f, 2.0f);  // Enable when ch 100 >= 2
- *   manager->addProcessorWithHysteresis(ambientProcessor, {0, 100}, 0.0f, 1.9f);  // Enable >= 0, disable < 1.9
+ *   manager->addProcessor(strobeProcessor, {0, 100}, 0, 3);  // Enable when ch 100 is between 0-3
+ *   manager->addProcessor(ambientProcessor, {0, 100}, 3, 3);  // Enable when ch 100 is exactly 3
  */
 class DmxProcessorManager : public ScheduledTask {
 private:
     struct ProcessorControl {
         DmxProcessor* processor;
         DmxCfg controlChannel;    // Channel to monitor
-        float enableThreshold;     // Enable when >= this value
-        float disableThreshold;    // Disable when < this value
-        bool lastState;            // Last enabled state
+        int minValue;              // Minimum value for range (inclusive)
+        int maxValue;              // Maximum value for range (inclusive)
         
-        ProcessorControl(DmxProcessor* proc, DmxCfg ch, float enableTh, float disableTh)
+        ProcessorControl(DmxProcessor* proc, DmxCfg ch, int minVal, int maxVal)
             : processor(proc), controlChannel(ch), 
-              enableThreshold(enableTh), disableThreshold(disableTh),
-              lastState(false) {}
+              minValue(minVal), maxValue(maxVal) {}
     };
     
     DmxManager* dmxManager;
@@ -102,8 +100,8 @@ public:
             }
             
             // Only add to managed processors if it has a valid control channel
-            if (procCfg.enableThreshold >= 0.0f) {
-                processors.emplace_back(processor, procCfg.controlChannel, procCfg.enableThreshold, procCfg.disableThreshold);
+            if (procCfg.minValue >= 0) {
+                processors.emplace_back(processor, procCfg.controlChannel, procCfg.minValue, procCfg.maxValue);
             }
             // Note: Processors without control channels are templates only,
             // controlled by parent sequences via includes
@@ -123,9 +121,9 @@ public:
         // Update processor states based on control channels
         for (auto& ctrl : processors) {
             // Check if this is an always-on processor
-            if (ctrl.enableThreshold < 0.0f) {
+            if (ctrl.minValue < 0) {
                 ctrl.processor->setEnabled(true);
-                ctrl.processor->process(dmxData, currentTime);
+                ctrl.processor->process(currentTime);
                 continue;
             }
             
@@ -139,50 +137,15 @@ public:
             
             uint8_t channelValue = universeIt->second[ctrl.controlChannel.channel - 1];
             
-            // Determine if this is reverse threshold mode (low values enable)
-            bool isReverse = (ctrl.enableThreshold < ctrl.disableThreshold);
+            // Check if channel value is within the enabled range
+            bool shouldEnable = (channelValue >= ctrl.minValue && channelValue <= ctrl.maxValue);
             
-            // Apply hysteresis logic
-            bool shouldEnable = false;
-            if (isReverse) {
-                // Reverse mode: enable at LOW values, disable at HIGH values
-                if (ctrl.lastState) {
-                    // Currently enabled - stay enabled if below disable threshold
-                    shouldEnable = (channelValue < ctrl.disableThreshold);
-                } else {
-                    // Currently disabled - enable if at or below enable threshold
-                    shouldEnable = (channelValue <= ctrl.enableThreshold);
-                }
-            } else {
-                // Normal mode: enable at HIGH values, disable at LOW values
-                if (ctrl.lastState) {
-                    // Currently enabled - stay enabled if at or above disable threshold
-                    shouldEnable = (channelValue >= ctrl.disableThreshold);
-                } else {
-                    // Currently disabled - enable if at or above enable threshold
-                    shouldEnable = (channelValue >= ctrl.enableThreshold);
-                }
-            }
-            
-            // Log::traceln("DmxProcessorManager: Processor '%s' control channel %d@%d ch value=%d, enableTh=%.2f, disableTh=%.2f, lastState=%d => shouldEnable=%d",
-            //              ctrl.processor->getName(),
-            //              ctrl.controlChannel.channel,
-            //              ctrl.controlChannel.universe,
-            //              channelValue,
-            //              ctrl.enableThreshold,
-            //              ctrl.disableThreshold,
-            //              ctrl.lastState ? 1 : 0,
-            //              shouldEnable ? 1 : 0);
-
             // Update processor state
-            if (shouldEnable != ctrl.lastState) {
-                ctrl.processor->setEnabled(shouldEnable);
-                ctrl.lastState = shouldEnable;
-            }
+            ctrl.processor->setEnabled(shouldEnable);
             
             // Run processor if enabled
             if (shouldEnable) {
-                ctrl.processor->process(dmxData, currentTime);
+                ctrl.processor->process(currentTime);
             }
         }
     }

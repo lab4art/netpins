@@ -28,13 +28,9 @@ class DmxProcessor {
         
         /**
          * Process DMX data
-         * @param dmxData Reference to the complete DMX data map
          * @param currentTime Current timestamp in milliseconds
          */
-        virtual void process(
-            std::map<uint16_t, std::array<uint8_t, 512>>& dmxData,
-            unsigned long currentTime
-        ) = 0;
+        virtual void process(unsigned long currentTime) = 0;
         
         /**
          * Reset processor state
