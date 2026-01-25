@@ -105,15 +105,35 @@ Delay output by duration
 ```
 
 #### motion_state
-Motion detection with state tracking (replaces old strobe processor)
+Motion detection with state tracking - outputs different values for different motion states
 ```yaml
 - type: motion_state
-  persist_ms: 30000    # Time before entering persisted state (default: 30000)
-  no_motion_ms: 30000      # Timeout for no motion (default: 30000)
-  threshold: 0.0           # Motion threshold (default: 0.0)
+  persist_ms: 30000        # Time motion must persist to enter persisted state (default: 30000)
+  no_motion_ms: 30000      # Timeout - time of no motion before reset (default: 30000)
+  threshold: 0.5           # Motion detection threshold (default: 0.0)
 ```
-**Use case:** Motion detection with different output values for different states. Use with DMX transformer for strobe effects.
-**Output:** `low` when no motion, `normal` during motion, `persisted` after motion persists ≥ persistence_ms
+**Use case:** Motion detection with state-based output. Perfect for triggering different effects based on motion duration.
+
+**Output States:**
+- `0.0` - No motion detected (after no_motion_ms timeout)
+- `1.0` - Motion detected (before persist_ms duration)
+- `2.0` - Motion persisted (motion active for ≥ persist_ms)
+
+**Example:** Motion sensor triggers strobe after 30s of continuous motion:
+```yaml
+- sensor: pir_sensor
+  pipeline:
+    - type: motion_state
+      persist_ms: 30000      # Enter persisted state after 30s
+      no_motion_ms: 30000    # Reset after 30s of no motion
+      threshold: 0.5
+  dmx: 10@1                  # Output state to DMX (0, 1, or 2)
+```
+
+**Notes:**
+- Use with DMX processors to trigger effects when state = 2.0
+- State persists during timeout period even without motion
+- Ideal for motion-activated lighting with strobe effects
 
 ### Threshold
 
@@ -233,7 +253,7 @@ Kalman filter (optimal estimation)
   mqtt: temperature
 ```
 
-### Motion Sensor
+### Motion Sensor (Simple)
 ```yaml
 - sensor: motion_sensor_1
   pipeline:
@@ -242,6 +262,14 @@ Kalman filter (optimal estimation)
     - { type: range_mapping, input_min: 0.0, input_max: 1.0, output_min: 0.0, output_max: 255.0 }
   dmx: 15@1
   mqtt: motion
+```
+
+### Motion Sensor (State-Based)
+```yaml
+- sensor: pir_sensor
+  pipeline:
+    - { type: motion_state, persist_ms: 30000, no_motion_ms: 30000, threshold: 0.5 }
+  dmx: 20@1
 ```
 
 ### Light Sensor (Auto-lights)
@@ -371,6 +399,13 @@ pipeline:
   - { type: ema, alpha: 0.1 }
   - { type: hysteresis, lower: 200.0, upper: 400.0, high: 255.0, low: 0.0 }
   - { type: debounce, duration_ms: 5000 }
+```
+
+### Pattern: Motion with State Detection
+```yaml
+pipeline:
+  - { type: motion_state, persist_ms: 30000, no_motion_ms: 30000, threshold: 0.5 }
+  # Output: 0.0 (no motion), 1.0 (motion), 2.0 (persisted motion)
 ```
 
 ## Troubleshooting

@@ -14,6 +14,7 @@
 | **Timeout** | ✅ | Timeout | Reset after 60s |
 | **Rate Limiting** | ✅ | RateLimit | Update every 500ms |
 | **Delay** | ✅ | Delay | Delay by 1s |
+| **Motion State** | ✅ | MotionState | 0→1→2 states |
 | **Threshold** | ✅ | Threshold | >100 → 255, else 0 |
 | **Hysteresis** | ✅ | Hysteresis | On at 120, off at 80 |
 | **Time Threshold** | ✅ | TimeThreshold | >30°C for 60s |
@@ -41,6 +42,8 @@
 | **Alarm condition** | Time-based threshold | TimeThreshold |
 | **Variable speed control** | Smooth + clamp | EMA + Clamp |
 | **Touch sensor** | Debounce + scale | Debounce + Scale |
+| **Motion-activated strobe** | State-based motion | MotionState + DMX processor |
+| **Persistent presence detection** | Motion with states | MotionState |
 
 ### CPU Usage (approximate)
 
@@ -50,6 +53,7 @@
 | Scale | ~3 ops | Very fast | Multiply + add |
 | Threshold | ~2 ops | Very fast | Compare |
 | Debounce | ~5 ops | Fast | Time check |
+| MotionState | ~8 ops | Fast | State machine |
 | MovingAverage | N ops | Fast | N = window size |
 | MedianFilter | N log N | Medium | Requires sorting |
 | EMA | ~4 ops | Fast | Weighted average |
