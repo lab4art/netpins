@@ -134,7 +134,6 @@ public:
                 ctrl.processor->setEnabled(false);
                 continue;
             }
-            
             uint8_t channelValue = universeIt->second[ctrl.controlChannel.channel - 1];
             
             // Check if channel value is within the enabled range

@@ -120,6 +120,10 @@ class Animation {
         //         name.c_str(), frameRate, frames, remainingFrames, repeat);
     }
 
+    /**
+     * Cancel the animation
+     * @param callOnEnd Whether to call the onEnd callback if not already called
+     */
     void cancel(bool callOnEnd = false) {
         remainingFrames = 0;
         if (task) {
@@ -275,7 +279,7 @@ class GenericFadeAnimation: public Animation {
      * Set the channels to fade
      * @param channelData Vector of channel fade data
      */
-    void setChannels(const std::vector<ChannelFade>& channelData) {
+    void setChannels(const std::vector<ChannelFade> channelData) {
         channels = channelData;
     }
     

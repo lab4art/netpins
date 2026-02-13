@@ -228,6 +228,7 @@ sensor_pipelines:
         persist_ms: 5000
         threshold: 0.5
     dmx: 1@100
+
 dmx_processors:
   - type: sequence
     name: strobe_effect
@@ -259,7 +260,7 @@ dmx_processors:
         hold_ms: 0
   - type: sequence
     name: steady_cyan_fade
-    control_channel: 1@100
+    control_channel: 1@100 # ignored when used as included sequence
     min_value: 1
     max_value: 1
     loop: false
@@ -279,7 +280,7 @@ dmx_processors:
     loop: true
     sequence:
       - include: steady_cyan
-        hold_ms: 10000
+        hold_ms: 10000 # if > 0 cancel the included sequence after hold_ms
       - include: strobe_effect
         hold_ms: 5000
   - type: sequence

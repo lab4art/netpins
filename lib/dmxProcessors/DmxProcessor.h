@@ -33,11 +33,6 @@ class DmxProcessor {
         virtual void process(unsigned long currentTime) = 0;
         
         /**
-         * Reset processor state
-         */
-        virtual void reset() {}
-        
-        /**
          * Enable or disable the processor
          */
         virtual void setEnabled(bool enable) { enabled = enable; }

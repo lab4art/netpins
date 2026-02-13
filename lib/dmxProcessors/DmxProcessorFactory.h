@@ -92,9 +92,9 @@ private:
             }
         }
         
-        // Register as template if it has a name (for includes)
+        // Add to registry if it has a name (for includes)
         if (!config.name.empty()) {
-            processor->registerAsTemplate(config.name);
+            processor->addSequenceToRegistry(config.name);
         }
         
         return processor;

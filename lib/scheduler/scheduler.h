@@ -60,7 +60,7 @@ private:
     bool fired;
     
 public:
-    OneShotTask(unsigned long delayMs, std::function<void()> callback)
+    OneShotTask(std::function<void()> callback)
         : ScheduledTask(0, "OneShot", false),
           func(callback),
           executeAt(0),
