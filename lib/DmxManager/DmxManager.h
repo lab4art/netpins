@@ -7,12 +7,10 @@
 #include <array>
 #include <functional>
 #include <Things.h>
-#include <Preferences.h>
 #include <Log.h>
 #include <settings.h>
 #include <scheduler.h>
 #include <ArtnetWiFi.h>
-#include <Arduino.h>
 
 /**
  * Mapping between things and dmx universe / channel.

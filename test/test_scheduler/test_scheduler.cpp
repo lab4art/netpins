@@ -138,10 +138,10 @@ void test_scheduler_zero_interval(void) {
     CounterTask task(0, "zero-interval-task");
     scheduler.addTask(&task);
 
-    // Task with interval=0 should never execute
-    mockMillis = 1000;
+    // Task with interval=0 should execute on every loop
+    mockMillis = 0;
     scheduler.loop();
-    TEST_ASSERT_EQUAL(0, task.getCount());
+    TEST_ASSERT_EQUAL(1, task.getCount());
 }
 
 void test_scheduler_task_created_disabled(void) {

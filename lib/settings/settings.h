@@ -7,6 +7,46 @@
 #include <Preferences.h>
 #include <Log.h>
 
+/**
+ * Simple optional wrapper for C++11/C++14 compatibility
+ */
+template <typename T>
+class Optional {
+private:
+    T value_;
+    bool has_value_;
+
+public:
+    Optional() : has_value_(false) {}
+    
+    Optional(const T& val) : value_(val), has_value_(true) {}
+    
+    bool has_value() const { return has_value_; }
+    
+    T& value() { return value_; }
+    const T& value() const { return value_; }
+    
+    Optional& operator=(const T& val) {
+        value_ = val;
+        has_value_ = true;
+        return *this;
+    }
+    
+    void reset() {
+        has_value_ = false;
+    }
+    
+    bool operator==(const Optional& other) const {
+        if (has_value_ != other.has_value_) return false;
+        if (!has_value_) return true;
+        return value_ == other.value_;
+    }
+    
+    bool operator!=(const Optional& other) const {
+        return !(*this == other);
+    }
+};
+
 enum DimmerMode {
     none,
     single,
@@ -805,7 +845,7 @@ struct PluginCfg {
  *   enabled: true
  *   uart_port: 1
  *   tx_pin: 17
- *   rx_pin: 16  # can be -1 if not used
+ *   rx_pin: 16
  *   enable_pin: 4  # DE/RE pins on MAX485
  *   universe: 0  # which universe to transmit (matches sensor_pipelines universe)
  */
@@ -941,8 +981,8 @@ struct Settings {
     int logLevel = -1; // default to not apply (-1=don't apply, 0=SILENT, 1=ERROR, 2=WARNING, 3=INFO, 4=TRACE)
 
     MqttCfg mqtt;
-    DmxOutputCfg dmxOutput;
-    DmxInputCfg dmxInput;
+    Optional<DmxOutputCfg> dmxOutput;
+    Optional<DmxInputCfg> dmxInput;
 
     bool operator==(const Settings& other) const {
         return
@@ -1024,13 +1064,13 @@ struct Settings {
             JsonObject jsonDmxOut = json["dmx_output"].as<JsonObject>();
             s.dmxOutput = DmxOutputCfg::deserialize(jsonDmxOut);
         } else {
-            s.dmxOutput = DmxOutputCfg{false, 1, -1, -1, -1, 0};
+            s.dmxOutput.reset();
         }
         if (json.containsKey("dmx_input")) {
             JsonObject jsonDmxIn = json["dmx_input"].as<JsonObject>();
             s.dmxInput = DmxInputCfg::deserialize(jsonDmxIn);
         } else {
-            s.dmxInput = DmxInputCfg{false, 2, -1, -1, -1, 0};
+            s.dmxInput.reset();
         }
 
         // actuators
@@ -1131,14 +1171,14 @@ struct Settings {
             MqttCfg::serialize(jsonMqtt, mqtt);
         }
 
-        if (dmxOutput.enabled) {
+        if (dmxOutput.has_value()) {
             JsonObject jsonDmxOut = json["dmx_output"].to<JsonObject>();
-            DmxOutputCfg::serialize(jsonDmxOut, dmxOutput);
+            DmxOutputCfg::serialize(jsonDmxOut, dmxOutput.value());
         }
 
-        if (dmxInput.enabled) {
+        if (dmxInput.has_value()) {
             JsonObject jsonDmxIn = json["dmx_input"].to<JsonObject>();
-            DmxInputCfg::serialize(jsonDmxIn, dmxInput);
+            DmxInputCfg::serialize(jsonDmxIn, dmxInput.value());
         }
 
         // actuators

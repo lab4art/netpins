@@ -229,20 +229,20 @@ void HardwareManager::createThings(Settings* settings, DmxManager* dmxManager, S
     }
 
     // DMX Output
-    if (settings->dmxOutput.enabled) {
-        Log::infoln("Creating DMX output on UART%d ...", settings->dmxOutput.uartPort);
+    if (settings->dmxOutput.has_value() && settings->dmxOutput.value().enabled) {
+        Log::infoln("Creating DMX output on UART%d ...", settings->dmxOutput.value().uartPort);
         dmxOutput = new DmxOutput(
-            settings->dmxOutput.uartPort,
-            settings->dmxOutput.txPin,
-            settings->dmxOutput.rxPin,
-            settings->dmxOutput.enablePin,
-            settings->dmxOutput.universe,
+            settings->dmxOutput.value().uartPort,
+            settings->dmxOutput.value().txPin,
+            settings->dmxOutput.value().rxPin,
+            settings->dmxOutput.value().enablePin,
+            settings->dmxOutput.value().universe,
             dmxManager->getDmxData()
         );
-        dmxManager->addUniverse(settings->dmxOutput.universe);
+        dmxManager->addUniverse(settings->dmxOutput.value().universe);
         if (dmxOutput->begin()) {
             scheduler->addTask(dmxOutput);
-            Log::infoln("DMX output initialized successfully for universe %d", settings->dmxOutput.universe);
+            Log::infoln("DMX output initialized successfully for universe %d", settings->dmxOutput.value().universe);
         } else {
             Log::errorln("Failed to initialize DMX output");
             delete dmxOutput;
@@ -253,18 +253,18 @@ void HardwareManager::createThings(Settings* settings, DmxManager* dmxManager, S
     }
 
     // DMX Input
-    if (settings->dmxInput.enabled) {
-        Log::infoln("Creating DMX input on UART%d ...", settings->dmxInput.uartPort);
+    if (settings->dmxInput.has_value()) {
+        Log::infoln("Creating DMX input on UART%d ...", settings->dmxInput.value().uartPort);
         dmxInput = new DmxInput(
-            settings->dmxInput.uartPort,
-            settings->dmxInput.txPin,
-            settings->dmxInput.rxPin,
-            settings->dmxInput.enablePin,
-            settings->dmxInput.universe,
+            settings->dmxInput.value().uartPort,
+            settings->dmxInput.value().txPin,
+            settings->dmxInput.value().rxPin,
+            settings->dmxInput.value().enablePin,
+            settings->dmxInput.value().universe,
             dmxManager->getDmxData(),
             onCommandReceived
         );
-        dmxManager->addUniverse(settings->dmxInput.universe);
+        dmxManager->addUniverse(settings->dmxInput.value().universe);
         if (dmxInput->begin()) {
             Log::infoln("Adding DmxInput to shcheduler task.");
             scheduler->addTask(dmxInput);
