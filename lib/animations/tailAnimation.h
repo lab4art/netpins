@@ -176,6 +176,7 @@ class TailAnimationThing: public Thing {
     private:
         TailAnimation* tailAnimation;
         unsigned int maxDuration;
+        int currentValues[10] = {0};
     
     public:
         TailAnimationThing(
@@ -199,7 +200,16 @@ class TailAnimationThing: public Thing {
             * [9] - tail length (in pixels)
         */
         void setData(uint8_t* data) {
-            // TODO set only if changed
+            if (memcmp(currentValues, data, 10) == 0) {
+                // Log::traceln("TailAnimationThing '%s' received same data, skipping update.", getName().c_str());
+                return; // No change in data, skip update
+            }
+            unsigned int durationMs = (unsigned int)(data[7] / 255.0f * maxDuration + 0.5f);
+            Log::traceln("TailAnimationThing '%s' updating with new data. Color1: %u %u %u, Color2: %u %u %u, Dimm: %u, Duration: %ums, HeadLength: %u, TailLength: %u", 
+                getName().c_str(), (unsigned int)data[0], (unsigned int)data[1], (unsigned int)data[2],
+                (unsigned int)data[3], (unsigned int)data[4], (unsigned int)data[5], (unsigned int)data[6],
+                durationMs, (unsigned int)data[8], (unsigned int)data[9]);
+
             tailAnimation->setColor1(RgbColor(data[0], data[1], data[2]));
             tailAnimation->setColor2(RgbColor(data[3], data[4], data[5]));
             tailAnimation->setDimm(data[6]);
@@ -210,6 +220,9 @@ class TailAnimationThing: public Thing {
                 tailLength = 1;
             }
             tailAnimation->setTailLength(tailLength);
+
+            // Update current values
+            memcpy(currentValues, data, 10);
         }
 
 };
