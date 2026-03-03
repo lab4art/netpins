@@ -299,6 +299,133 @@ dmx_processors:
         hold_ms: 0
 ```
 
+Autostart always run
+```yaml
+dmx_processors:
+  - type: sequence
+    name: sparks
+    min_value: -1 # always enabled, does not require a control channel
+    max_value: 255
+    loop: true
+    sequence:
+      - channels:
+          1@0: 0
+          2@0: 50
+          3@0: 50
+          4@0: 0
+        fade_in_ms: 0
+        hold_ms: 50
+      - channels:
+          1@0: 0
+          2@0: 0
+          3@0: 0
+          4@0: 0
+        fade_in_ms: 0
+        hold_ms: 200
+```
+
+
+```yaml
+# control tail aniimation plugin with dmx sequences
+rgb_strips:
+  - pin: 13
+    name: rgb-1
+    size: 20
+    dimmer: none
+    slices:
+      - 0
+    dmx: 1@10
+dmx_processors:
+  - type: sequence
+    name: on_off_tail_animation
+    min_value: -1
+    max_value: 255
+    loop: true
+    sequence:
+      - channels:
+          1@0: 50
+          2@0: 0
+          3@0: 0
+          4@0: 0
+          5@0: 0
+          6@0: 0
+          7@0: 255
+          8@0: 10
+          9@0: 0
+          10@0: 2
+        fade_in_ms: 0
+        hold_ms: 2000
+      - channels:
+          1@0: 10
+          2@0: 0
+          3@0: 0
+          4@0: 0
+          5@0: 0
+          6@0: 0
+          7@0: 0
+          8@0: 10
+          9@0: 0
+          10@0: 2
+        fade_in_ms: 0
+        hold_ms: 2000
+plugins:
+  - name: tail-animation-1
+    type: tail-animation
+    config:
+      rgb_strip_name: rgb-1
+      dmx: 1@0
+      max_duration: 10000
+      direction: right
+
+
+# control tail animation plugin with dmx sequences using includes
+dmx_processors:
+  - type: sequence
+    name: ta-on
+    sequence:
+      - channels:
+          1@0: 50
+          2@0: 0
+          3@0: 0
+          4@0: 0
+          5@0: 0
+          6@0: 0
+          7@0: 255
+          8@0: 10
+          9@0: 0
+          10@0: 2
+        fade_in_ms: 0
+  - type: sequence
+    name: ta-off
+    sequence:
+      - channels:
+          1@0: 50
+          2@0: 0
+          3@0: 0
+          4@0: 0
+          5@0: 0
+          6@0: 0
+          7@0: 0
+          8@0: 10
+          9@0: 0
+          10@0: 2
+        fade_in_ms: 0
+  - type: sequence
+    name: ta-runner
+    loop: true
+    initial_state_on: true
+    sequence:
+      - include: ta-on
+        hold_ms: 1000
+      - include: ta-off
+        hold_ms: 3000
+      - include: ta-on
+        hold_ms: 3000
+      - include: ta-off
+        hold_ms: 8000
+
+
+```
 
 ```yaml
 sensor_publish: # enable/disable sensor publishing over: mqtt, artnet, local

@@ -9,34 +9,15 @@
 #include <string>
 
 
-/**
- * Support recursive cofig, without actual recursion of function calls.
- * 
- * When entering an include, push the current sequence (or just the reference or id) state onto a stack,
- * and pop the stack when the included sequence ends.
- * 
- * Craete a stack of hold timers to handle duration. No need for Animation stack, includes does not fade.
- * 
- */
-
-/**
- * DMX Cue List Processor with Fade and Nested Sequences
- * 
- * Manages a list of DMX cues with smooth fading between them.
- * Each cue is a configurable map of DMX channels to values with fade-in time.
- * Supports nested sequences via include references.
- * Can be triggered manually, by time, or by DMX channel values.
- * 
- * Example: Create lighting cues that fade smoothly from one to another
- */
 class DmxSequenceProcessor : public DmxProcessor {
 
-    // Static sequence template registry for includes
-    static std::map<std::string, DmxSequenceProcessor*>& getSequenceProcessorRegistry() {
-        static std::map<std::string, DmxSequenceProcessor*> registry;
-        return registry;
-    }
     private:
+        // Static sequence template registry for includes
+        static std::map<std::string, DmxSequenceProcessor*>& getSequenceProcessorRegistry() {
+            static std::map<std::string, DmxSequenceProcessor*> registry;
+            return registry;
+        }
+
         struct Cue {
             std::map<DmxCfg, uint8_t> channels;  // Map of channel -> value (empty if include)
             std::string includeName;              // Name of included sequence (for reference only)
@@ -46,12 +27,12 @@ class DmxSequenceProcessor : public DmxProcessor {
         };
         
         std::vector<Cue> cues;
-        size_t currentCueIndex;
+        uint8_t currentCueIndex = 0;
 
-        OneShotTask* holdTask;
+        OneShotTask* holdTask = nullptr;
         
-        DmxSequenceProcessor* activeIncludeSequence;
-        OneShotTask* includeDurationTask;
+        DmxSequenceProcessor* activeIncludeSequence = nullptr;
+        OneShotTask* includeDurationTask = nullptr;
 
 
         // Fade state
@@ -86,10 +67,15 @@ class DmxSequenceProcessor : public DmxProcessor {
                 if (!enabled) return;
                 // enable hold timer if holdMs > 0
                 unsigned long holdMs = cues[currentCueIndex].holdTimeMs;
-                if (holdMs > 0) {
-                    holdTask->arm(holdMs);
-                } else {
+                Log::traceln("[DmxSequence] Name: %s  Cue %u ending fade. holdMs: %lu", sequenceName.c_str(), currentCueIndex, holdMs);
+                
+                if (holdMs == 0) {
                     nextCue();
+                } else if (holdMs == ULONG_MAX) {
+                    // Wait indefinitely until external trigger
+                    Log::traceln("[DmxSequence] Name: %s  Waiting indefinitely after cue %u until external trigger.", sequenceName.c_str(), currentCueIndex);
+                } else { // holdMs > 0
+                    holdTask->arm(holdMs);
                 }
             });
 
@@ -97,6 +83,7 @@ class DmxSequenceProcessor : public DmxProcessor {
 
             holdTask = new OneShotTask([this]() {
                 if (!enabled) return;
+                Log::traceln("[DmxSequence] Name: %s  Cue %u hold ended.", sequenceName.c_str(), currentCueIndex);
                 nextCue();
             });
             scheduler->addTask(holdTask);
@@ -105,8 +92,11 @@ class DmxSequenceProcessor : public DmxProcessor {
                 if (!enabled) return;
                 // stop included sequence
                 if (activeIncludeSequence) {
+                    Log::traceln("[DmxSequence] Name: %s  Stopping included sequence %s.", sequenceName.c_str(), activeIncludeSequence->sequenceName.c_str());
                     activeIncludeSequence->setEnabled(false);
                     activeIncludeSequence = nullptr;
+                } else {
+                    Log::warningln("[DmxSequence] Name: %s  Include duration task triggered but no active include sequence.", sequenceName.c_str());
                 }
                 nextCue();
             });
@@ -119,28 +109,36 @@ class DmxSequenceProcessor : public DmxProcessor {
          * @param fadeInMs Fade-in time for this cue in milliseconds
          * @param holdMs How long to hold this cue before auto-advancing
          */
-        void addCue(const std::map<DmxCfg, uint8_t>& channels, 
+        void addCue(const std::map<DmxCfg, uint8_t>& channels,
+                    std::string includeName = "",
                       unsigned long fadeInMs = 1000,
                       unsigned long holdMs = 5000) {
-            cues.push_back({channels, "", fadeInMs, holdMs});
-        }
-        
-        /**
-         * Add an include cue (references another sequence)
-         * @param includeName Name of sequence to include
-         * @param fadeInMs Fade-in time (currently unused for includes)
-         * @param holdMs How long to play the included sequence before next cue
-         */
-        void addIncludeCue(const std::string& includeName,
-                          unsigned long fadeInMs = 0,
-                          unsigned long holdMs = 0) {
             auto& registry = getSequenceProcessorRegistry();
-            if (registry.find(includeName) == registry.end()) {
+            if (!includeName.empty() && registry.find(includeName) == registry.end()) {
                 Log::errorln("[DmxSequence] Sequence include not found: %s", includeName.c_str());
                 return;
             }
-            cues.push_back({{}, includeName, fadeInMs, holdMs});
+            cues.push_back({channels, includeName, fadeInMs, holdMs});
+            Log::infoln("[DmxSequence] Name: %s  Added cue: channels=%d, include='%s', fadeIn=%lums, hold=%lums", 
+                sequenceName.c_str(), (int)channels.size(), includeName.c_str(), fadeInMs, holdMs);
         }
+        
+        // /**
+        //  * Add an include cue (references another sequence)
+        //  * @param includeName Name of sequence to include
+        //  * @param fadeInMs Fade-in time (currently unused for includes)
+        //  * @param holdMs How long to play the included sequence before next cue
+        //  */
+        // void addIncludeCue(const std::string& includeName,
+        //                   unsigned long fadeInMs = 0,
+        //                   unsigned long holdMs = 0) {
+        //     auto& registry = getSequenceProcessorRegistry();
+        //     if (registry.find(includeName) == registry.end()) {
+        //         Log::errorln("[DmxSequence] Sequence include not found: %s", includeName.c_str());
+        //         return;
+        //     }
+        //     cues.push_back({{}, includeName, fadeInMs, holdMs});
+        // }
 
         void addSequenceToRegistry(const std::string& name) {
             sequenceName = name;
@@ -155,6 +153,7 @@ class DmxSequenceProcessor : public DmxProcessor {
                 wasEnabled = true;
             }
             if (!enable) {
+                Log::traceln("[DmxSequence] Name: %s  Disabling sequence, stopping all cues and includes.", sequenceName.c_str());
                 fadeAnimation->cancel();
                 holdTask->cancel();
                 includeDurationTask->cancel();
@@ -172,41 +171,49 @@ class DmxSequenceProcessor : public DmxProcessor {
 
     private:
 
-        void goToCue(size_t cueIndex) {
+        void goToCue(uint8_t cueIndex) {
+            Log::traceln("[DmxSequence] Name: %s  Going to cue %u", sequenceName.c_str(), cueIndex);
             if (cueIndex >= cues.size()) return;
             if (dmxManager == nullptr) return;
 
-             // TODO verify index increments
             const Cue& targetCue = cues[cueIndex];
 
             if (targetCue.isInclude()) {
                 activeIncludeSequence = startInclude(targetCue.includeName);
-                if (activeIncludeSequence == nullptr) {
+                if (activeIncludeSequence != nullptr) {
+                    includeDurationTask->arm(targetCue.holdTimeMs);
+                } else {
                     // Failed to start include, skip to next cue
+                    Log::warningln("[DmxSequence] Name: %s  Failed to start included sequence '%s', skipping to next cue.", sequenceName.c_str(), targetCue.includeName.c_str());
                     nextCue();
-                    return;
                 }
-                includeDurationTask->arm(targetCue.holdTimeMs);
-                return;
+            } else {
+                auto channelData = getDmxChannels(targetCue);
+                fadeAnimation->setChannels(channelData);
+                fadeAnimation->setDuration(targetCue.fadeInMs);
+                fadeAnimation->restart();
             }
-
-            auto channelData = getDmxChannels(targetCue);
-            fadeAnimation->setChannels(channelData);
-            fadeAnimation->setDuration(targetCue.fadeInMs);
-            fadeAnimation->restart();
             currentCueIndex = cueIndex;
+            Log::traceln("[DmxSequence] Name: %s  Started cue %u", sequenceName.c_str(), cueIndex);
         }
 
         /**
          * Go to next cue
          */
         void nextCue() {
+            Log::traceln("[DmxSequence] Name: %s  current cue index: %u", sequenceName.c_str(), currentCueIndex);
             if (cues.empty()) return;
-            size_t next = currentCueIndex + 1;
+            uint8_t next;
+            if (currentCueIndex == 254) {
+                Log::errorln("[DmxSequence] Name: %s  Cue index overflow, resetting to 0", sequenceName.c_str());
+                next = 0;
+            } else {
+                next = currentCueIndex + 1;
+            }
             if (next >= cues.size()) {
                 next = loop ? 0 : cues.size();
             }
-
+            Log::traceln("[DmxSequence] Name: %s Next cue index: %u of %d", sequenceName.c_str(), next, cues.size());
             if (next == cues.size()) {
                 // End of sequence reached
                 setEnabled(false);
@@ -223,16 +230,20 @@ class DmxSequenceProcessor : public DmxProcessor {
             auto& registry = getSequenceProcessorRegistry();
             auto it = registry.find(includeName);
             if (it == registry.end()) {
-                Log::errorln("[DmxSequence] Template not found for include: %s", includeName.c_str());
+                Log::errorln("[DmxSequence] Name: %s  Template not found for include: %s", sequenceName.c_str(), includeName.c_str());
                 return nullptr;
             }
-            DmxSequenceProcessor* included = it->second;
-            included->setOnEnd([this]() {
-                Log::traceln("[DmxSequence] Included sequence ended, continuing parent");
-                nextCue();
+            DmxSequenceProcessor* include = it->second;
+            include->setOnEnd([this, include]() {
+                Log::traceln("[DmxSequence] Name: %s  Included sequence %s ended, continuing parent.", sequenceName.c_str(), include->sequenceName.c_str());
+                // Cancel the duration task to prevent double-triggering of nextCue()
+                this->includeDurationTask->cancel();
+                this->activeIncludeSequence = nullptr;
+                this->nextCue();
             });
-            included->setEnabled(true);
-            return included;
+            include->setEnabled(true);
+            Log::traceln("[DmxSequence] Name: %s  Started included sequence: %s", sequenceName.c_str(), includeName.c_str());
+            return include;
         }
         
     public:
@@ -253,11 +264,6 @@ class DmxSequenceProcessor : public DmxProcessor {
                 channelData.push_back({chId, startValue, targetValue});
             }
             return channelData;
-        }
-
-        // no-op process since fading is handled by animation task
-        void process(unsigned long currentTime) override {
-            // No processing needed here - fading handled by animation task
         }
 
         /**

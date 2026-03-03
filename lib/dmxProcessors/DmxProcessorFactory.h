@@ -50,6 +50,11 @@ private:
             processor->setLoop(loopIt->second == "true");
         }
         
+        // Add to registry if it has a name (for includes)
+        if (!config.name.empty()) {
+            processor->addSequenceToRegistry(config.name);
+        }
+
         // Parse sequence array
         auto sequenceIt = config.params.find("sequence");
         if (sequenceIt != config.params.end()) {
@@ -63,13 +68,13 @@ private:
                     JsonObject cueObj = cueVariant.as<JsonObject>();
                     
                     // Parse cue parameters
-                    unsigned long fadeInMs = cueObj["fade_in_ms"] | 1000;
-                    unsigned long holdMs = cueObj["hold_ms"] | 5000;
+                    unsigned long fadeInMs = cueObj["fade_in_ms"] | 0;
+                    unsigned long holdMs = cueObj["hold_ms"] | ULONG_MAX;
                     
                     // Check if this is an include cue
                     if (cueObj.containsKey("include")) {
                         std::string includeName = cueObj["include"].as<std::string>();
-                        processor->addIncludeCue(includeName, fadeInMs, holdMs);
+                        processor->addCue({}, includeName, fadeInMs, holdMs);
                     }
                     // Regular channel cue
                     else if (cueObj.containsKey("channels")) {
@@ -85,18 +90,13 @@ private:
                         
                         // Add cue to processor
                         if (!channels.empty()) {
-                            processor->addCue(channels, fadeInMs, holdMs);
+                            processor->addCue(channels, "", fadeInMs, holdMs);
                         }
                     }
                 }
             }
         }
-        
-        // Add to registry if it has a name (for includes)
-        if (!config.name.empty()) {
-            processor->addSequenceToRegistry(config.name);
-        }
-        
+                
         return processor;
     }
     

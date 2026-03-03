@@ -66,7 +66,7 @@ void DmxInput::callback() {
         return;
     }
     // Receive DMX data
-    if (dmxDataRef != nullptr) {
+    if (dmxDataRef != nullptr) { // TODO make dmxDataRef mandatory in constructor
         dmx_packet_t packet;
         
         // Try to receive a DMX packet (non-blocking with timeout)

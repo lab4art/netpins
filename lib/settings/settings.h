@@ -596,9 +596,6 @@ struct SensorPipelineCfg {
  *   - type: sequence
  *     name: cue_player
  *     loop: true
- *     control_channel: 100@0  # Optional: control via DMX channel
- *     enable_threshold: 2.0   # Enable when channel >= 2
- *     disable_threshold: 1.5  # Disable when channel < 1.5 (hysteresis)
  *     sequence:
  *       - channels:
  *           1@0: 255  # channel@universe: value
@@ -614,19 +611,17 @@ struct SensorPipelineCfg {
  *         hold_ms: 3000
  */
 struct DmxProcessorCfg {
-    std::string type;     // Processor type: sequence, etc.
+    std::string type;     // Processor type: sequence, controller, etc.
     std::string name;     // Optional name for identification
-    DmxCfg controlChannel;  // DMX channel to control enable/disable (0,0 = always on)
-    int minValue;         // Minimum DMX value for range (inclusive, default: -1 = always on)
-    int maxValue;         // Maximum DMX value for range (inclusive, default: 255)
+    bool loop = false;   // For sequences: whether to loop after finishing
+    bool initialStateOn = false; // Whether the processor is enabled on startup
     std::map<std::string, std::string> params;  // Type-specific parameters
 
     bool operator==(const DmxProcessorCfg& other) const {
         return type == other.type &&
             name == other.name &&
-            controlChannel == other.controlChannel &&
-            minValue == other.minValue &&
-            maxValue == other.maxValue &&
+            loop == other.loop &&
+            initialStateOn == other.initialStateOn &&
             params == other.params;
     }
 
@@ -641,23 +636,17 @@ struct DmxProcessorCfg {
         if (json.containsKey("name")) {
             cfg.name = json["name"].as<std::string>();
         }
-        
-        // Parse control channel
-        if (json.containsKey("control_channel")) {
-            cfg.controlChannel = DmxCfg::deserialize(json["control_channel"].as<std::string>());
-        } else {
-            cfg.controlChannel = {0, 0};  // 0,0 = always on
+        if (json.containsKey("loop")) {
+            cfg.loop = json["loop"].as<bool>();
         }
-        
-        // Parse range values
-        cfg.minValue = json["min_value"] | -1;  // -1 = always on
-        cfg.maxValue = json["max_value"] | 255;  // Default to full DMX range
+        if (json.containsKey("initial_state_on")) {
+            cfg.initialStateOn = json["initial_state_on"].as<bool>();
+        }
         
         // Store all other fields as params
         for (JsonPair kv : json) {
             std::string key(kv.key().c_str());
-            if (key != "type" && key != "name" && 
-                key != "control_channel" && key != "min_value" && key != "max_value") {
+            if (key != "type" && key != "name" && key != "loop" && key != "initial_state_on") {
                 if (kv.value().is<int>()) {
                     cfg.params[key] = std::to_string(kv.value().as<int>());
                 } else if (kv.value().is<float>()) {
@@ -683,14 +672,12 @@ struct DmxProcessorCfg {
         if (!cfg.name.empty()) {
             json["name"] = cfg.name;
         }
-        
-        // Serialize control channel
-        if (cfg.controlChannel.channel != 0 || cfg.controlChannel.universe != 0) {
-            json["control_channel"] = DmxCfg::serialize(cfg.controlChannel);
+        if (cfg.loop) {
+            json["loop"] = cfg.loop;
         }
-        
-        json["min_value"] = cfg.minValue;
-        json["max_value"] = cfg.maxValue;
+        if (cfg.initialStateOn) {
+            json["initial_state_on"] = cfg.initialStateOn;
+        }
         
         // Serialize all params
         for (const auto& param : cfg.params) {
@@ -722,6 +709,78 @@ struct DmxProcessorCfg {
                 }
             }
         }
+    }
+};
+
+/**
+ * DMX Trigger Configuration
+ * 
+ * Triggers manage when sequences are enabled based on DMX channel values.
+ * 
+ * Example YAML:
+ * dmx_triggers:
+ *   - name: ctrl1
+ *     control_channel: 1@0
+ *     min_value: 1
+ *     max_value: 1.5
+ *     sequence: ta-runner
+ *   - name: ctrl2
+ *     control_channel: 1@0
+ *     min_value: 2
+ *     max_value: 2.5
+ *     sequence: ta-runner-slow
+ */
+struct DmxTriggerCfg {
+    std::string name;         // Optional name for identification
+    DmxCfg controlChannel;    // DMX channel to monitor
+    int minValue;             // Minimum DMX value for range (inclusive)
+    int maxValue;             // Maximum DMX value for range (inclusive)
+    std::string sequence;     // Name of sequence to control
+
+    bool operator==(const DmxTriggerCfg& other) const {
+        return name == other.name &&
+            controlChannel == other.controlChannel &&
+            minValue == other.minValue &&
+            maxValue == other.maxValue &&
+            sequence == other.sequence;
+    }
+
+    bool operator!=(const DmxTriggerCfg& other) const {
+        return !(*this == other);
+    }
+
+    static DmxTriggerCfg deserialize(JsonObject& json) {
+        DmxTriggerCfg cfg;
+        
+        if (json.containsKey("name")) {
+            cfg.name = json["name"].as<std::string>();
+        }
+        
+        if (json.containsKey("control_channel")) {
+            cfg.controlChannel = DmxCfg::deserialize(json["control_channel"].as<std::string>());
+        } else {
+            cfg.controlChannel = {0, 0};
+        }
+        
+        cfg.minValue = json["min_value"] | 0;
+        cfg.maxValue = json["max_value"] | 255;
+        cfg.sequence = json["sequence"].as<std::string>();
+        
+        return cfg;
+    }
+
+    static void serialize(JsonObject& json, const DmxTriggerCfg& cfg) {
+        if (!cfg.name.empty()) {
+            json["name"] = cfg.name;
+        }
+        
+        if (cfg.controlChannel.channel != 0 || cfg.controlChannel.universe != 0) {
+            json["control_channel"] = DmxCfg::serialize(cfg.controlChannel);
+        }
+        
+        json["min_value"] = cfg.minValue;
+        json["max_value"] = cfg.maxValue;
+        json["sequence"] = cfg.sequence;
     }
 };
 
@@ -969,6 +1028,7 @@ struct Settings {
     
     std::vector<SensorPipelineCfg> sensorPipelines; // Pipeline-based sensor processing
     std::vector<DmxProcessorCfg> dmxProcessors;     // DMX effect processors
+    std::vector<DmxTriggerCfg> dmxTriggers;         // DMX triggers
 
     std::vector<PluginCfg> plugins;
 
@@ -1015,6 +1075,7 @@ struct Settings {
 
             sensorPipelines == other.sensorPipelines &&
             dmxProcessors == other.dmxProcessors &&
+            dmxTriggers == other.dmxTriggers &&
 
             plugins == other.plugins;
             
@@ -1142,6 +1203,15 @@ struct Settings {
             }
         }
 
+        // dmx controllers
+        if (json.containsKey("dmx_triggers")) {
+            JsonArray triggersArray = json["dmx_triggers"].as<JsonArray>();
+            for (JsonVariant v : triggersArray) {
+                JsonObject jsonTrigger = v.as<JsonObject>();
+                s.dmxTriggers.push_back(DmxTriggerCfg::deserialize(jsonTrigger));
+            }
+        }
+
         // 
         // plugins
         JsonArray pluginsArray = json["plugins"].as<JsonArray>();
@@ -1263,6 +1333,15 @@ struct Settings {
             for (auto& processor : this->dmxProcessors) {
                 JsonObject jsonProc = processorsArray.add<JsonObject>();
                 DmxProcessorCfg::serialize(jsonProc, processor);
+            }
+        }
+
+        // dmx triggers
+        if (dmxTriggers.size() > 0) {
+            JsonArray triggersArray = json["dmx_triggers"].to<JsonArray>();
+            for (auto& trigger : this->dmxTriggers) {
+                JsonObject jsonTrigger = triggersArray.add<JsonObject>();
+                DmxTriggerCfg::serialize(jsonTrigger, trigger);
             }
         }
 

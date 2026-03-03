@@ -30,7 +30,7 @@ class DmxProcessor {
          * Process DMX data
          * @param currentTime Current timestamp in milliseconds
          */
-        virtual void process(unsigned long currentTime) = 0;
+        // virtual void process(unsigned long currentTime) = 0;
         
         /**
          * Enable or disable the processor
