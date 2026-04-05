@@ -185,15 +185,14 @@ public:
         // Process through pipeline
         SensorData processed = entry.pipeline->process(data);
 
-        // Map to DMX range (0-1 -> 0-255)
-        uint8_t dmxValue = static_cast<uint8_t>(
-            clampValue(processed.value, 0.0f, 255.0f)
-        );
-
         // Log::traceln("Sensor '%s': raw=%.3f processed=%.3f, dmx-ch=%d@%d, value=%d",
         //            sensorName.c_str(), rawValue, processed.value, entry.dmxCfg.channel, entry.dmxCfg.universe, dmxValue);
         // Set DMX value if configured
         if (entry.dmxCfg.channel > 0) {
+            // Map to DMX range (0-1 -> 0-255)
+            uint8_t dmxValue = static_cast<uint8_t>(
+                clampValue(processed.value, 0.0f, 255.0f)
+            );
             uint16_t dmxChannel = entry.dmxCfg.get0BasedChannel();
             dmxData[entry.dmxCfg.universe][dmxChannel] = dmxValue;
         }

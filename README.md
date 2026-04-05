@@ -181,6 +181,171 @@ dmx_output:
   universe: 0 # universe to output to DMX
 ```
 
+Start/stop sequence with an ON/OFF switch:
+```yaml
+pwms:
+  - pin: 4
+    name: pwm-4
+    dmx: 1@0 # channel@universe
+digital_reads:
+  - pin: 5
+    name: sw_on_off
+    read_ms: 20
+sensor_pipelines:
+  - sensor: sw_on_off
+    pipeline:
+      - type: debounce
+        duration_ms: 30
+      - type: threshold
+        threshold: 0.5
+        high: 255.0
+        low: 0.0
+    dmx: 1@101
+dmx_processors:
+  - type: sequence
+    name: ambient-loop
+    loop: true
+    sequence:
+      - channels:
+          1@0: 255
+        fade_in_ms: 500
+        hold_ms: 1500
+      - channels:
+          1@0: 0
+        fade_in_ms: 500
+        hold_ms: 1500
+  - type: sequence
+    name: ambient-off # make sure pwm is turned off when the sequence is stopped
+    loop: false
+    sequence:
+      - channels:
+          1@0: 0
+        fade_in_ms: 0
+        hold_ms: 0
+dmx_triggers:
+  - name: switch-ambient-on
+    control_channel: 1@101
+    min_value: 255
+    max_value: 255
+    sequence: ambient-loop
+  - name: switch-ambient-off
+    control_channel: 1@101
+    min_value: 0
+    max_value: 0
+    sequence: ambient-off
+```
+
+Start/stop sequence with a toggle button (momentary press toggles ON/OFF):
+```yaml
+pwms:
+  - pin: 4
+    name: pwm-4
+    dmx: 1@0 # channel@universe
+digital_reads:
+  - pin: 5
+    name: sw_on_off
+    read_ms: 20
+sensor_pipelines:
+  - sensor: sw_on_off
+    pipeline:
+      - type: debounce
+        duration_ms: 30
+      - type: threshold
+        threshold: 0.5
+        high: 1.0
+        low: 0.0
+      - type: toggle
+        threshold: 0.5
+        on_value: 255.0
+        off_value: 0.0
+        initial_on: false
+        on_rising: true
+    dmx: 1@101
+dmx_processors:
+  - type: sequence
+    name: ambient-loop
+    loop: true
+    sequence:
+      - channels:
+          1@0: 255
+        fade_in_ms: 500
+        hold_ms: 1500
+      - channels:
+          1@0: 0
+        fade_in_ms: 500
+        hold_ms: 1500
+  - type: sequence
+    name: ambient-off # make sure pwm is turned off when the sequence is stopped
+    loop: false
+    sequence:
+      - channels:
+          1@0: 0
+        fade_in_ms: 0
+        hold_ms: 0
+dmx_triggers:
+  - name: switch-ambient-on
+    control_channel: 1@101
+    min_value: 255
+    max_value: 255
+    sequence: ambient-loop
+  - name: switch-ambient-off
+    control_channel: 1@101
+    min_value: 0
+    max_value: 0
+    sequence: ambient-off
+```
+
+PWM fade on/off example configuration:
+```yaml
+pwms:
+  - pin: 4
+    name: pwm-4
+    dmx: 1@0 # channel@universe
+digital_reads:
+  - pin: 5
+    name: sw_on_off
+    read_ms: 20
+sensor_pipelines:
+  - sensor: sw_on_off
+    pipeline:
+      - type: debounce
+        duration_ms: 30
+      - type: threshold
+        threshold: 0.5
+        high: 255.0
+        low: 0.0
+    dmx: 1@101
+dmx_processors:
+  - type: sequence
+    name: fade-in
+    loop: false
+    sequence:
+      - channels:
+          1@0: 255
+        fade_in_ms: 700
+        hold_ms: 0
+  - type: sequence
+    name: fade-out
+    loop: false
+    sequence:
+      - channels:
+          1@0: 0
+        fade_in_ms: 700
+        hold_ms: 0
+dmx_triggers:
+  - name: switch-fade-in
+    control_channel: 1@101
+    min_value: 255
+    max_value: 255
+    sequence: fade-in
+  - name: switch-fade-out
+    control_channel: 1@101
+    min_value: 0
+    max_value: 0
+    sequence: fade-out
+```
+
+
 ### Experimental
 DmxOut sample configuration:
 ```yaml
@@ -260,9 +425,6 @@ dmx_processors:
         hold_ms: 0
   - type: sequence
     name: steady_cyan_fade
-    control_channel: 1@100 # ignored when used as included sequence
-    min_value: 1
-    max_value: 1
     loop: false
     sequence:
       - channels:
@@ -274,9 +436,6 @@ dmx_processors:
         hold_ms: 0
   - type: sequence
     name: strobe_runner
-    control_channel: 1@100
-    min_value: 2
-    max_value: 2
     loop: true
     sequence:
       - include: steady_cyan
@@ -285,9 +444,6 @@ dmx_processors:
         hold_ms: 5000
   - type: sequence
     name: fade_to_black
-    control_channel: 1@100
-    min_value: 0
-    max_value: 0
     loop: false
     sequence:
       - channels:
@@ -297,6 +453,22 @@ dmx_processors:
           4@0: 0
         fade_in_ms: 5000
         hold_ms: 0
+dmx_triggers:
+  - name: steady-cyan-fade-when-motion
+    control_channel: 1@100
+    min_value: 1
+    max_value: 1
+    sequence: steady_cyan_fade
+  - name: strobe-when-persisted
+    control_channel: 1@100
+    min_value: 2
+    max_value: 2
+    sequence: strobe_runner
+  - name: fade-to-black-when-idle
+    control_channel: 1@100
+    min_value: 0
+    max_value: 0
+    sequence: fade_to_black
 ```
 
 Autostart always run
@@ -304,8 +476,7 @@ Autostart always run
 dmx_processors:
   - type: sequence
     name: sparks
-    min_value: -1 # always enabled, does not require a control channel
-    max_value: 255
+    initial_state_on: true # always enabled on startup, no trigger needed
     loop: true
     sequence:
       - channels:
@@ -338,8 +509,7 @@ rgb_strips:
 dmx_processors:
   - type: sequence
     name: on_off_tail_animation
-    min_value: -1
-    max_value: 255
+    initial_state_on: true
     loop: true
     sequence:
       - channels:
@@ -424,38 +594,8 @@ dmx_processors:
       - include: ta-off
         hold_ms: 8000
 
-
 ```
 
-```yaml
-sensor_publish: # enable/disable sensor publishing over: mqtt, artnet, local
-  - mqtt
-  - artnet
-  - local
-
-sensor_mappings:
-  - sensor: dr-4
-    dmx: 4@1 # controll blue (assuming rgb strip is mapped to 2@1) collor of the rgb strip
-    value_range: # map read value range to dmx value 0-255
-      from: 0
-      to: 1023
-
-digital_reads:
-  - pin: 4
-    name: dr-4
-    read_ms: 100
-hum_temps:
-  - pin: 4
-    read_ms: 1000
-touch_sensors:
-  - pin: 4
-    threshold: 250 # works ok with a wire on a s2_mini pin
-
-pwm_fades:
-  - name: fade-13
-    pwm: pwm-13 # identified by name
-
-```
 Tail animation example configuration:
 ```yaml
 rgb_strips:
@@ -497,37 +637,23 @@ plugins:
       max_fade_time: 5000
       dimmable: true
 ```
-PWM fade
-```yaml
-pwms:
-  - pin: 13
-    name: pwm-13
-    dmx: 1@0 # channel@universe
-plugins:
-  - name: pwm-fade-1
-    type: pwm-fade
-    config:
-      pwm_name: pwm-13
-      dmx: 1@0
-      max_fade_duration: 5000
-```
 
-Analog read sensor example configuration:
+To map the full analog range to DMX 0-255, use the `map` processor:
 ```yaml
-pwms:
-  - pin: 5
-    name: pwm-5
-    dmx: 1@0
 analog_reads:
   - pin: 3
-    name: analog_read
-    read_ms: 10
-sensor_mappings:
-  - sensor: analog_read
+    name: pot_level
+    read_ms: 20
+sensor_pipelines:
+  - sensor: pot_level
+    pipeline:
+      - type: map
+        input_min: 0
+        input_max: 65536
+        output_min: 0
+        output_max: 255
+        clamp: true
     dmx: 1@0
-    value_range:
-      from: 0
-      to: 65536
 ```
 
 

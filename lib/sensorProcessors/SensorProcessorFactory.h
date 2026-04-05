@@ -28,12 +28,30 @@ struct ProcessorConfig {
     // Helper methods to get parameters with defaults
     float getFloat(const std::string& key, float defaultValue = 0.0f) const {
         auto it = floatParams.find(key);
-        return (it != floatParams.end()) ? it->second : defaultValue;
+        if (it != floatParams.end()) {
+            return it->second;
+        }
+
+        auto intIt = intParams.find(key);
+        if (intIt != intParams.end()) {
+            return static_cast<float>(intIt->second);
+        }
+
+        return defaultValue;
     }
     
     int getInt(const std::string& key, int defaultValue = 0) const {
         auto it = intParams.find(key);
-        return (it != intParams.end()) ? it->second : defaultValue;
+        if (it != intParams.end()) {
+            return it->second;
+        }
+
+        auto floatIt = floatParams.find(key);
+        if (floatIt != floatParams.end()) {
+            return static_cast<int>(floatIt->second);
+        }
+
+        return defaultValue;
     }
     
     std::string getString(const std::string& key, const std::string& defaultValue = "") const {
@@ -136,6 +154,15 @@ class SensorProcessorFactory {
             }
             
             // Threshold processors
+            if (type == "toggle") {
+                float threshold = config.getFloat("threshold", 0.5f);
+                float onValue = config.getFloat("on_value", 255.0f);
+                float offValue = config.getFloat("off_value", 0.0f);
+                bool initialOn = config.getBool("initial_on", false);
+                bool onRising = config.getBool("on_rising", true);
+                return std::make_shared<ToggleProcessor>(threshold, onValue, offValue, initialOn, onRising);
+            }
+
             if (type == "threshold") {
                 float threshold = config.getFloat("threshold", 128.0f);
                 float high = config.getFloat("high", 255.0f);

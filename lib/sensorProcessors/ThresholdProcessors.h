@@ -247,3 +247,68 @@ class DeadZoneProcessor : public SensorProcessor {
         }
 };
 
+/**
+ * Toggle processor - flips latched output on each input edge
+ * Useful for momentary push buttons where each press toggles ON/OFF state.
+ */
+class ToggleProcessor : public SensorProcessor {
+    private:
+        float edgeThreshold;
+        float onValue;
+        float offValue;
+        bool initialOn;
+        bool toggleOnRising;
+
+        bool latchedOn;
+        bool hasPreviousInput;
+        bool previousInputHigh;
+
+    public:
+        ToggleProcessor(float threshold = 0.5f,
+                        float onVal = 255.0f,
+                        float offVal = 0.0f,
+                        bool initialStateOn = false,
+                        bool onRising = true)
+            : SensorProcessor("Toggle"),
+              edgeThreshold(threshold),
+              onValue(onVal),
+              offValue(offVal),
+              initialOn(initialStateOn),
+              toggleOnRising(onRising),
+              latchedOn(initialStateOn),
+              hasPreviousInput(false),
+              previousInputHigh(false) {}
+
+        SensorData process(const SensorData& data) override {
+            if (!enabled) return data;
+
+            SensorData result = data;
+            bool inputHigh = data.value > edgeThreshold;
+
+            if (!hasPreviousInput) {
+                hasPreviousInput = true;
+                previousInputHigh = inputHigh;
+                result.value = latchedOn ? onValue : offValue;
+                return result;
+            }
+
+            bool edgeDetected = toggleOnRising
+                ? (!previousInputHigh && inputHigh)
+                : (previousInputHigh && !inputHigh);
+
+            if (edgeDetected) {
+                latchedOn = !latchedOn;
+            }
+
+            previousInputHigh = inputHigh;
+            result.value = latchedOn ? onValue : offValue;
+            return result;
+        }
+
+        void reset() override {
+            latchedOn = initialOn;
+            hasPreviousInput = false;
+            previousInputHigh = false;
+        }
+};
+

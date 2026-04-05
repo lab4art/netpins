@@ -66,31 +66,29 @@ void DmxInput::callback() {
         return;
     }
     // Receive DMX data
-    if (dmxDataRef != nullptr) { // TODO make dmxDataRef mandatory in constructor
-        dmx_packet_t packet;
+    dmx_packet_t packet;
         
-        // Try to receive a DMX packet (non-blocking with timeout)
-        if (dmx_receive(dmxPort, &packet, DMX_TIMEOUT_TICK)) {
-            // Check if we got a valid DMX packet
-            if (!packet.err) {
-                // Get the data
-                uint8_t data[DMX_PACKET_SIZE];
-                dmx_read(dmxPort, data, DMX_PACKET_SIZE);
-                
-                // Copy to our shared dmxData for the specified universe
-                auto& universeData = (*dmxDataRef)[inputUniverse];
+    // Try to receive a DMX packet (non-blocking with timeout)
+    if (dmx_receive(dmxPort, &packet, DMX_TIMEOUT_TICK)) {
+        // Check if we got a valid DMX packet
+        if (!packet.err) {
+            // Get the data
+            uint8_t data[DMX_PACKET_SIZE];
+            dmx_read(dmxPort, data, DMX_PACKET_SIZE);
+            
+            // Copy to our shared dmxData for the specified universe
+            auto& universeData = (*dmxDataRef)[inputUniverse];
 
-                // copy data without the first byte (start code)
-                memcpy(universeData.data(), &data[1], 512);
-                
-                // Trigger callback if provided
-                if (onDataReceived) {
-                    onDataReceived();
-                }
-                // Log::infoln("DMX Input: Received uni %d, first 3 channels: %d, %d, %d", inputUniverse, data[1], data[2], data[3]);
-            } else {
-                Log::errorln("DMX Input: Error receiving DMX packet, err code: %d", packet.err);
+            // copy data without the first byte (start code)
+            memcpy(universeData.data(), &data[1], 512);
+            
+            // Trigger callback if provided
+            if (onDataReceived) {
+                onDataReceived();
             }
+            // Log::infoln("DMX Input: Received uni %d, first 3 channels: %d, %d, %d", inputUniverse, data[1], data[2], data[3]);
+        } else {
+            Log::errorln("DMX Input: Error receiving DMX packet, err code: %d", packet.err);
         }
     }
 }

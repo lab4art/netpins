@@ -17,8 +17,6 @@
 
 #include <pluginFactory.h>
 // register factories to make sure they are not stripped by the linker
-#include <pwmFadeAnimationFactory.cpp>
-REGISTER_ANIMATION_FACTORY(PWMFadeAnimationFactory);
 #include <tailAnimationFactory.cpp>
 REGISTER_ANIMATION_FACTORY(TailAnimationFactory);
 #include <waveEffectFactory.cpp>
