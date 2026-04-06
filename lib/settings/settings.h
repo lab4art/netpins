@@ -639,14 +639,14 @@ struct DmxProcessorCfg {
         if (json.containsKey("loop")) {
             cfg.loop = json["loop"].as<bool>();
         }
-        if (json.containsKey("initial_state_on")) {
-            cfg.initialStateOn = json["initial_state_on"].as<bool>();
+        if (json.containsKey("autostart")) {
+            cfg.initialStateOn = json["autostart"].as<bool>();
         }
         
         // Store all other fields as params
         for (JsonPair kv : json) {
             std::string key(kv.key().c_str());
-            if (key != "type" && key != "name" && key != "loop" && key != "initial_state_on") {
+            if (key != "type" && key != "name" && key != "loop" && key != "autostart") {
                 if (kv.value().is<int>()) {
                     cfg.params[key] = std::to_string(kv.value().as<int>());
                 } else if (kv.value().is<float>()) {
@@ -676,7 +676,7 @@ struct DmxProcessorCfg {
             json["loop"] = cfg.loop;
         }
         if (cfg.initialStateOn) {
-            json["initial_state_on"] = cfg.initialStateOn;
+            json["autostart"] = cfg.initialStateOn;
         }
         
         // Serialize all params

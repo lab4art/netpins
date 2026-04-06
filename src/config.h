@@ -15,13 +15,6 @@
 
 #define ANIMATION_FRAME_RATE 50 // Hz
 
-#include <pluginFactory.h>
-// register factories to make sure they are not stripped by the linker
-#include <tailAnimationFactory.cpp>
-REGISTER_ANIMATION_FACTORY(TailAnimationFactory);
-#include <waveEffectFactory.cpp>
-REGISTER_ANIMATION_FACTORY(WaveEffectFactory);
-
 // debug settings ////////////
 #define FORCE_RESET false
 #define WAIT_FOR_SERIAL false
@@ -31,3 +24,12 @@ REGISTER_ANIMATION_FACTORY(WaveEffectFactory);
 // #define LOG_LEVEL LOG_LEVEL_TRACE
 
 #define PRINT_EXECUTION_STAT false
+
+
+// includes must be after LOG_LEVEL definition otherwise it gets defined by Log.h to the default level INFO
+#include <pluginFactory.h>
+// register factories to make sure they are not stripped by the linker
+#include <tailAnimationFactory.cpp>
+REGISTER_ANIMATION_FACTORY(TailAnimationFactory);
+#include <waveEffectFactory.cpp>
+REGISTER_ANIMATION_FACTORY(WaveEffectFactory);

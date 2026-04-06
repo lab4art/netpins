@@ -345,7 +345,6 @@ dmx_triggers:
     sequence: fade-out
 ```
 
-
 ### Experimental
 DmxOut sample configuration:
 ```yaml
@@ -476,7 +475,7 @@ Autostart always run
 dmx_processors:
   - type: sequence
     name: sparks
-    initial_state_on: true # always enabled on startup, no trigger needed
+    autostart: true # always enabled on startup, no trigger needed
     loop: true
     sequence:
       - channels:
@@ -509,7 +508,7 @@ rgb_strips:
 dmx_processors:
   - type: sequence
     name: on_off_tail_animation
-    initial_state_on: true
+    autostart: true
     loop: true
     sequence:
       - channels:
@@ -583,7 +582,7 @@ dmx_processors:
   - type: sequence
     name: ta-runner
     loop: true
-    initial_state_on: true
+    autostart: true
     sequence:
       - include: ta-on
         hold_ms: 1000
