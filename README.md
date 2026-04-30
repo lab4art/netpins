@@ -181,6 +181,31 @@ dmx_output:
   universe: 0 # universe to output to DMX
 ```
 
+Motion sensor (PIR, Radar) with hold and delay:
+```yaml
+pwms:
+  - pin: 4
+    name: pwm-4
+    dmx: 1@0
+digital_reads:
+  - pin: 5
+    name: motion_sensor
+    read_ms: 20
+sensor_pipelines:
+  - sensor: motion_sensor
+    pipeline:
+      - type: motion_state
+        no_motion_ms: 10000 # keep motion active for 10 seconds after no motion is detected
+        persist_ms: 2000 # motion needs to be continuously detected for 2 seconds to be considered persisted (value 2), otherwise it's non-persisted motion (value 1) until no-motion timeout is reached (value 0)
+        threshold: 0.5
+      - type: threshold
+        high: 255
+        low: 0
+        threshold: 1.5 # note that motion_state processor outputs 0, 1 or 2 so threshold between 1 and 2 is needed to separate non-persisted and persisted motion
+    dmx: 1@0
+```
+
+
 Start/stop sequence with an ON/OFF switch:
 ```yaml
 pwms:

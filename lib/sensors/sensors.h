@@ -4,7 +4,7 @@
 #include <DHT.h>
 #include <DHT_U.h>
 #include <VL53L1X.h>
-
+#include <Log.h>
 
 class MovingAverage {
     private:
@@ -122,6 +122,7 @@ class DigitalReadSensor : public SensorBase<bool> {
         }
 
         bool doRead() {
+            // Log::infoln("Reading digital pin %d: %d", getPin(), digitalRead(getPin()));
             return setValue(digitalRead(getPin()) == HIGH);
         }
 };
@@ -154,11 +155,11 @@ class TouchSensor : public SensorBase<bool> {
         bool doRead() {
             int currentRead = touchRead(getPin());
             if (nonTouchedAverage->isFull() && abs(nonTouchedAverage->get() - currentRead) > threshold) {
-                // Log.infoln("Touched. Avg touch %d, current touch %d", nonTouchedAverage->get(), currentRead);
+                // Log::infoln("Touched. Avg touch %d, current touch %d", nonTouchedAverage->get(), currentRead);
                 return true;
             } else {
                 nonTouchedAverage->add(currentRead);
-                // Log.infoln("NO touch. Avg touch %d, current touch %d", nonTouchedAverage->get(), currentRead);
+                // Log::infoln("NO touch. Avg touch %d, current touch %d", nonTouchedAverage->get(), currentRead);
                 return false;
             }
         }
