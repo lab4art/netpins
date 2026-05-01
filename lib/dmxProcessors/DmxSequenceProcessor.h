@@ -67,13 +67,11 @@ class DmxSequenceProcessor : public DmxProcessor {
                 if (!enabled) return;
                 // enable hold timer if holdMs > 0
                 unsigned long holdMs = cues[currentCueIndex].holdTimeMs;
-                Log::traceln("[DmxSequence] Name: %s  Cue %u ending fade. holdMs: %lu", sequenceName.c_str(), currentCueIndex, holdMs);
                 
                 if (holdMs == 0) {
                     nextCue();
                 } else if (holdMs == ULONG_MAX) {
                     // Wait indefinitely until external trigger
-                    Log::traceln("[DmxSequence] Name: %s  Waiting indefinitely after cue %u until external trigger.", sequenceName.c_str(), currentCueIndex);
                 } else { // holdMs > 0
                     holdTask->arm(holdMs);
                 }
@@ -83,7 +81,6 @@ class DmxSequenceProcessor : public DmxProcessor {
 
             holdTask = new OneShotTask([this]() {
                 if (!enabled) return;
-                Log::traceln("[DmxSequence] Name: %s  Cue %u hold ended.", sequenceName.c_str(), currentCueIndex);
                 nextCue();
             });
             scheduler->addTask(holdTask);
@@ -92,11 +89,8 @@ class DmxSequenceProcessor : public DmxProcessor {
                 if (!enabled) return;
                 // stop included sequence
                 if (activeIncludeSequence) {
-                    Log::traceln("[DmxSequence] Name: %s  Stopping included sequence %s.", sequenceName.c_str(), activeIncludeSequence->sequenceName.c_str());
                     activeIncludeSequence->setEnabled(false);
                     activeIncludeSequence = nullptr;
-                } else {
-                    Log::warningln("[DmxSequence] Name: %s  Include duration task triggered but no active include sequence.", sequenceName.c_str());
                 }
                 nextCue();
             });
@@ -148,12 +142,13 @@ class DmxSequenceProcessor : public DmxProcessor {
         }
 
         void setEnabled(bool enable) override {
+            // Update base enabled flag first so nested onEnd/include callbacks see fresh state.
+            DmxProcessor::setEnabled(enable);
             if (enable && !wasEnabled && !cues.empty()) {
                 goToCue(0);
                 wasEnabled = true;
             }
             if (!enable) {
-                Log::traceln("[DmxSequence] Name: %s  Disabling sequence, stopping all cues and includes.", sequenceName.c_str());
                 fadeAnimation->cancel();
                 holdTask->cancel();
                 includeDurationTask->cancel();
@@ -162,17 +157,14 @@ class DmxSequenceProcessor : public DmxProcessor {
                     activeIncludeSequence = nullptr;
                 }
                 currentCueIndex = 0;
-                onEnd();
                 wasEnabled = false;
+                onEnd();
             }
-
-            DmxProcessor::setEnabled(enable);
         }
 
     private:
 
         void goToCue(uint8_t cueIndex) {
-            Log::traceln("[DmxSequence] Name: %s  Going to cue %u", sequenceName.c_str(), cueIndex);
             if (cueIndex >= cues.size()) return;
             if (dmxManager == nullptr) return;
 
@@ -181,10 +173,13 @@ class DmxSequenceProcessor : public DmxProcessor {
             if (targetCue.isInclude()) {
                 activeIncludeSequence = startInclude(targetCue.includeName);
                 if (activeIncludeSequence != nullptr) {
-                    includeDurationTask->arm(targetCue.holdTimeMs);
+                    // Only arm a timeout if an explicit hold_ms was specified.
+                    // Without it, the parent advances naturally via the included sequence's onEnd callback.
+                    if (targetCue.holdTimeMs != ULONG_MAX) {
+                        includeDurationTask->arm(targetCue.holdTimeMs);
+                    }
                 } else {
                     // Failed to start include, skip to next cue
-                    Log::warningln("[DmxSequence] Name: %s  Failed to start included sequence '%s', skipping to next cue.", sequenceName.c_str(), targetCue.includeName.c_str());
                     nextCue();
                 }
             } else {
@@ -194,14 +189,12 @@ class DmxSequenceProcessor : public DmxProcessor {
                 fadeAnimation->restart();
             }
             currentCueIndex = cueIndex;
-            Log::traceln("[DmxSequence] Name: %s  Started cue %u", sequenceName.c_str(), cueIndex);
         }
 
         /**
          * Go to next cue
          */
         void nextCue() {
-            Log::traceln("[DmxSequence] Name: %s  current cue index: %u", sequenceName.c_str(), currentCueIndex);
             if (cues.empty()) return;
             uint8_t next;
             if (currentCueIndex == 254) {
@@ -213,7 +206,6 @@ class DmxSequenceProcessor : public DmxProcessor {
             if (next >= cues.size()) {
                 next = loop ? 0 : cues.size();
             }
-            Log::traceln("[DmxSequence] Name: %s Next cue index: %u of %d", sequenceName.c_str(), next, cues.size());
             if (next == cues.size()) {
                 // End of sequence reached
                 setEnabled(false);
@@ -235,14 +227,15 @@ class DmxSequenceProcessor : public DmxProcessor {
             }
             DmxSequenceProcessor* include = it->second;
             include->setOnEnd([this, include]() {
-                Log::traceln("[DmxSequence] Name: %s  Included sequence %s ended, continuing parent.", sequenceName.c_str(), include->sequenceName.c_str());
+                if (!this->enabled) {
+                    return;
+                }
                 // Cancel the duration task to prevent double-triggering of nextCue()
                 this->includeDurationTask->cancel();
                 this->activeIncludeSequence = nullptr;
                 this->nextCue();
             });
             include->setEnabled(true);
-            Log::traceln("[DmxSequence] Name: %s  Started included sequence: %s", sequenceName.c_str(), includeName.c_str());
             return include;
         }
         

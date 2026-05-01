@@ -142,6 +142,7 @@ class PwmThing : public SwitchableThing {
             if (!dirty) {
                 return;
             }
+            //Log::traceln("Writing PWM value %d to pin %d", currentValue, pin);
             analogWrite(pin, currentValue);
             dirty = false;
         }

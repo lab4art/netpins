@@ -138,7 +138,7 @@ reboot_after_wifi_failed: 15 # reboot after 15 failed wifi connections, 0 means 
 disable_wifi_power_save: false # disable WiFi power save to prevent led flicering on "poor" power connection
 disable_wifi_reconnect: false # try to connect once only (repeat in case a successful connection is lost)
 disable_artnet: false
-log_level: -1 # -1=no-affects-from-this-settging, 0=no logs, 1=error, 2=warning, 3=info, 4=debug, 5=trace
+log_level: -1 # -1=no-affects-from-this-settging, 0=no logs, 1=error, 2=warning, 3=info, 4=trace
 pwms:
   - pin: 13
     name: pwm-13
@@ -163,6 +163,7 @@ servos:
     max_angle: 180
     min_pulse_width: 500
     max_pulse_width: 2500
+    dmx: 1@0
   - pin: 13
     max_angle: 90
 dmx_input:
@@ -179,6 +180,32 @@ dmx_output:
   rx_pin: 18
   enable_pin: 16
   universe: 0 # universe to output to DMX
+```
+
+Control PWM with a potentiometer:
+```yaml
+pwms:
+  - pin: 5
+    name: pwm
+    dmx: 1@0
+
+analog_reads:
+  - pin: 3
+    name: pot_level
+    read_ms: 20
+
+sensor_pipelines:
+  - sensor: pot_level
+    pipeline:
+      - type: ema # smooth the input noice
+        alpha: 0.1 # reasonambe alpha value is between 0.05 and 0.3, lower means more smoothing but more lag
+      - type: map
+        input_min: 0
+        input_max: 8191   # 13-bit resolution
+        output_min: 0
+        output_max: 255
+        clamp: true
+    dmx: 1@0
 ```
 
 Motion sensor (PIR, Radar) with hold and delay:
@@ -318,6 +345,78 @@ dmx_triggers:
     min_value: 0
     max_value: 0
     sequence: ambient-off
+```
+
+Morse SOS using nested sequences (S, O, SOS) with a 5 second loop delay and autostart:
+```yaml
+pwms:
+  - pin: 5
+    name: pwm-5
+    dmx: 1@0 # channel@universe
+dmx_processors:
+  - type: sequence
+    name: morse-dot
+    loop: false
+    sequence:
+      - channels:
+          1@0: 255
+        fade_in_ms: 0
+        hold_ms: 200
+      - channels:
+          1@0: 0
+        fade_in_ms: 0
+        hold_ms: 200
+  - type: sequence
+    name: morse-dash
+    loop: false
+    sequence:
+      - channels:
+          1@0: 255
+        fade_in_ms: 0
+        hold_ms: 600
+      - channels:
+          1@0: 0
+        fade_in_ms: 0
+        hold_ms: 200
+  - type: sequence
+    name: morse-space
+    loop: false
+    sequence:
+      - channels:
+          1@0: 0
+        fade_in_ms: 0
+        hold_ms: 600
+  - type: sequence
+    name: morse-S
+    loop: false
+    sequence:
+      - include: morse-dot
+      - include: morse-dot
+      - include: morse-dot
+  - type: sequence
+    name: morse-O
+    loop: false
+    sequence:
+      - include: morse-dash
+      - include: morse-dash
+      - include: morse-dash
+  - type: sequence
+    name: morse-SOS
+    loop: false
+    sequence:
+      - include: morse-S
+      - include: morse-space
+      - include: morse-O
+      - include: morse-space
+      - include: morse-S
+      - include: morse-space
+  - type: sequence
+    name: morse-SOS-loop
+    autostart: true
+    loop: true
+    sequence:
+      - include: morse-SOS
+      - include: morse-space # extra space between words
 ```
 
 PWM fade on/off example configuration:

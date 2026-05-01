@@ -43,8 +43,11 @@ private:
      */
     static DmxSequenceProcessor* createSequenceProcessor(const DmxProcessorCfg& config, Scheduler* scheduler, DmxManager* dmxManager) {
         auto processor = new DmxSequenceProcessor(scheduler, dmxManager);
-              
-        // Parse loop
+
+        // Apply loop from structured config (YAML `loop:`).
+        processor->setLoop(config.loop);
+
+        // Backward-compatible fallback if loop is stored in params.
         auto loopIt = config.params.find("loop");
         if (loopIt != config.params.end()) {
             processor->setLoop(loopIt->second == "true");
