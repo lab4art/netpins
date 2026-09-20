@@ -7,6 +7,7 @@
 
 HardwareManager::HardwareManager() 
     : semaphore(NULL), commitNeoStipTask(NULL), numOfCreatedStrips(0), dmxOutput(nullptr), dmxInput(nullptr) {
+    stepperEngine.init();
     initNeoStipTask();
     ledCommitTask = new LedCommitTask(this, 20);  // 20ms = 50Hz
 }
@@ -24,10 +25,18 @@ HardwareManager::~HardwareManager() {
     for (auto pwm : pwms) {
         delete pwm;
     }
+
+    for (auto doubleRelay : doubleRelays) {
+        delete doubleRelay;
+    }
     
     // Clean up servos
     for (auto servo : servos) {
         delete servo;
+    }
+
+    for (auto stepper : steppers) {
+        delete stepper;
     }
     
     // Clean up sensors
@@ -196,6 +205,13 @@ void HardwareManager::createThings(Settings* settings, DmxManager* dmxManager, S
         Log::infoln("PWMs created.");
     }
 
+    Log::infoln("Creating double relays ...");
+    for (auto& doubleRelayCfg : settings->doubleRelays) {
+        auto doubleRelayThing = new DoubleRelayThing(doubleRelayCfg.upPin, doubleRelayCfg.downPin, doubleRelayCfg.activeLow, doubleRelayCfg.name);
+        dmxManager->addMapping(doubleRelayThing, doubleRelayCfg.dmxCfg);
+        doubleRelays.push_back(doubleRelayThing);
+    }
+
     Log::infoln("Creating RGBW strips ...");
     std::vector<InitializedThingGroup<RgbwThingGroup>> rgbwThingGroups = createStripThings<NeoGrbwFeature, NeoEsp32RmtNSk6812Method, RgbwThing, RgbwThingGroup>(rgbwStrips, settings->rgbwStrips);
     for (auto& rgbwThingGroup : rgbwThingGroups) {
@@ -217,6 +233,19 @@ void HardwareManager::createThings(Settings* settings, DmxManager* dmxManager, S
         auto thing = new ServoThing(servoCfg.pin, servoCfg.maxAngle, minPulseWidth, maxPulseWidth);
         dmxManager->addMapping(thing, servoCfg.dmxCfg);
         servos.push_back(thing);
+    }
+
+    Log::infoln("Creating steppers ...");
+    for (auto& stepperCfg : settings->steppers) {
+        auto stepperThing = new StepperThing(stepperEngine, stepperCfg);
+        if (stepperThing->begin()) {
+            dmxManager->addMapping(stepperThing, stepperCfg.dmxCfg);
+            steppers.push_back(stepperThing);
+            Log::infoln("Stepper '%s' created.", stepperCfg.name.c_str());
+        } else {
+            Log::errorln("Failed to initialize stepper '%s'", stepperCfg.name.c_str());
+            delete stepperThing;
+        }
     }
 
     // Plugins
@@ -368,6 +397,9 @@ void HardwareManager::turnOffAllSwitchables() {
     for (auto& switchable : switchables) {
         switchable->off();
     }
+    for (auto& doubleRelay : doubleRelays) {
+        doubleRelay->off();
+    }
 }
 
 void HardwareManager::runLightsTest() {
@@ -375,11 +407,17 @@ void HardwareManager::runLightsTest() {
     for (auto& switchable : switchables) {
         switchable->on();
     }
+    for (auto& doubleRelay : doubleRelays) {
+        doubleRelay->on();
+    }
     doCommitThings();
     Log::info("Waiting 2s ...");
     delay(2000);
     for (auto& switchable : switchables) {
         switchable->off();
+    }
+    for (auto& doubleRelay : doubleRelays) {
+        doubleRelay->off();
     }
     doCommitThings();
     Log::info("Lights test done.");

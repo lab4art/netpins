@@ -11,6 +11,7 @@
 #include <DmxManager.h>
 #include <DmxOutput.h>
 #include <DmxInput.h>
+#include "../Thing/StepperThing.h"
 #include <scheduler.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -37,10 +38,14 @@ private:
     std::map<int /* pin */, NeoPixelBus<NeoGrbwFeature, NeoEsp32RmtNSk6812Method>*> rgbwStrips;
     std::map<int /* pin */, NeoPixelBus<NeoGrbFeature, NeoEsp32RmtNWs2812xMethod>*> rgbStrips;
     std::vector<PwmThing*> pwms;
+    std::vector<DoubleRelayThing*> doubleRelays;
     std::vector<ServoThing*> servos;
+    std::vector<StepperThing*> steppers;
     std::vector<Switchabe*> switchables;
     DmxOutput* dmxOutput;
     DmxInput* dmxInput;
+
+    FastAccelStepperEngine stepperEngine;
 
     // Sensors
     std::vector<HumTempSensor*> humTempSensors;

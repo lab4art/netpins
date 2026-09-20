@@ -277,6 +277,85 @@ class ServoThing : public Thing {
         }
 };
 
+class DoubleRelayThing : public Thing {
+    private:
+        enum State {
+            UP,
+            STOP,
+            DOWN
+        };
+
+        uint8_t upPin;
+        uint8_t downPin;
+        bool activeLow;
+        State currentState = STOP;
+
+        uint8_t relayOnLevel() {
+            return activeLow ? LOW : HIGH;
+        }
+
+        uint8_t relayOffLevel() {
+            return activeLow ? HIGH : LOW;
+        }
+
+        State stateFromDmxData(uint8_t* data) {
+            bool upActive = data[0] > 9;
+            bool downActive = data[1] > 9;
+
+            if (upActive == downActive) {
+                return STOP;
+            }
+            return upActive ? UP : DOWN;
+        }
+
+        void applyState(State state) {
+            if (state == currentState) {
+                return;
+            }
+
+            if (state == UP) {
+                digitalWrite(downPin, relayOffLevel());
+                digitalWrite(upPin, relayOnLevel());
+            } else if (state == DOWN) {
+                digitalWrite(upPin, relayOffLevel());
+                digitalWrite(downPin, relayOnLevel());
+            } else {
+                digitalWrite(upPin, relayOffLevel());
+                digitalWrite(downPin, relayOffLevel());
+            }
+
+            currentState = state;
+        }
+
+    public:
+        DoubleRelayThing(uint8_t upPin, uint8_t downPin, bool activeLow, std::string name)
+            : upPin(upPin), downPin(downPin), activeLow(activeLow) {
+            pinMode(upPin, OUTPUT);
+            pinMode(downPin, OUTPUT);
+            this->name = name;
+
+            // Boot safe: both relays OFF (STOP).
+            digitalWrite(upPin, relayOffLevel());
+            digitalWrite(downPin, relayOffLevel());
+        }
+
+        int numChannels() {
+            return 2;
+        }
+
+        void setData(uint8_t* data) {
+            applyState(stateFromDmxData(data));
+        }
+
+        void on() {
+            applyState(STOP);
+        }
+
+        void off() {
+            applyState(STOP);
+        }
+};
+
 class ThingGroup : public SwitchableThing {
     private:
         int numOfChannels;

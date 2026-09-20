@@ -133,7 +133,7 @@ hostname: tower
 hb_int: 5000 # 0 = disabled
 udp_port: 5824
 lights_test: true # power on all at boot for 2 seconds
-max_idle: 120 # power off microcontroller when no network activity for N minutes
+max_idle: 120 # power-off microcontroller when no network activity for N minutes, 0 disable power-off
 reboot_after_wifi_failed: 15 # reboot after 15 failed wifi connections, 0 means no reboot
 disable_wifi_power_save: false # disable WiFi power save to prevent led flicering on "poor" power connection
 disable_wifi_reconnect: false # try to connect once only (repeat in case a successful connection is lost)
@@ -146,6 +146,12 @@ pwms:
   - pin: 14
     name: pwm-14
     dmx: 2@0
+double_relays:
+  - up_pin: 26
+    down_pin: 27
+    name: double-relay-1
+    active_low: true # set false for active-high relay boards
+    dmx: 10@0
 rgbw_strips: []
 rgb_strips:
   - pin: 13
@@ -166,6 +172,15 @@ servos:
     dmx: 1@0
   - pin: 13
     max_angle: 90
+steppers:
+  - name: blind-1
+    step_pin: 17
+    dir_pin: 18
+    enable_pin: 16
+    dmx: 1@0 # speed on channel 1, direction on channel 2
+    max_speed_hz: 4000
+    acceleration: 1000
+    auto_enable: true
 dmx_input:
   enabled: true
   uart_port: 1
@@ -181,6 +196,15 @@ dmx_output:
   enable_pin: 16
   universe: 0 # universe to output to DMX
 ```
+
+Double relay DMX mapping (`double_relays`):
+- channel 1 = UP command, channel 2 = DOWN command
+- `ch1=0` and `ch2=0` -> stop (both relays OFF)
+- `ch1>9` and `ch2=0` -> UP
+- `ch1=0` and `ch2>9` -> DOWN
+- `ch1>9` and `ch2>9` -> stop (conflict-safe)
+
+For safety, relay outputs are always forced to STOP before switching direction, so both relays are never ON at the same time.
 
 Control PWM with a potentiometer:
 ```yaml

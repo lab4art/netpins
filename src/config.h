@@ -1,6 +1,6 @@
 #pragma once
 
-#define FIRMWARE_VERSION "netpins-2.0.0-snapshot"
+#define FIRMWARE_VERSION "netpins-2.0.0"
 
 // Useful for initial setup via serial console without booting to AP mode
 #define WIFI_SSID ""
@@ -11,7 +11,7 @@
 #define SUBNET         IPAddress(0, 0, 0, 0)
 #define DNS            IPAddress(0, 0, 0, 0)
 
-#define FACTORY_REST_PIN -1 // -1 to use power cycle factory reset
+#define FACTORY_REST_PIN 0 // -1 to use power cycle factory reset
 
 #define ANIMATION_FRAME_RATE 50 // Hz
 

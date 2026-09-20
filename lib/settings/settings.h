@@ -157,6 +157,55 @@ struct PwmCfg {
     }
 };
 
+/**
+ * - up_pin: 13
+ *   down_pin: 14
+ *   name: double-relay-1
+ *   active_low: true
+ *   dmx: 1@0 # channel@universe
+ */
+struct DoubleRelayCfg {
+    std::uint8_t upPin;
+    std::uint8_t downPin;
+    std::string name;
+    bool activeLow = false;
+    DmxCfg dmxCfg = {0, 0};
+
+    bool operator==(const DoubleRelayCfg& other) const {
+        return upPin == other.upPin &&
+            downPin == other.downPin &&
+            name == other.name &&
+            activeLow == other.activeLow &&
+            dmxCfg == other.dmxCfg;
+    }
+
+    bool operator!=(const DoubleRelayCfg& other) const {
+        return !(*this == other);
+    }
+
+    static DoubleRelayCfg deserialize(JsonObject& json) {
+        DoubleRelayCfg b;
+        b.upPin = json["up_pin"].as<std::uint8_t>();
+        b.downPin = json["down_pin"].as<std::uint8_t>();
+        b.name = json["name"].as<std::string>();
+        if (json.containsKey("active_low")) {
+            b.activeLow = json["active_low"].as<bool>();
+        }
+        if (json.containsKey("dmx")) {
+            b.dmxCfg = DmxCfg::deserialize(json["dmx"].as<std::string>());
+        }
+        return b;
+    }
+
+    static void serialize(JsonObject& jsonBlind, const DoubleRelayCfg& b) {
+        jsonBlind["up_pin"] = b.upPin;
+        jsonBlind["down_pin"] = b.downPin;
+        jsonBlind["name"] = b.name;
+        jsonBlind["active_low"] = b.activeLow;
+        jsonBlind["dmx"] = DmxCfg::serialize(b.dmxCfg);
+    }
+};
+
 struct StripeCfg {
     std::uint8_t pin;
     std::string name;
@@ -267,6 +316,70 @@ struct ServoCfg {
             jsonServo["max_pulse_width"] = s.maxPulseWidth;
         }
         jsonServo["dmx"] = DmxCfg::serialize(s.dmxCfg);
+    }
+};
+
+struct StepperCfg {
+    std::uint8_t stepPin;
+    std::uint8_t dirPin;
+    std::uint8_t enablePin = 255;
+    std::string name;
+    DmxCfg dmxCfg = {0, 0};
+
+    uint32_t maxSpeedHz = 4000;
+    uint32_t acceleration = 1000;
+
+    bool autoEnable = true;
+
+    bool operator==(const StepperCfg& other) const {
+        return stepPin == other.stepPin &&
+            dirPin == other.dirPin &&
+            enablePin == other.enablePin &&
+            name == other.name &&
+            dmxCfg == other.dmxCfg &&
+            maxSpeedHz == other.maxSpeedHz &&
+            acceleration == other.acceleration &&
+            autoEnable == other.autoEnable;
+    }
+
+    bool operator!=(const StepperCfg& other) const {
+        return !(*this == other);
+    }
+
+    static StepperCfg deserialize(JsonObject& json) {
+        StepperCfg s;
+        s.stepPin = json["step_pin"].as<std::uint8_t>();
+        s.dirPin = json["dir_pin"].as<std::uint8_t>();
+        if (json.containsKey("enable_pin")) {
+            s.enablePin = json["enable_pin"].as<std::uint8_t>();
+        }
+        s.name = json["name"].as<std::string>();
+        if (json.containsKey("dmx")) {
+            s.dmxCfg = DmxCfg::deserialize(json["dmx"].as<std::string>());
+        }
+        if (json.containsKey("max_speed_hz")) {
+            s.maxSpeedHz = json["max_speed_hz"].as<uint32_t>();
+        }
+        if (json.containsKey("acceleration")) {
+            s.acceleration = json["acceleration"].as<uint32_t>();
+        }
+        if (json.containsKey("auto_enable")) {
+            s.autoEnable = json["auto_enable"].as<bool>();
+        }
+        return s;
+    }
+
+    static void serialize(JsonObject& jsonStepper, const StepperCfg& s) {
+        jsonStepper["step_pin"] = s.stepPin;
+        jsonStepper["dir_pin"] = s.dirPin;
+        if (s.enablePin != 255) {
+            jsonStepper["enable_pin"] = s.enablePin;
+        }
+        jsonStepper["name"] = s.name;
+        jsonStepper["dmx"] = DmxCfg::serialize(s.dmxCfg);
+        jsonStepper["max_speed_hz"] = s.maxSpeedHz;
+        jsonStepper["acceleration"] = s.acceleration;
+        jsonStepper["auto_enable"] = s.autoEnable;
     }
 };
 
@@ -1017,9 +1130,11 @@ struct Settings {
     std::uint16_t udpPort;
 
     std::vector<PwmCfg> pwms;
+    std::vector<DoubleRelayCfg> doubleRelays;
     std::vector<StripeCfg> rgbwStrips;
     std::vector<StripeCfg> rgbStrips;
     std::vector<ServoCfg> servos;
+    std::vector<StepperCfg> steppers;
     
     std::vector<HumTempSensorCfg> humTemps;
     std::vector<TouchSensorCfg> touchSensors;
@@ -1064,9 +1179,11 @@ struct Settings {
             dmxInput == other.dmxInput &&
 
             pwms == other.pwms &&
+            doubleRelays == other.doubleRelays &&
             rgbwStrips == other.rgbwStrips &&
             rgbStrips == other.rgbStrips &&
             servos == other.servos &&
+            steppers == other.steppers &&
 
             humTemps == other.humTemps &&
             touchSensors == other.touchSensors &&
@@ -1141,6 +1258,19 @@ struct Settings {
             s.pwms.push_back(PwmCfg::deserialize(jsonPwm));
         }
 
+        JsonArray doubleRelaysArray = json["double_relays"].as<JsonArray>();
+        if (doubleRelaysArray.isNull()) {
+            // Backward compatibility with older key names.
+            doubleRelaysArray = json["doubleRelays"].as<JsonArray>();
+        }
+        if (doubleRelaysArray.isNull()) {
+            doubleRelaysArray = json["blinds"].as<JsonArray>();
+        }
+        for (JsonVariant v : doubleRelaysArray) {
+            JsonObject jsonDoubleRelay = v.as<JsonObject>();
+            s.doubleRelays.push_back(DoubleRelayCfg::deserialize(jsonDoubleRelay));
+        }
+
         JsonArray rgbwStripsArray = json["rgbw_strips"].as<JsonArray>();
         for (JsonVariant v : rgbwStripsArray) {
             JsonObject jsonStripe = v.as<JsonObject>();
@@ -1157,6 +1287,12 @@ struct Settings {
         for (JsonVariant v : servosArray) {
             JsonObject jsonServo = v.as<JsonObject>();
             s.servos.push_back(ServoCfg::deserialize(jsonServo));
+        }
+
+        JsonArray steppersArray = json["steppers"].as<JsonArray>();
+        for (JsonVariant v : steppersArray) {
+            JsonObject jsonStepper = v.as<JsonObject>();
+            s.steppers.push_back(StepperCfg::deserialize(jsonStepper));
         }
 
 
@@ -1261,6 +1397,14 @@ struct Settings {
             }
         }
 
+        if (doubleRelays.size() > 0) {
+            JsonArray jsonDoubleRelays = json["double_relays"].to<JsonArray>();
+            for (auto doubleRelay : this->doubleRelays) {
+                JsonObject jsonDoubleRelayItem = jsonDoubleRelays.add<JsonObject>();
+                DoubleRelayCfg::serialize(jsonDoubleRelayItem, doubleRelay);
+            }
+        }
+
         if (rgbwStrips.size() > 0) {
             JsonArray jsonRgbw = json["rgbw_strips"].to<JsonArray>();
             for (auto stripe : rgbwStrips) {
@@ -1282,6 +1426,14 @@ struct Settings {
             for (auto servo : servos) {
                 JsonObject jsonServo = servosArray.add<JsonObject>();
                 ServoCfg::serialize(jsonServo, servo);
+            }
+        }
+
+        if (steppers.size() > 0) {
+            JsonArray steppersArray = json["steppers"].to<JsonArray>();
+            for (auto stepper : this->steppers) {
+                JsonObject jsonStepper = steppersArray.add<JsonObject>();
+                StepperCfg::serialize(jsonStepper, stepper);
             }
         }
 
