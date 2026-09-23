@@ -1076,7 +1076,6 @@ struct DmxOutputCfg {
  *   tx_pin: -1  # can be -1 if not used for transmit
  *   rx_pin: 16  # RX pin for receiving DMX data
  *   enable_pin: 4  # DE/RE pins on MAX485
- *   enable_pin: 4  # DE/RE pins on MAX485
  *   universe: 0  # which universe this input represents
  */
 struct DmxInputCfg {

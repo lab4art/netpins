@@ -80,7 +80,7 @@ Transmit DMX data (from sensor mappings) via RS-485 to control external DMX devi
 ```yaml
 dmx_output:
   enabled: true
-  uart_port: 2        # UART port number (0, 1, or 2). 0 is used by default for serial output
+  uart_port: 1        # UART port number (board-dependent). 0 is used by default for serial output
   tx_pin: 17          # GPIO pin for DMX transmit
   rx_pin: 18          # GPIO pin for DMX receive (can be -1 if not used)
   enable_pin: 16      # GPIO pin for RS485 enable (DE/RE on MAX485)
@@ -101,7 +101,7 @@ Receive DMX data via RS-485 from an external DMX source (like a lighting console
 ```yaml
 dmx_input:
   enabled: true
-  uart_port: 2        # UART port number (0, 1, or 2). Use different port than output
+  uart_port: 1        # UART port number (board-dependent). Use different port than output when needed
   tx_pin: 17          # GPIO pin for DMX transmit
   rx_pin: 18          # GPIO pin for DMX receive
   enable_pin: 4       # GPIO pin for RS485 enable (DE/RE on MAX485)
@@ -121,6 +121,7 @@ dmx_input:
 - To disable ArtNet and use only DMX input, set `disable_artnet: true`
 - Both ArtNet and DMX input can feed different universes simultaneously
 - Universe mapping follows the same rules as ArtNet input
+- Some boards (for example ESP32-S2) expose only UART0 and UART1, so `uart_port: 2` is invalid there
 
 
 ## Sample Configuration

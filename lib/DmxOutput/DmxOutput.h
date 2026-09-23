@@ -24,12 +24,20 @@ private:
     int dmxPort;           // UART port number (0, 1, or 2)
     int txPin;             // TX pin for DMX transmission
     int rxPin;             // RX pin (can be set to -1 if not used for receive)
-    int enablePin;         // DE/RE enable pin for MAX485
+    int enablePin;         // DE/RE enable pin for MAX485 (-1 if not used)
     bool enabled;          // Whether DMX output is enabled
     
     // Reference to shared DMX data and which universe to output
     std::map<uint16_t, std::array<uint8_t, 512>>* dmxDataRef;
     uint16_t outputUniverse;
+
+    // Runtime stats for trace-level diagnostics.
+    unsigned long lastStatsLogMs = 0;
+    uint32_t framesSentSinceLastLog = 0;
+    uint32_t sendErrorsSinceLastLog = 0;
+    uint8_t lastCh1 = 0;
+    uint8_t lastCh2 = 0;
+    uint8_t lastCh3 = 0;
     
 public:
     /**
@@ -38,7 +46,7 @@ public:
      * @param dmxPort UART port number (0, 1, or 2 for ESP32)
      * @param txPin TX pin number
      * @param rxPin RX pin number (use -1 if only transmitting)
-     * @param enablePin Enable pin for MAX485 DE/RE
+    * @param enablePin Enable pin for MAX485 DE/RE (use -1 if not used)
      * @param universe Which universe to output
      * @param dmxData Reference to shared DMX data map
      */

@@ -37,6 +37,15 @@ private:
     
     // Callback for when DMX data is received
     std::function<void()> onDataReceived;
+
+    // Runtime stats for rate-limited logging.
+    unsigned long lastStatsLogMs = 0;
+    uint32_t packetsSinceLastLog = 0;
+    uint32_t errorsSinceLastLog = 0;
+    uint8_t lastCh1 = 0;
+    uint8_t lastCh2 = 0;
+    uint8_t lastCh3 = 0;
+    unsigned long lastOnDataCallbackMs = 0;
     
 public:
     /**

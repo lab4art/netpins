@@ -1,4 +1,13 @@
 #include "DmxInput.h"
+#include <soc/soc_caps.h>
+
+namespace {
+constexpr TickType_t DMX_INPUT_WAIT_TICKS = dmx_ms_to_ticks(30);
+constexpr TickType_t DMX_INPUT_DRAIN_TICKS = 0;
+constexpr size_t DMX_INPUT_CHANNELS_TO_READ = 256;
+constexpr size_t DMX_INPUT_BYTES_TO_READ = DMX_INPUT_CHANNELS_TO_READ + 1;  // Start code + 256 channels.
+constexpr unsigned long DMX_INPUT_CALLBACK_MIN_INTERVAL_MS = 20;
+}
 
 DmxInput::DmxInput(int dmxPort, int txPin, int rxPin, int enablePin,
                    uint16_t universe, std::map<uint16_t, std::array<uint8_t, 512>>& dmxData,
@@ -19,8 +28,19 @@ DmxInput::~DmxInput() {
 }
 
 bool DmxInput::begin() {
-    if (dmxPort < 0 || rxPin < 0 || enablePin < 0) {
+    if (dmxPort < 0 || rxPin < 0) {
         Log::errorln("DMX Input: Invalid pin configuration");
+        return false;
+    }
+
+    if (enablePin < 0 && enablePin != DMX_PIN_NO_CHANGE) {
+        Log::errorln("DMX Input: Invalid enable pin %d (use -1 for no direction control)", enablePin);
+        return false;
+    }
+
+    if (dmxPort >= SOC_UART_NUM) {
+        Log::errorln("DMX Input: Invalid UART%d for this board (available: 0-%d)",
+                     dmxPort, SOC_UART_NUM - 1);
         return false;
     }
     
@@ -65,31 +85,57 @@ void DmxInput::callback() {
         Log::warningln("DmxInput callback: enabled is FALSE, returning early");
         return;
     }
-    // Receive DMX data
+    bool hasNewData = false;
     dmx_packet_t packet;
-        
-    // Try to receive a DMX packet (non-blocking with timeout)
-    if (dmx_receive(dmxPort, &packet, DMX_TIMEOUT_TICK)) {
-        // Check if we got a valid DMX packet
-        if (!packet.err) {
-            // Get the data
-            uint8_t data[DMX_PACKET_SIZE];
-            dmx_read(dmxPort, data, DMX_PACKET_SIZE);
-            
-            // Copy to our shared dmxData for the specified universe
-            auto& universeData = (*dmxDataRef)[inputUniverse];
 
-            // copy data without the first byte (start code)
-            memcpy(universeData.data(), &data[1], 512);
-            
-            // Trigger callback if provided
-            if (onDataReceived) {
-                onDataReceived();
+    bool hasPacket = dmx_receive_num(dmxPort, &packet, DMX_INPUT_BYTES_TO_READ, DMX_INPUT_WAIT_TICKS);
+    while (hasPacket) {
+        if (!packet.err) {
+            // Read fixed payload: start code + first 256 channels.
+            uint8_t data[DMX_PACKET_SIZE] = {0};
+            size_t bytesToRead = DMX_INPUT_BYTES_TO_READ;
+            size_t bytesRead = dmx_read(dmxPort, data, bytesToRead);
+
+            // Restore shared DMX state updates (start code is data[0]).
+            auto& universeData = (*dmxDataRef)[inputUniverse];
+            memset(universeData.data(), 0, universeData.size());
+            if (bytesRead > 1) {
+                size_t slotsToCopy = bytesRead - 1;
+                if (slotsToCopy > universeData.size()) {
+                    slotsToCopy = universeData.size();
+                }
+                memcpy(universeData.data(), &data[1], slotsToCopy);
             }
-            // Log::infoln("DMX Input: Received uni %d, first 3 channels: %d, %d, %d", inputUniverse, data[1], data[2], data[3]);
+
+            lastCh1 = (bytesRead > 1) ? data[1] : 0;
+            lastCh2 = (bytesRead > 2) ? data[2] : 0;
+            lastCh3 = (bytesRead > 3) ? data[3] : 0;
+            ++packetsSinceLastLog;
+            hasNewData = true;
         } else {
-            Log::errorln("DMX Input: Error receiving DMX packet, err code: %d", packet.err);
+            ++errorsSinceLastLog;
         }
+
+        hasPacket = dmx_receive_num(dmxPort, &packet, DMX_INPUT_BYTES_TO_READ, DMX_INPUT_DRAIN_TICKS);
+    }
+
+    // Notify activity, but throttle callback to avoid excessive loop overhead.
+    unsigned long now = millis();
+    if (hasNewData && onDataReceived &&
+        (now - lastOnDataCallbackMs >= DMX_INPUT_CALLBACK_MIN_INTERVAL_MS)) {
+        onDataReceived();
+        lastOnDataCallbackMs = now;
+    }
+
+    // Rate-limit diagnostics to avoid slowing down packet processing.
+    if (Log::getLogLevel() >= LOG_LEVEL_TRACE && now - lastStatsLogMs >= 1000 &&
+        (packetsSinceLastLog > 0 || errorsSinceLastLog > 0)) {
+        Log::traceln("DMX Input: uni %d, rx=%u pkt/s, err=%u/s, ch1..3=%d,%d,%d",
+                     inputUniverse, packetsSinceLastLog, errorsSinceLastLog,
+                     lastCh1, lastCh2, lastCh3);
+        packetsSinceLastLog = 0;
+        errorsSinceLastLog = 0;
+        lastStatsLogMs = now;
     }
 }
 
