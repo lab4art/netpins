@@ -93,6 +93,11 @@ void setup() {
         Log::error((std::string("ERR: creating things. ") + e.what()).c_str());
     }
 
+    { // restore saved DMX data
+        auto& liveDmxData = dmxManager->getDmxData();
+        dmxManager->restoreDmxData(liveDmxData);
+    }
+
     firmwareUpdateResultQueue = xQueueCreate(1, sizeof(int));
 
     networkManager = new NetworkManager(settings, scheduler, FIRMWARE_VERSION);

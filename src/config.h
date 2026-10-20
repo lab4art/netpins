@@ -1,6 +1,6 @@
 #pragma once
 
-#define FIRMWARE_VERSION "netpins-2.0.1-snapshot"
+#define FIRMWARE_VERSION "netpins-2.0.1"
 
 // Useful for initial setup via serial console without booting to AP mode
 #define WIFI_SSID ""
