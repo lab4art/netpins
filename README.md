@@ -207,7 +207,7 @@ Double relay DMX mapping (`double_relays`):
 
 For safety, relay outputs are always forced to STOP before switching direction, so both relays are never ON at the same time.
 
-Control PWM with a potentiometer:
+### Control PWM with a potentiometer:
 ```yaml
 pwms:
   - pin: 5
@@ -233,7 +233,7 @@ sensor_pipelines:
     dmx: 1@0
 ```
 
-Motion sensor (PIR, Radar) with hold and delay:
+### Motion sensor (PIR, Radar) with hold and delay:
 ```yaml
 pwms:
   - pin: 4
@@ -258,7 +258,7 @@ sensor_pipelines:
 ```
 
 
-Start/stop sequence with an ON/OFF switch:
+### Start/stop sequence with an ON/OFF switch:
 ```yaml
 pwms:
   - pin: 4
@@ -312,7 +312,7 @@ dmx_triggers:
     sequence: ambient-off
 ```
 
-Start/stop sequence with a toggle button (momentary press toggles ON/OFF):
+### Start/stop sequence with a toggle button (momentary press toggles ON/OFF):
 ```yaml
 pwms:
   - pin: 4
@@ -372,7 +372,7 @@ dmx_triggers:
     sequence: ambient-off
 ```
 
-Morse SOS using nested sequences (S, O, SOS) with a 5 second loop delay and autostart:
+### Morse SOS using nested sequences (S, O, SOS) with a 5 second loop delay and autostart:
 ```yaml
 pwms:
   - pin: 5
@@ -444,7 +444,7 @@ dmx_processors:
       - include: morse-space # extra space between words
 ```
 
-PWM fade on/off example configuration:
+### PWM fade on/off:
 ```yaml
 pwms:
   - pin: 4
@@ -494,19 +494,56 @@ dmx_triggers:
     sequence: fade-out
 ```
 
-### Experimental
-DmxOut sample configuration:
+### Artnet to DMX
+
+A bridge that is listening to Artnet data and converts it to DMX (tested with MAX485 module).
+
 ```yaml
-dmxOutput:
+dmx_output:
   enabled: true
-  uart_port: 1        # UART port number (0, 1, or 2). 0 is used by default for serial output
-  tx_pin: 17          # GPIO pin for DMX transmit
-  rx_pin: 18          # GPIO pin for DMX receive (can be -1 if not used)
-  enable_pin: 16      # GPIO pin for RS485 enable (can be -1 if not needed)
-  universe: 0         # Source (Artnet) DMX universe to output to DMX
+  uart_port: 1
+  tx_pin: 17
+  rx_pin: 18
+  enable_pin: 16
+  universe: 0
+dmx_input:
+  enabled: true
+  uart_port: 1
+  tx_pin: 13
+  rx_pin: 14
+  enable_pin: 15
+  universe: 0
 ```
 
-motion_state processor with dmx sequences example configuration:
+### Autostart always run sequence
+```yaml
+dmx_processors:
+  - type: sequence
+    name: sparks
+    autostart: true # always enabled on startup, no trigger needed
+    loop: true
+    sequence:
+      - channels:
+          1@0: 0
+          2@0: 50
+          3@0: 50
+          4@0: 0
+        fade_in_ms: 0
+        hold_ms: 50
+      - channels:
+          1@0: 0
+          2@0: 0
+          3@0: 0
+          4@0: 0
+        fade_in_ms: 0
+        hold_ms: 200
+```
+
+
+
+### Experimental
+
+Motion_state processor with dmx sequences:
 ```yaml
 dmx_offset: 0
 wifi_ssid: 
@@ -619,31 +656,6 @@ dmx_triggers:
     sequence: fade_to_black
 ```
 
-Autostart always run
-```yaml
-dmx_processors:
-  - type: sequence
-    name: sparks
-    autostart: true # always enabled on startup, no trigger needed
-    loop: true
-    sequence:
-      - channels:
-          1@0: 0
-          2@0: 50
-          3@0: 50
-          4@0: 0
-        fade_in_ms: 0
-        hold_ms: 50
-      - channels:
-          1@0: 0
-          2@0: 0
-          3@0: 0
-          4@0: 0
-        fade_in_ms: 0
-        hold_ms: 200
-```
-
-
 ```yaml
 # control tail aniimation plugin with dmx sequences
 rgb_strips:
@@ -744,7 +756,7 @@ dmx_processors:
 
 ```
 
-Tail animation example configuration:
+Tail animation:
 ```yaml
 rgb_strips:
   - pin: 13
@@ -763,7 +775,7 @@ plugins:
       max_duration: 10000
       direction: left
 ```
-Wave effect example configuration:
+Wave effect:
 ```yaml
 rgb_strips:
   - pin: 13
@@ -784,24 +796,6 @@ plugins:
       dmx: 1@0
       max_fade_time: 5000
       dimmable: true
-```
-
-To map the full analog range to DMX 0-255, use the `map` processor:
-```yaml
-analog_reads:
-  - pin: 3
-    name: pot_level
-    read_ms: 20
-sensor_pipelines:
-  - sensor: pot_level
-    pipeline:
-      - type: map
-        input_min: 0
-        input_max: 65536
-        output_min: 0
-        output_max: 255
-        clamp: true
-    dmx: 1@0
 ```
 
 
